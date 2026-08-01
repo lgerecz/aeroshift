@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <script>
+  window.onerror = function(msg, url, line, col, error) {
+    // Ignore internal platform/previewer scripts and browser extensions
+    if (!url || msg.indexOf('__name') !== -1 || url.indexOf('picker=1') !== -1 || url.indexOf('extension') !== -1) {
+      return false; 
+    }
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed; top:0; left:0; right:0; background:#ef4444; color:white; padding:15px; z-index:9999; font-family:monospace; font-size:12px; text-align:left; border-bottom:3px solid #b91c1c; box-shadow:0 4px 10px rgba(0,0,0,0.3);';
+    banner.innerHTML = '<strong>AeroShift JS Error:</strong> ' + msg + '<br><small>Archivo: ' + url + ' | Línea: ' + line + ' | Col: ' + col + '</small>';
+    document.body.appendChild(banner);
+    return false;
+  };
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroShift — Parrilla de Turnos Handling</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo" onclick="switchView('inicio')" style="cursor: pointer;" title="Volver al inicio">
+        <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="vertical-align: middle;">
+          <circle cx="32" cy="32" r="30" fill="var(--primary)"/>
+          <path d="M22 20L34 32L22 44" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M34 20L46 32L34 44" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1 style="margin-left: 8px;">AeroShift</h1>
+      </div>
+      <span class="subtitle">Parrilla de Turnos — Handling</span>
+    </div>
+
+    <!-- CENTRAL NAV TABS INSIDE HEADER -->
+    <div class="header-center">
+      <button class="nav-tab active" id="tabParrilla" onclick="switchView('parrilla')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        Parrilla Diaria de Turnos
+      </button>
+    </div>
+
+    <div class="header-right">
+      <div class="date-nav">
+        <button class="btn-icon" onclick="changeDate(-1)" title="Día anterior">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <input type="date" id="currentDate" onchange="renderSchedule()">
+        <button class="btn-icon" onclick="changeDate(1)" title="Día siguiente">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="btn-sm btn-secondary" onclick="setToday()">Hoy</button>
+      </div>
+      <button class="btn-sm btn-secondary" onclick="exportCSV()" title="Exportar a CSV">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar
+      </button>
+    </div>
+  </header>
+
+  <!-- WELCOME PORTAL -->
+  <div class="app-layout" id="viewInicio" style="display: flex; align-items: center; justify-content: center; height: calc(100vh - var(--header-height)); margin-top: var(--header-height); padding: 24px 40px; background: var(--bg-body); overflow: hidden;">
+    <div class="welcome-container" style="max-width: 800px; text-align: center; display: flex; flex-direction: column; gap: 16px; width: 100%;">
+      <div class="welcome-logo-badge" style="margin-bottom: 0px;">
+        <svg width="56" height="56" viewBox="0 0 64 64" fill="none" style="display: block; margin: 0 auto;">
+          <circle cx="32" cy="32" r="30" fill="var(--primary)"/>
+          <path d="M22 20L34 32L22 44" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M34 20L46 32L34 44" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="welcome-header">
+        <h2 style="font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 4px; letter-spacing: -0.5px;">¡Bienvenido a <span style="color: var(--primary);">AeroShift</span>!</h2>
+        <div class="welcome-slogan" style="font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 8px; letter-spacing: 0.5px;">Tu equipo, siempre a tiempo</div>
+        <p style="color: var(--text-muted); font-size: 13.5px; max-width: 580px; margin: 0 auto; line-height: 1.5;">El centro de control inteligente para la planificación de turnos y la auditoría con IA de tu servicio de handling terrestre.</p>
+      </div>
+      
+      <div class="welcome-options" style="display: flex; gap: 20px; width: 100%; margin-top: 8px;">
+        <!-- OPCIÓN 1: CREAR -->
+        <div class="welcome-card" onclick="switchView('metodo-creacion')" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 20px; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div class="welcome-card-icon" style="width: 48px; height: 48px; background: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(59, 130, 246, 0.2);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px;">CREAR PARRILLA</h3>
+            <p style="color: var(--text-muted); font-size: 12.5px; line-height: 1.4;">Planifica tus turnos de hoy. Asigna agentes a mano o utiliza el motor matemático de OR-Tools para una asignación óptima instantánea.</p>
+          </div>
+          <button class="btn btn-primary" style="margin-top: auto; padding: 8px 18px; font-size: 12.5px; font-weight: 600;">Planificar Turnos</button>
+        </div>
+        
+        <!-- OPCIÓN 2: REVISAR -->
+        <div class="welcome-card" onclick="switchView('ia')" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 20px; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div class="welcome-card-icon" style="width: 48px; height: 48px; background: rgba(16, 185, 129, 0.1); color: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(16, 185, 129, 0.2);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:#10b981;">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px;">REVISAR PARRILLA</h3>
+            <p style="color: var(--text-muted); font-size: 12.5px; line-height: 1.4;">Audita tu planificación manual. Deja que la IA busque solapamientos, incidencias de turnos y sugiera mejoras operativas.</p>
+          </div>
+          <button class="btn btn-secondary" style="margin-top: auto; padding: 8px 18px; font-size: 12.5px; font-weight: 600; border-color: #10b981; color: #10b981; background:transparent;">Auditar con IA</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SELECCIÓN DE MÉTODO DE CREACIÓN (CREAR PARRILLA) -->
+  <div class="app-layout" id="viewMetodoCreacion" style="display: none; align-items: center; justify-content: center; height: calc(100vh - var(--header-height)); margin-top: var(--header-height); padding: 24px 40px; background: var(--bg-body); overflow: hidden;">
+    <div class="welcome-container" style="max-width: 800px; text-align: center; display: flex; flex-direction: column; gap: 20px; width: 100%;">
+      <!-- Botón para volver atrás -->
+      <button onclick="switchView('inicio')" style="background: none; border: none; color: var(--text-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; align-self: flex-start; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block; vertical-align:middle; stroke:currentColor;"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Volver al inicio
+      </button>
+
+      <div class="welcome-header">
+        <h2 style="font-size: 26px; font-weight: 800; color: #fff; margin-bottom: 4px; letter-spacing: -0.5px;">¿Cómo deseas crear tu parrilla hoy?</h2>
+        <p style="color: var(--text-muted); font-size: 13.5px; max-width: 600px; margin: 0 auto; line-height: 1.5;">Selecciona el método de entrada de datos para configurar tus vuelos y horarios de hoy.</p>
+      </div>
+      
+      <div class="welcome-options" style="display: flex; gap: 20px; width: 100%;">
+        <!-- OPCIÓN A: SUBIR ARCHIVO -->
+        <div class="welcome-card" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; overflow: hidden;">
+          <div class="welcome-card-icon" style="width: 48px; height: 48px; background: rgba(55, 138, 221, 0.1); color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(55, 138, 221, 0.2);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px;">SUBIR ARCHIVO</h3>
+            <p style="color: var(--text-muted); font-size: 12.5px; line-height: 1.4;">Carga un cuadrante o programación. Soporta formatos de Excel (.xlsx, .xls), PDF, CSV o capturas de imagen.</p>
+          </div>
+          
+          <!-- Botón o Input file real pero estilizado -->
+          <label class="btn btn-primary" style="margin-top: auto; padding: 8px 18px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-block;">
+            Subir archivo
+            <input type="file" id="scheduleFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" multiple onchange="handleScheduleFileUpload(event)" style="display: none;">
+          </label>
+        </div>
+        
+        <!-- OPCIÓN B: MANUAL -->
+        <div class="welcome-card" onclick="switchView('parrilla')" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 20px; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div class="welcome-card-icon" style="width: 48px; height: 48px; background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(245, 158, 11, 0.2);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:#f59e0b;">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px;">CREACIÓN MANUAL</h3>
+            <p style="color: var(--text-muted); font-size: 12.5px; line-height: 1.4;">Planifica el día desde cero de forma tradicional. Define tus agentes, añade embarques uno a uno y arrástralos a la cuadrícula con total precisión.</p>
+          </div>
+          <button class="btn btn-secondary" style="margin-top: auto; padding: 8px 18px; font-size: 12.5px; font-weight: 600; border-color: #f59e0b; color: #f59e0b; background:transparent;">Asignación Manual</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- WEB 3: PREVISUALIZACIÓN Y VALIDACIÓN — DISEÑO DOBLE RECTÁNGULO CON SCROLL -->
+  <div class="app-layout" id="viewExtractorPreview" style="display: none; padding: 24px; flex-direction: column; gap: 20px; overflow-y: auto; height: calc(100vh - var(--header-height)); margin-top: var(--header-height); background: var(--bg-body);">
+    <!-- BARRA SUPERIOR DE ACCIONES -->
+    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); flex-shrink: 0;">
+      <div style="text-align: left;">
+        <h2 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 10px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" style="stroke: var(--primary); display:inline-block; vertical-align:middle;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Validación de Programación IA
+        </h2>
+        <p style="color: var(--text-secondary); font-size: 13px; margin: 4px 0 0 0;">Verifica que los turnos del personal y los embarques coincidan con tus capturas originales antes de importarlos.</p>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <button class="btn btn-secondary" onclick="tryUploadAgain()" style="font-weight: 600; padding: 10px 20px; display: flex; align-items: center; gap: 8px; border-color: var(--text-muted); color: var(--text-primary);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Escanear otra vez
+        </button>
+        <button class="btn btn-primary" onclick="validateUploadedData()" style="font-weight: 700; background: var(--success); border-color: var(--success); padding: 10px 24px; display: flex; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="stroke:currentColor;"><polyline points="20 6 9 17 4 12"/></svg>
+          Validar e Importar Datos
+        </button>
+      </div>
+    </div>
+
+    <!-- RECTÁNGULO DE ARCHIVOS ADJUNTOS (FULL-WIDTH - CON SCROLL E IMÁGENES) -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; flex-shrink: 0; box-sizing: border-box;">
+      <h3 style="font-size: 13px; font-weight: 750; color: #fff; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" style="stroke: var(--primary); display:inline-block; vertical-align:middle;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Archivos Cargados en el Extractor (Haz clic en una miniatura para ampliar con Lupa)
+      </h3>
+      <div id="uploadedFilesListPage" style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 8px; min-height: 120px;">
+        <!-- Rellenado dinámicamente por JS con los blobs de tus capturas reales -->
+      </div>
+    </div>
+
+    <!-- CUADRO DE MANDOS DE DATOS DETECTADOS (COLUMNAS SPLIT) -->
+    <div style="display: flex; gap: 24px; width: 100%; margin-top: 10px; align-items: flex-start; flex-shrink: 0; padding-bottom: 40px;">
+      
+      <!-- RECTÁNGULO 1 (IZQUIERDO): TURNOS DEL PERSONAL CON SCROLL -->
+      <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
+        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 460px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
+          <h3 style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+            👥 Turnos del Personal — Sábado 20 Junio
+          </h3>
+          <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
+            <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
+              <thead>
+                <tr style="border-top: 2px double #444; border-bottom: 2px double #444; color: #888; font-weight: 700; text-transform: uppercase;">
+                  <th style="padding: 10px 6px; text-align: left;">AGENTE</th>
+                  <th style="padding: 10px 6px; text-align: left; width: 100px;">HORARIO</th>
+                  <th style="padding: 10px 6px; text-align: left; width: 120px;">PUESTO / ROL</th>
+                  <th style="padding: 10px 6px; text-align: center; width: 100px;">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody id="detectedAgentsBody" style="color: var(--text-secondary); line-height: 1.6;">
+                <!-- Rellenado dinámicamente por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECTÁNGULO 2 (DERECHO): PARRILLA DE EMBARQUES CON SCROLL -->
+      <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
+        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 460px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
+          <h3 style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+            ✈️ Parrilla de Embarques — Sábado 20 Junio
+          </h3>
+          <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
+            <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
+              <thead>
+                <tr style="border-top: 2px double #444; border-bottom: 2px double #444; color: #888; font-weight: 700; text-transform: uppercase;">
+                  <th style="padding: 10px 4px; text-align: left; width: 40px;">Nº</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 60px;">DEST</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 90px;">VUELO</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 80px;">APERTU</th>
+                  <th style="padding: 10px 4px; text-align: left;">AGENTES</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 80px;">EMB</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 80px;">STD</th>
+                  <th style="padding: 10px 4px; text-align: center; width: 100px;">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody id="detectedFlightsBody" style="line-height: 1.6;">
+                <!-- Rellenado dinámicamente por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<!-- MAIN LAYOUT -->
+  <div class="app-layout" id="viewParrilla" style="display: none;">
+    <!-- SIDEBAR LEFT: AGENTS -->
+    <aside class="sidebar sidebar-agents">
+      <div class="sidebar-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Agentes
+        </h2>
+        <button class="btn-icon btn-add" onclick="openModal('agentModal')" title="Añadir agente">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-content" id="agentList">
+        <!-- Agentes se renderizan aquí -->
+      </div>
+    </aside>
+
+    <!-- MAIN: SCHEDULE TABLE -->
+    <main class="main-content">
+      <!-- SHIFT TABS -->
+      <div class="shift-tabs">
+        <button class="shift-tab active" data-shift="all" onclick="filterShift('all', this)">
+          <span class="dot dot-all"></span> Todos
+        </button>
+        <button class="shift-tab" data-shift="morning" onclick="filterShift('morning', this)">
+          <span class="dot dot-morning"></span> Mañana <small>(06:00–14:00)</small>
+        </button>
+        <button class="shift-tab" data-shift="afternoon" onclick="filterShift('afternoon', this)">
+          <span class="dot dot-afternoon"></span> Tarde <small>(14:00–22:00)</small>
+        </button>
+        <button class="shift-tab" data-shift="night" onclick="filterShift('night', this)">
+          <span class="dot dot-night"></span> Noche <small>(22:00–06:00)</small>
+        </button>
+      </div>
+
+      <!-- SCHEDULE GRID -->
+      <div class="schedule-wrapper">
+        <div class="schedule-container" id="scheduleContainer">
+          <table class="schedule-table" id="scheduleTable">
+            <thead id="scheduleHead"></thead>
+            <tbody id="scheduleBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- STATS BAR -->
+      <div class="stats-bar" id="statsBar">
+        <div class="stat">
+          <span class="stat-label">Agentes activos</span>
+          <span class="stat-value" id="statAgents">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Embarques asignados</span>
+          <span class="stat-value" id="statAssigned">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Sin asignar</span>
+          <span class="stat-value" id="statUnassigned">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Vuelos totales</span>
+          <span class="stat-value" id="statFlights">0</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- SIDEBAR RIGHT: FLIGHTS -->
+    <aside class="sidebar sidebar-flights">
+      <div class="sidebar-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.8.3 1.1L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.7.5 1.1.3l.5-.3c.4-.2.5-.6.5-1.1z"/></svg>
+          Embarques
+        </h2>
+        <button class="btn-icon btn-add" onclick="openModal('flightModal')" title="Añadir embarque">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-content" id="flightList">
+        <!-- Embarques se renderizan aquí -->
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn btn-primary btn-block" onclick="openModal('flightModal')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo Embarque
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- IA WORKSPACE CONTAINER -->
+  <div class="app-layout" id="viewIA" style="display:none; padding:24px; flex-direction:column; gap:24px; overflow-y:auto; height: calc(100vh - var(--header-height)); margin-top: var(--header-height);">
+    <div class="ia-workspace">
+      <!-- COLUMNA IZQUIERDA: MOTOR DE OPTIMIZACIÓN (OR-TOOLS) -->
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <div class="ia-card-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <h3>Motor de Optimización (OR-Tools)</h3>
+          </div>
+          <span class="ia-badge">Algorítmico</span>
+        </div>
+        <p class="ia-card-desc">Asigna automáticamente todos los vuelos del día a los agentes de handling respetando estrictamente sus turnos de trabajo, evitando solapamientos y maximizando las preferencias de aerolíneas.</p>
+        
+        <div class="ia-settings">
+          <div class="form-group">
+            <label for="optMinSep">Tiempo mínimo entre embarques (minutos)</label>
+            <input type="number" id="optMinSep" value="45" min="15" max="120" step="5">
+            <small class="form-help">Tiempo de seguridad entre puertas de embarque.</small>
+          </div>
+          <div class="form-group" style="margin-top:10px;">
+            <label class="checkbox-label" style="font-weight:500;">
+              <input type="checkbox" id="optPreferAirlines" checked>
+              Priorizar afinidad por aerolínea contratada
+            </label>
+            <small class="form-help">Los agentes que tengan una aerolínea asignada serán emparejados preferentemente con sus propios vuelos.</small>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="backendUrl">URL del Servidor Backend</label>
+            <input type="text" id="backendUrl" value="http://localhost:8000" placeholder="Ej: http://localhost:8000" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--bg-body); color:var(--text-primary);">
+            <small class="form-help">Dirección del servicio local FastAPI que corre Google OR-Tools.</small>
+          </div>
+        </div>
+
+        <div class="ia-actions" style="margin-top:auto;">
+          <button class="btn btn-primary btn-lg btn-block" onclick="runOrToolsOptimization()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px; display:inline-block; vertical-align:middle; stroke:currentColor;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Generar Parrilla Óptima
+          </button>
+          <button class="btn btn-secondary btn-block" onclick="resetGridAssignments()" style="margin-top:10px;">
+            Vaciar Asignaciones de Hoy
+          </button>
+        </div>
+        
+        <div id="optStatus" class="opt-status-box" style="display:none; margin-top:15px;">
+          <!-- Mensaje de estado -->
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: AUDITORÍA POR INTELIGENCIA ARTIFICIAL -->
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <div class="ia-card-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <h3>Auditor de Parrilla por IA</h3>
+          </div>
+          <span class="ia-badge ai">Inteligencia Artificial</span>
+        </div>
+        <p class="ia-card-desc">Audita tu parrilla actual (hecha a mano o modificada) en tiempo real. La IA detectará solapamientos críticos, incidencias de horarios, desigualdades de carga y propondrá soluciones.</p>
+
+        <div class="ia-settings">
+          <div class="form-group">
+            <label for="openaiKey">API Key de OpenAI (Opcional)</label>
+            <input type="password" id="openaiKey" placeholder="sk-..." onchange="saveApiKey(this.value)" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; font-family:monospace; background:var(--bg-body); color:var(--text-primary);">
+            <small class="form-help">Si la proporcionas, se usará un modelo avanzado (GPT-4o-mini) para generar un análisis ejecutivo de alto nivel adaptado a tu operativa.</small>
+          </div>
+        </div>
+
+        <div class="ia-actions">
+          <button class="btn btn-secondary btn-lg btn-block" onclick="runAiAudit()" style="background: var(--bg-card); border: 2px solid var(--primary); color: var(--primary); font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            Auditar Parrilla Manual con IA
+          </button>
+        </div>
+
+        <div id="auditResultContainer" class="audit-result-container" style="margin-top:15px; min-height: 250px; max-height: 380px;">
+          <div class="audit-empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="stroke:var(--text-muted); margin-bottom:12px; opacity:0.5;">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <p>No se ha realizado ninguna auditoría para hoy.</p>
+            <small>Haz clic en "Auditar Parrilla Manual" para evaluar tus asignaciones actuales.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD/EDIT AGENT -->
+  <div class="modal-overlay" id="agentModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="agentModalTitle">Nuevo Agente</h3>
+        <button class="btn-icon" onclick="closeModal('agentModal')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="agentId">
+        <div class="form-group">
+          <label for="agentName">Nombre completo</label>
+          <input type="text" id="agentName" placeholder="Ej: Juan García López">
+        </div>
+        <div class="form-group">
+          <label for="agentCode">Código / ID</label>
+          <input type="text" id="agentCode" placeholder="Ej: AG-001">
+        </div>
+        <div class="form-group">
+          <label>Turnos asignados</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="agentMorning" checked>
+              <span class="dot dot-morning"></span> Mañana
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="agentAfternoon">
+              <span class="dot dot-afternoon"></span> Tarde
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="agentNight">
+              <span class="dot dot-night"></span> Noche
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="agentAirline">Aerolínea asignada</label>
+          <select id="agentAirline">
+            <option value="">Todas</option>
+            <option value="IB">Iberia</option>
+            <option value="VY">Vueling</option>
+            <option value="UX">Air Europa</option>
+            <option value="FR">Ryanair</option>
+            <option value="EW">EasyJet</option>
+            <option value="LH">Lufthansa</option>
+            <option value="AF">Air France</option>
+            <option value="BA">British Airways</option>
+            <option value="TK">Turkish Airlines</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('agentModal')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveAgent()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD/EDIT FLIGHT -->
+  <div class="modal-overlay" id="flightModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="flightModalTitle">Nuevo Embarque</h3>
+        <button class="btn-icon" onclick="closeModal('flightModal')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="flightId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="flightAirline">Aerolínea</label>
+            <select id="flightAirline">
+              <option value="IB">Iberia</option>
+              <option value="VY">Vueling</option>
+              <option value="UX">Air Europa</option>
+              <option value="FR">Ryanair</option>
+              <option value="EW">EasyJet</option>
+              <option value="LH">Lufthansa</option>
+              <option value="AF">Air France</option>
+              <option value="BA">British Airways</option>
+              <option value="TK">Turkish Airlines</option>
+              <option value="OTHER">Otra</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="flightNumber">Nº Vuelo</label>
+            <input type="text" id="flightNumber" placeholder="Ej: IB3214">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="flightTime">Hora de embarque</label>
+            <input type="time" id="flightTime">
+          </div>
+          <div class="form-group">
+            <label for="flightGate">Puerta / Stand</label>
+            <input type="text" id="flightGate" placeholder="Ej: B23 / S14">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="flightDestination">Destino</label>
+          <input type="text" id="flightDestination" placeholder="Ej: LHR / London Heathrow">
+        </div>
+        <div class="form-group">
+          <label for="flightType">Tipo</label>
+          <select id="flightType">
+            <option value="departure">Salida</option>
+            <option value="arrival">Llegada</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('flightModal')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveFlight()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ASSIGN AGENT TO FLIGHT -->
+  <div class="modal-overlay" id="assignModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3>Asignar Agente</h3>
+        <button class="btn-icon" onclick="closeModal('assignModal')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="assign-info" id="assignFlightInfo"></p>
+        <div class="form-group">
+          <label>Seleccionar agente disponible:</label>
+          <div id="assignAgentList" class="assign-agent-list">
+            <!-- Agentes disponibles se renderizan aquí -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm" id="btnUnassign" onclick="unassignFlight()" style="display:none">Quitar asignación</button>
+        <button class="btn btn-secondary" onclick="closeModal('assignModal')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- MODAL: UPLOAD & PROCESSING PROGRESS (IA EXTRACTOR) -->
+  <div class="modal-overlay" id="processingModal">
+    <div class="modal modal-sm" style="text-align: center; padding: 30px; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;">
+      <div style="margin-bottom: 8px;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="spinner" style="stroke: var(--primary); display: block; margin: 0 auto;">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;" id="procTitle">Leyendo archivo...</h3>
+      <p style="color: var(--text-muted); font-size: 13px; line-height: 1.4; margin: 0;" id="procSub">Preparando motor de extracción de datos...</p>
+      
+      <!-- Progress Bar -->
+      <div style="width: 100%; height: 6px; background: var(--bg-body); border-radius: 3px; overflow: hidden; margin: 8px 0; border: 1px solid var(--border);">
+        <div id="procProgress" style="width: 0%; height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.1s linear;"></div>
+      </div>
+      <div id="procStatus" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">PROCESANDO 0%</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
