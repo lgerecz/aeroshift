@@ -74,11 +74,15 @@ function init() {
     document.getElementById('openaiKey').value = savedKey;
   }
   const savedUrl = localStorage.getItem('aeroshift_backend_url');
-  if (savedUrl && document.getElementById('backendUrl')) {
-    document.getElementById('backendUrl').value = savedUrl;
-  } else if (document.getElementById('backendUrl')) {
-    // If hosted on Render, default to the Render backend URL automatically
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && window.location.hostname !== '') {
+  const isHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && window.location.hostname !== '';
+
+  if (document.getElementById('backendUrl')) {
+    if (isHosted && (!savedUrl || savedUrl.includes('localhost') || savedUrl.includes('127.0.0.1'))) {
+      document.getElementById('backendUrl').value = 'https://aeroshift-backend.onrender.com';
+      localStorage.setItem('aeroshift_backend_url', 'https://aeroshift-backend.onrender.com');
+    } else if (savedUrl) {
+      document.getElementById('backendUrl').value = savedUrl;
+    } else if (isHosted) {
       document.getElementById('backendUrl').value = 'https://aeroshift-backend.onrender.com';
     }
   }
@@ -965,46 +969,40 @@ async function handleScheduleFileUpload(event) {
     formData.append('files', files[i]);
   }
 
-  // Set up a dynamic timeout: 25 seconds to allow the cloud server to wake up, process the image, and call OpenAI Vision
-  const timeoutMs = 25000;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
     const response = await fetch(`${backendUrl}/extract`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiKey}`
       },
-      body: formData,
-      signal: controller.signal
+      body: formData
     });
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Error en el servidor de visión: ${response.status}`);
+      throw new Error(`Error en el servidor de extracción: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     if (data.success) {
-      // If we performed a real vision extraction, we enrich the flights and leave agents blank
+      // Keep all properties returned by the server, with fallback values to match renderDetectedAgents and renderDetectedFlights!
       extractedData = {
         agents: data.agents.map((a, idx) => {
           return {
             id: a.id || (idx + 1),
             name: a.name || 'Agente de Rampa',
-            code: a.code || ('AG-' + String(idx + 1).padStart(3, '0')),
-            shifts: a.shifts || ['morning'],
-            airline: a.airline || ''
+            hours: a.hours || '08:00-16:00',
+            role: a.role || 'CSA',
+            type: a.type || 'pasaje'
           };
         }),
         flights: data.flights.map((f, index) => {
           return {
             id: f.id || (index + 1),
             destination: f.destination || 'MAD',
+            airline: f.airline || 'FR',
             number: f.number || 'FR000',
-            time: f.time || '12:00', // STD
-            agents: '' // ¡COMPLETAMENTE EN BLANCO, LOS NOMBRES SE ASIGNAN DESPUÉS!
+            time: f.time || '12:00',
+            agents: '' // Always blank initially as requested
           };
         })
       };
@@ -1057,7 +1055,7 @@ async function handleScheduleFileUpload(event) {
     clearInterval(interval);
     progress.style.width = '100%';
     status.textContent = 'PROCESANDO 100%';
-    sub.textContent = 'Servidor de extracción offline. Cargando datos de previsualización...';
+    sub.textContent = `Error: ${error.message}. Cargando datos de previsualización...`;
 
     setTimeout(() => {
       try {
@@ -1096,7 +1094,7 @@ async function handleScheduleFileUpload(event) {
         switchView('extractor-preview');
         
         setTimeout(() => {
-          alert('Aviso de Simulación:\nEl servidor de extracción de Python o tu API Key de OpenAI están offline.\n\nSe ha cargado un listado estructurado de demostración con 26 vuelos vacíos extraídos idénticos a los de tu imagen de prueba. Se ha detectado la subida de tus imágenes reales y las puedes previsualizar y ampliar arriba. Para activar el análisis de visión IA real de tus fotos, enciende tu servidor Python con tu API Key configurada.');
+          alert(`Aviso de Simulación:\nNo se pudo conectar con el motor de extracción real o hubo un problema en el servidor.\n\nDetalle técnico: ${error.message}\n\nSe ha cargado un listado estructurado de demostración con 26 vuelos vacíos y 24 agentes. Puedes ver las imágenes reales subidas arriba en la pantalla.`);
         }, 150);
       }
     }, 1000);
