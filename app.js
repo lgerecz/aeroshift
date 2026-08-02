@@ -965,9 +965,8 @@ async function handleScheduleFileUpload(event) {
     formData.append('files', files[i]);
   }
 
-  // Set up a dynamic timeout: 25 seconds for real AI extraction, 1.5 seconds for offline fallback detection
-  const hasKey = openaiKey && openaiKey.length > 15;
-  const timeoutMs = hasKey ? 25000 : 1500;
+  // Set up a dynamic timeout: 25 seconds to allow the cloud server to wake up, process the image, and call OpenAI Vision
+  const timeoutMs = 25000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
