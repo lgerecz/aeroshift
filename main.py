@@ -697,6 +697,63 @@ def optimize_schedule(req: OptimizeRequest):
             "message": "No se pudo encontrar un cuadrante viable respetando tus descansos y horarios."
         }
 
+# DEMO Fallback Data (Sábado 20 Junio)
+DEMO_AGENTS = [
+    { "id": 1, "name": "CARO", "hours": "04:15-14:15", "role": "DSM", "type": "admin" },
+    { "id": 2, "name": "DÉBORA", "hours": "02:45-12:45", "role": "PSM", "type": "admin" },
+    { "id": 3, "name": "GASTÓN", "hours": "06:45-16:45", "role": "PSM", "type": "admin" },
+    { "id": 4, "name": "MOI", "hours": "04:45-14:45", "role": "OPS", "type": "admin" },
+    { "id": 5, "name": "BEGO", "hours": "05:00-13:00", "role": "OPS", "type": "admin" },
+    { "id": 6, "name": "LIZ", "hours": "03:30-11:30", "role": "TKT", "type": "admin" },
+    { "id": 7, "name": "CAROL", "hours": "09:00-16:00", "role": "TKT", "type": "admin" },
+    { "id": 8, "name": "CRISTI", "hours": "07:15-15:15", "role": "LL", "type": "admin" },
+    { "id": 9, "name": "IRENE", "hours": "02:45-08:10", "role": "CSA", "type": "pasaje" },
+    { "id": 10, "name": "STEFANIA", "hours": "02:45-08:45", "role": "CSA", "type": "pasaje" },
+    { "id": 11, "name": "MARU", "hours": "03:30-08:00", "role": "CSA", "type": "pasaje" },
+    { "id": 12, "name": "ASMA", "hours": "03:30-08:10", "role": "CSA", "type": "pasaje" },
+    { "id": 13, "name": "ALEJANDRA", "hours": "03:45-06:00", "role": "CSA", "type": "pasaje" },
+    { "id": 14, "name": "ALEJANDRO", "hours": "03:45-06:00", "role": "CSA", "type": "pasaje" },
+    { "id": 15, "name": "CATHERINE", "hours": "04:35-07:10", "role": "CSA", "type": "pasaje" },
+    { "id": 16, "name": "VICTORIA", "hours": "04:35-07:25", "role": "CSA", "type": "pasaje" },
+    { "id": 17, "name": "GUILLE", "hours": "04:35-07:25", "role": "CSA", "type": "pasaje" },
+    { "id": 18, "name": "MARTA A.", "hours": "04:35-11:25", "role": "CSA [TKT]", "type": "pasaje" },
+    { "id": 19, "name": "NURIA G.", "hours": "04:35-11:25", "role": "CSA [OPS]", "type": "pasaje" },
+    { "id": 20, "name": "OMAR", "hours": "04:35-12:20", "role": "CSA", "type": "pasaje" },
+    { "id": 21, "name": "MARTA C.", "hours": "04:35-12:20", "role": "CSA [OPS]", "type": "pasaje" },
+    { "id": 22, "name": "ANASTASIYA", "hours": "04:50-07:25", "role": "CSA", "type": "pasaje" },
+    { "id": 23, "name": "JORGE N.", "hours": "04:55-11:25", "role": "CSA [TKT]", "type": "pasaje" },
+    { "id": 24, "name": "LETI", "hours": "04:55-11:25", "role": "CSA", "type": "pasaje" }
+]
+
+DEMO_FLIGHTS = [
+    { "id": 1, "destination": "MAN", "airline": "FR", "number": "FR3209", "time": "05:45", "agents": "" },
+    { "id": 2, "destination": "EMA", "airline": "FR", "number": "FR4459", "time": "05:45", "agents": "" },
+    { "id": 3, "destination": "NUE", "airline": "FR", "number": "FR5094", "time": "05:45", "agents": "" },
+    { "id": 4, "destination": "BOH", "airline": "FR", "number": "FR5945", "time": "06:00", "agents": "" },
+    { "id": 5, "destination": "BRE", "airline": "FR", "number": "FR9929", "time": "06:05", "agents": "" },
+    { "id": 6, "destination": "LBA", "airline": "FR", "number": "FR2447", "time": "06:15", "agents": "" },
+    { "id": 7, "destination": "MME", "airline": "FR", "number": "FR3374", "time": "06:20", "agents": "" },
+    { "id": 8, "destination": "BUD", "airline": "FR", "number": "FR2274", "time": "06:25", "agents": "" },
+    { "id": 9, "destination": "WMI", "airline": "FR", "number": "FR4059", "time": "06:30", "agents": "" },
+    { "id": 10, "destination": "TNG", "airline": "FR", "number": "FR9587", "time": "06:30", "agents": "" },
+    { "id": 11, "destination": "CRL", "airline": "FR", "number": "FR1915", "time": "06:45", "agents": "" },
+    { "id": 12, "destination": "AAR", "airline": "FR", "number": "FR4695", "time": "06:50", "agents": "" },
+    { "id": 13, "destination": "OPO", "airline": "FR", "number": "FR5046", "time": "06:55", "agents": "" },
+    { "id": 14, "destination": "RAK", "airline": "FR", "number": "FR3909", "time": "07:00", "agents": "" },
+    { "id": 15, "destination": "FMO", "airline": "FR", "number": "FR3368", "time": "07:10", "agents": "" },
+    { "id": 16, "destination": "GOT", "airline": "FR", "number": "FR91",   "time": "07:10", "agents": "" },
+    { "id": 17, "destination": "BER", "airline": "FR", "number": "FR233",  "time": "07:20", "agents": "" },
+    { "id": 18, "destination": "ABZ", "airline": "FR", "number": "FR8007", "time": "07:25", "agents": "" },
+    { "id": 19, "destination": "EIN", "airline": "FR", "number": "FR2575", "time": "07:45", "agents": "" },
+    { "id": 20, "destination": "VLC", "airline": "FR", "number": "FR645",  "time": "08:10", "agents": "" },
+    { "id": 21, "destination": "BCN", "airline": "FR", "number": "FR3081", "time": "08:20", "agents": "" },
+    { "id": 22, "destination": "FCO", "airline": "FR", "number": "FR6139", "time": "09:05", "agents": "" },
+    { "id": 23, "destination": "PRG", "airline": "FR", "number": "FR6658", "time": "09:15", "agents": "" },
+    { "id": 24, "destination": "BLQ", "airline": "FR", "number": "FR8933", "time": "09:25", "agents": "" },
+    { "id": 25, "destination": "VIE", "airline": "FR", "number": "FR703",  "time": "09:55", "agents": "" },
+    { "id": 26, "destination": "ZAG", "airline": "FR", "number": "FR600",  "time": "10:00", "agents": "" }
+]
+
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
@@ -704,65 +761,136 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
     ahora totalmente adaptado para inicializar tus 26 vuelos reales con la columna
     de agentes vacía y tus 24 agentes del horario.
     """
-    return {
-        "success": True,
-        "is_real_ai": False,
-        "message": "Lector local de AeroShift activo (Maqueta real de Sábado 20 Junio cargada).",
-        "agents": [
-            { "id": 1, "name": "CARO", "hours": "04:15-14:15", "role": "DSM", "type": "admin" },
-            { "id": 2, "name": "DÉBORA", "hours": "02:45-12:45", "role": "PSM", "type": "admin" },
-            { "id": 3, "name": "GASTÓN", "hours": "06:45-16:45", "role": "PSM", "type": "admin" },
-            { "id": 4, "name": "MOI", "hours": "04:45-14:45", "role": "OPS", "type": "admin" },
-            { "id": 5, "name": "BEGO", "hours": "05:00-13:00", "role": "OPS", "type": "admin" },
-            { "id": 6, "name": "LIZ", "hours": "03:30-11:30", "role": "TKT", "type": "admin" },
-            { "id": 7, "name": "CAROL", "hours": "09:00-16:00", "role": "TKT", "type": "admin" },
-            { "id": 8, "name": "CRISTI", "hours": "07:15-15:15", "role": "LL", "type": "admin" },
-            { "id": 9, "name": "IRENE", "hours": "02:45-08:10", "role": "CSA", "type": "pasaje" },
-            { "id": 10, "name": "STEFANIA", "hours": "02:45-08:45", "role": "CSA", "type": "pasaje" },
-            { "id": 11, "name": "MARU", "hours": "03:30-08:00", "role": "CSA", "type": "pasaje" },
-            { "id": 12, "name": "ASMA", "hours": "03:30-08:10", "role": "CSA", "type": "pasaje" },
-            { "id": 13, "name": "ALEJANDRA", "hours": "03:45-06:00", "role": "CSA", "type": "pasaje" },
-            { "id": 14, "name": "ALEJANDRO", "hours": "03:45-06:00", "role": "CSA", "type": "pasaje" },
-            { "id": 15, "name": "CATHERINE", "hours": "04:35-07:10", "role": "CSA", "type": "pasaje" },
-            { "id": 16, "name": "VICTORIA", "hours": "04:35-07:25", "role": "CSA", "type": "pasaje" },
-            { "id": 17, "name": "GUILLE", "hours": "04:35-07:25", "role": "CSA", "type": "pasaje" },
-            { "id": 18, "name": "MARTA A.", "hours": "04:35-11:25", "role": "CSA [TKT]", "type": "pasaje" },
-            { "id": 19, "name": "NURIA G.", "hours": "04:35-11:25", "role": "CSA [OPS]", "type": "pasaje" },
-            { "id": 20, "name": "OMAR", "hours": "04:35-12:20", "role": "CSA", "type": "pasaje" },
-            { "id": 21, "name": "MARTA C.", "hours": "04:35-12:20", "role": "CSA [OPS]", "type": "pasaje" },
-            { "id": 22, "name": "ANASTASIYA", "hours": "04:50-07:25", "role": "CSA", "type": "pasaje" },
-            { "id": 23, "name": "JORGE N.", "hours": "04:55-11:25", "role": "CSA [TKT]", "type": "pasaje" },
-            { "id": 24, "name": "LETI", "hours": "04:55-11:25", "role": "CSA", "type": "pasaje" }
-        ],
-        "flights": [
-            { "id": 1, "destination": "MAN", "airline": "FR", "number": "FR3209", "time": "05:45", "agents": "" },
-            { "id": 2, "destination": "EMA", "airline": "FR", "number": "FR4459", "time": "05:45", "agents": "" },
-            { "id": 3, "destination": "NUE", "airline": "FR", "number": "FR5094", "time": "05:45", "agents": "" },
-            { "id": 4, "destination": "BOH", "airline": "FR", "number": "FR5945", "time": "06:00", "agents": "" },
-            { "id": 5, "destination": "BRE", "airline": "FR", "number": "FR9929", "time": "06:05", "agents": "" },
-            { "id": 6, "destination": "LBA", "airline": "FR", "number": "FR2447", "time": "06:15", "agents": "" },
-            { "id": 7, "destination": "MME", "airline": "FR", "number": "FR3374", "time": "06:20", "agents": "" },
-            { "id": 8, "destination": "BUD", "airline": "FR", "number": "FR2274", "time": "06:25", "agents": "" },
-            { "id": 9, "destination": "WMI", "airline": "FR", "number": "FR4059", "time": "06:30", "agents": "" },
-            { "id": 10, "destination": "TNG", "airline": "FR", "number": "FR9587", "time": "06:30", "agents": "" },
-            { "id": 11, "destination": "CRL", "airline": "FR", "number": "FR1915", "time": "06:45", "agents": "" },
-            { "id": 12, "destination": "AAR", "airline": "FR", "number": "FR4695", "time": "06:50", "agents": "" },
-            { "id": 13, "destination": "OPO", "airline": "FR", "number": "FR5046", "time": "06:55", "agents": "" },
-            { "id": 14, "destination": "RAK", "airline": "FR", "number": "FR3909", "time": "07:00", "agents": "" },
-            { "id": 15, "destination": "FMO", "airline": "FR", "number": "FR3368", "time": "07:10", "agents": "" },
-            { "id": 16, "destination": "GOT", "airline": "FR", "number": "FR91",   "time": "07:10", "agents": "" },
-            { "id": 17, "destination": "BER", "airline": "FR", "number": "FR233",  "time": "07:20", "agents": "" },
-            { "id": 18, "destination": "ABZ", "airline": "FR", "number": "FR8007", "time": "07:25", "agents": "" },
-            { "id": 19, "destination": "EIN", "airline": "FR", "number": "FR2575", "time": "07:45", "agents": "" },
-            { "id": 20, "destination": "VLC", "airline": "FR", "number": "FR645",  "time": "08:10", "agents": "" },
-            { "id": 21, "destination": "BCN", "airline": "FR", "number": "FR3081", "time": "08:20", "agents": "" },
-            { "id": 22, "destination": "FCO", "airline": "FR", "number": "FR6139", "time": "09:05", "agents": "" },
-            { "id": 23, "destination": "PRG", "airline": "FR", "number": "FR6658", "time": "09:15", "agents": "" },
-            { "id": 24, "destination": "BLQ", "airline": "FR", "number": "FR8933", "time": "09:25", "agents": "" },
-            { "id": 25, "destination": "VIE", "airline": "FR", "number": "FR703",  "time": "09:55", "agents": "" },
-            { "id": 26, "destination": "ZAG", "airline": "FR", "number": "FR600",  "time": "10:00", "agents": "" }
-        ]
-    }
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {
+            "success": True,
+            "is_real_ai": False,
+            "message": "Lector local de AeroShift activo (Maqueta real de Sábado 20 Junio cargada por falta de API Key).",
+            "agents": DEMO_AGENTS,
+            "flights": DEMO_FLIGHTS
+        }
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        image_contents = []
+        for file in files:
+            content = await file.read()
+            base64_image = base64.b64encode(content).decode('utf-8')
+            mime_type = "image/png"
+            if file.filename.lower().endswith(('.jpg', '.jpeg')):
+                mime_type = "image/jpeg"
+            elif file.filename.lower().endswith('.gif'):
+                mime_type = "image/gif"
+            elif file.filename.lower().endswith('.webp'):
+                mime_type = "image/webp"
+
+            image_contents.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{base64_image}"
+                }
+            })
+
+        if not image_contents:
+            return {
+                "success": True,
+                "is_real_ai": False,
+                "message": "No se recibieron imágenes válidas. Cargando datos de previsualización.",
+                "agents": DEMO_AGENTS,
+                "flights": DEMO_FLIGHTS
+            }
+
+        system_prompt = (
+            "Eres un asistente de inteligencia artificial experto en lectura y extracción de horarios de aeropuertos.\n"
+            "Tu tarea es analizar las imágenes proporcionadas y extraer:\n"
+            "1. La lista de vuelos programados (vuelos de salida/boarding gates).\n"
+            "2. La lista de agentes de pasaje/handling disponibles con sus turnos de trabajo.\n\n"
+            "Debes devolver un objeto JSON estricto con el siguiente esquema exacto de JSON:\n"
+            "{\n"
+            "  \"agents\": [\n"
+            "    {\"id\": 1, \"name\": \"NOMBRE\", \"hours\": \"HH:MM-HH:MM\", \"role\": \"CSA\", \"type\": \"pasaje\"}\n"
+            "  ],\n"
+            "  \"flights\": [\n"
+            "    {\"id\": 1, \"destination\": \"XXX\", \"airline\": \"FR\", \"number\": \"FR123\", \"time\": \"HH:MM\", \"agents\": \"\"}\n"
+            "  ]\n"
+            "}\n\n"
+            "Reglas importantes:\n"
+            "- Cada agente debe tener un id numérico secuencial único.\n"
+            "- 'hours' debe tener el formato exacto 'HH:MM-HH:MM' (ej: '04:35-11:25').\n"
+            "- 'role' debe ser el código de rol (ej: CSA, DSM, PSM, OPS, TKT, LL).\n"
+            "- 'type' debe ser 'admin' si el rol es DSM, PSM, OPS, TKT, TKD, LL, SOMBRA, SHADOW, FAMI, SICK, CURSO, AUTOCHECKIN. En cualquier otro caso, debe ser 'pasaje'.\n"
+            "- Cada vuelo debe tener un id numérico secuencial único.\n"
+            "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA).\n"
+            "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH).\n"
+            "- 'time' debe tener el formato 'HH:MM' (ej: '05:45').\n"
+            "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
+            "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": image_contents
+                }
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=4000,
+            temperature=0.0
+        )
+
+        raw_result = response.choices[0].message.content.strip()
+        parsed_result = json.loads(raw_result)
+
+        extracted_agents = parsed_result.get("agents", [])
+        extracted_flights = parsed_result.get("flights", [])
+
+        formatted_agents = []
+        for idx, ag in enumerate(extracted_agents):
+            formatted_agents.append({
+                "id": ag.get("id") or (idx + 1),
+                "name": str(ag.get("name") or f"AGENTE_{idx+1}").upper().strip(),
+                "hours": str(ag.get("hours") or "08:00-16:00").strip(),
+                "role": str(ag.get("role") or "CSA").upper().strip(),
+                "type": str(ag.get("type") or "pasaje").lower().strip()
+            })
+
+        formatted_flights = []
+        for idx, fl in enumerate(extracted_flights):
+            formatted_flights.append({
+                "id": fl.get("id") or (idx + 1),
+                "destination": str(fl.get("destination") or "MAD").upper().strip(),
+                "airline": str(fl.get("airline") or "FR").upper().strip(),
+                "number": str(fl.get("number") or f"FL{idx+1}").upper().strip(),
+                "time": str(fl.get("time") or "12:00").strip(),
+                "agents": ""
+            })
+
+        return {
+            "success": True,
+            "is_real_ai": True,
+            "message": f"Extracción exitosa realizada por GPT-4o-mini a partir de {len(files)} imágenes.",
+            "agents": formatted_agents,
+            "flights": formatted_flights
+        }
+
+    except Exception as e:
+        print(f"Error calling OpenAI Vision API: {e}")
+        return {
+            "success": True,
+            "is_real_ai": False,
+            "message": f"Error en la extracción por IA ({str(e)}). Cargando maqueta de previsualización.",
+            "agents": DEMO_AGENTS,
+            "flights": DEMO_FLIGHTS
+        }
 
 if __name__ == "__main__":
     import uvicorn

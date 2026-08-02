@@ -76,6 +76,11 @@ function init() {
   const savedUrl = localStorage.getItem('aeroshift_backend_url');
   if (savedUrl && document.getElementById('backendUrl')) {
     document.getElementById('backendUrl').value = savedUrl;
+  } else if (document.getElementById('backendUrl')) {
+    // If hosted on Render, default to the Render backend URL automatically
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && window.location.hostname !== '') {
+      document.getElementById('backendUrl').value = 'https://aeroshift-backend.onrender.com';
+    }
   }
 
   // Pre-render the preview tables so they are ready on load!
