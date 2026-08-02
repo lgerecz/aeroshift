@@ -984,18 +984,28 @@ async function handleScheduleFileUpload(event) {
 
     const data = await response.json();
     if (data.success) {
-      // Keep all properties returned by the server, with fallback values to match renderDetectedAgents and renderDetectedFlights!
-      extractedData = {
-        agents: data.agents.map((a, idx) => {
+      // SMART MERGE: If we got new agents, map and store them. Otherwise, retain existing agents so they don't get erased!
+      let newAgents = [];
+      if (data.agents && data.agents.length > 0) {
+        newAgents = data.agents.map((a, idx) => {
           return {
             id: a.id || (idx + 1),
-            name: a.name || 'Agente de Rampa',
+            name: a.name || 'Agente',
             hours: a.hours || '08:00-16:00',
             role: a.role || 'CSA',
             type: a.type || 'pasaje'
           };
-        }),
-        flights: data.flights.map((f, index) => {
+        });
+      } else if (extractedData && extractedData.agents && extractedData.agents.length > 0) {
+        newAgents = extractedData.agents;
+      } else {
+        newAgents = [];
+      }
+
+      // SMART MERGE: If we got new flights, map and store them. Otherwise, retain existing flights!
+      let newFlights = [];
+      if (data.flights && data.flights.length > 0) {
+        newFlights = data.flights.map((f, index) => {
           return {
             id: f.id || (index + 1),
             destination: f.destination || 'MAD',
@@ -1004,7 +1014,17 @@ async function handleScheduleFileUpload(event) {
             time: f.time || '12:00',
             agents: '' // Always blank initially as requested
           };
-        })
+        });
+      } else if (extractedData && extractedData.flights && extractedData.flights.length > 0) {
+        newFlights = extractedData.flights;
+      } else {
+        newFlights = [];
+      }
+
+      extractedData = {
+        date: data.date || (extractedData ? extractedData.date : 'Sábado 20 Junio'),
+        agents: newAgents,
+        flights: newFlights
       };
       
       clearInterval(interval);
@@ -1160,6 +1180,11 @@ function renderDetectedAgents() {
     initializeMockExtractedData();
   }
 
+  const titleElem = document.getElementById('detectedAgentsTitle');
+  if (titleElem && extractedData && extractedData.date) {
+    titleElem.innerHTML = `👥 Turnos del Personal — ${extractedData.date}`;
+  }
+
   // Filter agents by type
   const admins = extractedData.agents.filter(a => a.type === 'admin');
   const pasajes = extractedData.agents.filter(a => a.type === 'pasaje');
@@ -1301,6 +1326,11 @@ function renderDetectedFlights() {
     initializeMockExtractedData();
   }
 
+  const titleElem = document.getElementById('detectedFlightsTitle');
+  if (titleElem && extractedData && extractedData.date) {
+    titleElem.innerHTML = `✈️ Parrilla de Embarques — ${extractedData.date}`;
+  }
+
   const calculateTimes = (stdStr) => {
     try {
       const [sh, sm] = stdStr.split(':').map(Number);
@@ -1424,6 +1454,7 @@ function deleteFlightFromPreview(id) {
 // Seeding the EXACT 27 agents and 26 flights from your screenshots (WITH NO AGENTS PRE-ASSIGNED TO FLIGHTS!)
 function initializeMockExtractedData() {
   extractedData = {
+    date: 'Sábado 20 Junio',
     agents: [
       { id: 1, name: 'CARO', hours: '04:15-14:15', role: 'DSM', type: 'admin' },
       { id: 2, name: 'DÉBORA', hours: '02:45-12:45', role: 'PSM', type: 'admin' },

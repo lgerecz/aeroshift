@@ -807,9 +807,11 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "Eres un asistente de inteligencia artificial experto en lectura y extracción de horarios de aeropuertos.\n"
             "Tu tarea es analizar las imágenes proporcionadas y extraer:\n"
             "1. La lista de vuelos programados (vuelos de salida/boarding gates).\n"
-            "2. La lista de agentes de pasaje/handling disponibles con sus turnos de trabajo.\n\n"
+            "2. La lista de agentes de pasaje/handling disponibles con sus turnos de trabajo.\n"
+            "3. La fecha del horario (ej: 'DOMINGO 21 JUNIO' o 'SÁBADO 20 JUNIO') que suele estar en las cabeceras o esquinas superiores de los documentos.\n\n"
             "Debes devolver un objeto JSON estricto con el siguiente esquema exacto de JSON:\n"
             "{\n"
+            "  \"date\": \"DOMINGO 21 JUNIO\",\n"
             "  \"agents\": [\n"
             "    {\"id\": 1, \"name\": \"NOMBRE\", \"hours\": \"HH:MM-HH:MM\", \"role\": \"CSA\", \"type\": \"pasaje\"}\n"
             "  ],\n"
@@ -818,14 +820,15 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "  ]\n"
             "}\n\n"
             "Reglas importantes:\n"
+            "- 'date' debe ser la fecha leída de la cabecera del documento, por ejemplo 'DOMINGO 21 JUNIO'. Si no la encuentras o es ilegible, pon 'Sábado 20 Junio' por defecto.\n"
             "- Cada agente debe tener un id numérico secuencial único.\n"
             "- 'hours' debe tener el formato exacto 'HH:MM-HH:MM' (ej: '04:35-11:25').\n"
             "- 'role' debe ser el código de rol (ej: CSA, DSM, PSM, OPS, TKT, LL).\n"
             "- 'type' debe ser 'admin' si el rol es DSM, PSM, OPS, TKT, TKD, LL, SOMBRA, SHADOW, FAMI, SICK, CURSO, AUTOCHECKIN. En cualquier otro caso, debe ser 'pasaje'.\n"
             "- Cada vuelo debe tener un id numérico secuencial único.\n"
-            "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA).\n"
+            "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA, SNN, OTP, PSA, ORK, PAD, LBC, BUD).\n"
             "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH).\n"
-            "- 'time' debe tener el formato 'HH:MM' (ej: '05:45').\n"
+            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
             "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
             "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
         )
@@ -850,6 +853,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         raw_result = response.choices[0].message.content.strip()
         parsed_result = json.loads(raw_result)
 
+        extracted_date = parsed_result.get("date") or "Sábado 20 Junio"
         extracted_agents = parsed_result.get("agents", [])
         extracted_flights = parsed_result.get("flights", [])
 
@@ -878,6 +882,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "success": True,
             "is_real_ai": True,
             "message": f"Extracción exitosa realizada por GPT-4o-mini a partir de {len(files)} imágenes.",
+            "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights
         }
@@ -888,6 +893,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "success": True,
             "is_real_ai": False,
             "message": f"Error en la extracción por IA ({str(e)}). Cargando maqueta de previsualización.",
+            "date": "Sábado 20 Junio",
             "agents": DEMO_AGENTS,
             "flights": DEMO_FLIGHTS
         }
