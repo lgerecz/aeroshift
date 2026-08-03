@@ -766,9 +766,10 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         return {
             "success": True,
             "is_real_ai": False,
-            "message": "Lector local de AeroShift activo (Maqueta real de Sábado 20 Junio cargada por falta de API Key).",
-            "agents": DEMO_AGENTS,
-            "flights": DEMO_FLIGHTS
+            "message": "Servidor sin clave API Key de OpenAI configurada. No se cargaron datos ficticios para evitar confusiones.",
+            "date": "Fecha no detectada",
+            "agents": [],
+            "flights": []
         }
 
     try:
@@ -798,9 +799,10 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             return {
                 "success": True,
                 "is_real_ai": False,
-                "message": "No se recibieron imágenes válidas. Cargando datos de previsualización.",
-                "agents": DEMO_AGENTS,
-                "flights": DEMO_FLIGHTS
+                "message": "No se recibieron imágenes válidas.",
+                "date": "Fecha no detectada",
+                "agents": [],
+                "flights": []
             }
 
         system_prompt = (
@@ -821,6 +823,14 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "}\n\n"
             "Reglas importantes:\n"
             "- 'date' debe ser la fecha leída de la cabecera del documento, por ejemplo 'DOMINGO 21 JUNIO'. Si no la encuentras o es ilegible, pon 'Sábado 20 Junio' por defecto.\n"
+            "- ¡¡¡REGLA DE ORO DE EXTRACCIÓN PARCIAL (NO INVENTAR DATOS)!!!:\n"
+            "  * Si la imagen proporcionada SOLO contiene la Parrilla de Vuelos/Embarques y NO contiene los Turnos de Personal, la clave 'agents' del JSON DEBE ser un array vacío: '\"agents\": []'. ¡BAJO NINGÚN CONCEPTO te inventes agentes, roles ni horarios ficticios!\n"
+            "  * Si la imagen proporcionada SOLO contiene los Turnos de Personal y NO contiene los Vuelos/Embarques, la clave 'flights' del JSON DEBE ser un array vacío: '\"flights\": []'. ¡BAJO NINGÚN CONCEPTO te inventes destinos, números de vuelo ni horas ficticias!\n"
+            "- ¡¡¡REGLA PARA FILAS MULTIPERSONALES (separadas por '/')!!!:\n"
+            "  Si en una misma fila del cuadrante aparecen dos personas separadas por una barra '/' (ej: 'JORGE / PATRI (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear DOS objetos de agente distintos e individuales en la lista JSON:\n"
+            "  1. Un agente con nombre 'JORGE', horario '02:45-12:45' y rol 'PSM'.\n"
+            "  2. Un agente con nombre 'PATRI', horario '06:45-16:45' y rol 'PSM'.\n"
+            "  De esta forma, cada persona real tendrá su propio renglón individual en el JSON final.\n"
             "- Cada agente debe tener un id numérico secuencial único.\n"
             "- 'hours' debe tener el formato exacto 'HH:MM-HH:MM' (ej: '04:35-11:25').\n"
             "- 'role' debe ser el código de rol (ej: CSA, DSM, PSM, OPS, TKT, LL).\n"
@@ -859,12 +869,21 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
 
         formatted_agents = []
         for idx, ag in enumerate(extracted_agents):
+            role_upper = str(ag.get("role") or "CSA").upper().strip()
+            
+            # Enforce deterministic classification of admin roles so they end up in the correct visual quadrant
+            agent_type = "pasaje"
+            for admin_role in ['DSM', 'PSM', 'OPS', 'TKT', 'TKD', 'LL', 'SOMBRA', 'SHADOW', 'FAMI', 'SICK', 'CURSO', 'AUTOCHECKIN']:
+                if admin_role in role_upper:
+                    agent_type = "admin"
+                    break
+            
             formatted_agents.append({
                 "id": ag.get("id") or (idx + 1),
                 "name": str(ag.get("name") or f"AGENTE_{idx+1}").upper().strip(),
                 "hours": str(ag.get("hours") or "08:00-16:00").strip(),
-                "role": str(ag.get("role") or "CSA").upper().strip(),
-                "type": str(ag.get("type") or "pasaje").lower().strip()
+                "role": role_upper,
+                "type": agent_type
             })
 
         formatted_flights = []
@@ -892,10 +911,10 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         return {
             "success": True,
             "is_real_ai": False,
-            "message": f"Error en la extracción por IA ({str(e)}). Cargando maqueta de previsualización.",
-            "date": "Sábado 20 Junio",
-            "agents": DEMO_AGENTS,
-            "flights": DEMO_FLIGHTS
+            "message": f"Error en la extracción por IA ({str(e)}). No se han cargado datos ficticios para evitar confusiones.",
+            "date": "Fecha no detectada",
+            "agents": [],
+            "flights": []
         }
 
 if __name__ == "__main__":

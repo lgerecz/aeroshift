@@ -1451,65 +1451,16 @@ function deleteFlightFromPreview(id) {
   }
 }
 
-// Seeding the EXACT 27 agents and 26 flights from your screenshots (WITH NO AGENTS PRE-ASSIGNED TO FLIGHTS!)
+// Seeding empty structure so we don't invent or pre-load any fake data!
 function initializeMockExtractedData() {
+  const today = new Date();
+  const options = { weekday: 'long', day: 'numeric', month: 'long' };
+  const dateStr = today.toLocaleDateString('es-ES', options);
+  
   extractedData = {
-    date: 'Sábado 20 Junio',
-    agents: [
-      { id: 1, name: 'CARO', hours: '04:15-14:15', role: 'DSM', type: 'admin' },
-      { id: 2, name: 'DÉBORA', hours: '02:45-12:45', role: 'PSM', type: 'admin' },
-      { id: 3, name: 'GASTÓN', hours: '06:45-16:45', role: 'PSM', type: 'admin' },
-      { id: 4, name: 'MOI', hours: '04:45-14:45', role: 'OPS', type: 'admin' },
-      { id: 5, name: 'BEGO', hours: '05:00-13:00', role: 'OPS', type: 'admin' },
-      { id: 6, name: 'LIZ', hours: '03:30-11:30', role: 'TKT', type: 'admin' },
-      { id: 7, name: 'CAROL', hours: '09:00-16:00', role: 'TKT', type: 'admin' },
-      { id: 8, name: 'CRISTI', hours: '07:15-15:15', role: 'LL', type: 'admin' },
-      
-      { id: 9, name: 'IRENE', hours: '02:45-08:10', role: 'CSA', type: 'pasaje' },
-      { id: 10, name: 'STEFANIA', hours: '02:45-08:45', role: 'CSA', type: 'pasaje' },
-      { id: 11, name: 'MARU', hours: '03:30-08:00', role: 'CSA', type: 'pasaje' },
-      { id: 12, name: 'ASMA', hours: '03:30-08:10', role: 'CSA', type: 'pasaje' },
-      { id: 13, name: 'ALEJANDRA', hours: '03:45-06:00', role: 'CSA', type: 'pasaje' },
-      { id: 14, name: 'ALEJANDRO', hours: '03:45-06:00', role: 'CSA', type: 'pasaje' },
-      { id: 15, name: 'CATHERINE', hours: '04:35-07:10', role: 'CSA', type: 'pasaje' },
-      { id: 16, name: 'VICTORIA', hours: '04:35-07:25', role: 'CSA', type: 'pasaje' },
-      { id: 17, name: 'GUILLE', hours: '04:35-07:25', role: 'CSA', type: 'pasaje' },
-      { id: 18, name: 'MARTA A.', hours: '04:35-11:25', role: 'CSA [TKT]', type: 'pasaje' },
-      { id: 19, name: 'NURIA G.', hours: '04:35-11:25', role: 'CSA [OPS]', type: 'pasaje' },
-      { id: 20, name: 'OMAR', hours: '04:35-12:20', role: 'CSA', type: 'pasaje' },
-      { id: 21, name: 'MARTA C.', hours: '04:35-12:20', role: 'CSA [OPS]', type: 'pasaje' },
-      { id: 22, name: 'ANASTASIYA', hours: '04:50-07:25', role: 'CSA', type: 'pasaje' },
-      { id: 23, name: 'JORGE N.', hours: '04:55-11:25', role: 'CSA [TKT]', type: 'pasaje' },
-      { id: 24, name: 'LETI', hours: '04:55-11:25', role: 'CSA', type: 'pasaje' }
-    ],
-    flights: [
-      { id: 1, destination: 'MAN', airline: 'FR', number: 'FR3209', time: '05:45', agents: '' },
-      { id: 2, destination: 'EMA', airline: 'FR', number: 'FR4459', time: '05:45', agents: '' },
-      { id: 3, destination: 'NUE', airline: 'FR', number: 'FR5094', time: '05:45', agents: '' },
-      { id: 4, destination: 'BOH', airline: 'FR', number: 'FR5945', time: '06:00', agents: '' },
-      { id: 5, destination: 'BRE', airline: 'FR', number: 'FR9929', time: '06:05', agents: '' },
-      { id: 6, destination: 'LBA', airline: 'FR', number: 'FR2447', time: '06:15', agents: '' },
-      { id: 7, destination: 'MME', airline: 'FR', number: 'FR3374', time: '06:20', agents: '' },
-      { id: 8, destination: 'BUD', airline: 'FR', number: 'FR2274', time: '06:25', agents: '' },
-      { id: 9, destination: 'WMI', airline: 'FR', number: 'FR4059', time: '06:30', agents: '' },
-      { id: 10, destination: 'TNG', airline: 'FR', number: 'FR9587', time: '06:30', agents: '' },
-      { id: 11, destination: 'CRL', airline: 'FR', number: 'FR1915', time: '06:45', agents: '' },
-      { id: 12, destination: 'AAR', airline: 'FR', number: 'FR4695', time: '06:50', agents: '' },
-      { id: 13, destination: 'OPO', airline: 'FR', number: 'FR5046', time: '06:55', agents: '' },
-      { id: 14, destination: 'RAK', airline: 'FR', number: 'FR3909', time: '07:00', agents: '' },
-      { id: 15, destination: 'FMO', airline: 'FR', number: 'FR3368', time: '07:10', agents: '' },
-      { id: 16, destination: 'GOT', airline: 'FR', number: 'FR91',   time: '07:10', agents: '' },
-      { id: 17, destination: 'BER', airline: 'FR', number: 'FR233',  time: '07:20', agents: '' },
-      { id: 18, destination: 'ABZ', airline: 'FR', number: 'FR8007', time: '07:25', agents: '' },
-      { id: 19, destination: 'EIN', airline: 'FR', number: 'FR2575', time: '07:45', agents: '' },
-      { id: 20, destination: 'VLC', airline: 'FR', number: 'FR645',  time: '08:10', agents: '' },
-      { id: 21, destination: 'BCN', airline: 'FR', number: 'FR3081', time: '08:20', agents: '' },
-      { id: 22, destination: 'FCO', airline: 'FR', number: 'FR6139', time: '09:05', agents: '' },
-      { id: 23, destination: 'PRG', airline: 'FR', number: 'FR6658', time: '09:15', agents: '' },
-      { id: 24, destination: 'BLQ', airline: 'FR', number: 'FR8933', time: '09:25', agents: '' },
-      { id: 25, destination: 'VIE', airline: 'FR', number: 'FR703',  time: '09:55', agents: '' },
-      { id: 26, destination: 'ZAG', airline: 'FR', number: 'FR600',  time: '10:00', agents: '' }
-    ]
+    date: dateStr.charAt(0).toUpperCase() + dateStr.slice(1),
+    agents: [],
+    flights: []
   };
 }
 function zoomPreviewImage(url) {
