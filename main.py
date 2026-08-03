@@ -757,9 +757,9 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Visión IA real (GPT-4o-mini) con fallback para extraer datos de tus fotos,
-    ahora totalmente adaptado para inicializar tus 26 vuelos reales con la columna
-    de agentes vacía y tus 24 agentes del horario.
+    Extracción multimodal por IA (GPT-4o-mini) que soporta imágenes (con preprocesamiento de contraste Pillow),
+    PDFs digitales (usando pypdf) y archivos de Excel (usando pandas),
+    evitando por completo invenciones de datos parciales.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -773,33 +773,121 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         }
 
     try:
+        import pandas as pd
+        import pypdf
+        from PIL import Image, ImageEnhance
         from openai import OpenAI
+        
         client = OpenAI(api_key=api_key)
 
-        image_contents = []
-        for file in files:
-            content = await file.read()
-            base64_image = base64.b64encode(content).decode('utf-8')
-            mime_type = "image/png"
-            if file.filename.lower().endswith(('.jpg', '.jpeg')):
-                mime_type = "image/jpeg"
-            elif file.filename.lower().endswith('.gif'):
-                mime_type = "image/gif"
-            elif file.filename.lower().endswith('.webp'):
-                mime_type = "image/webp"
+        user_content_blocks = []
+        text_payloads = []
 
-            image_contents.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{mime_type};base64,{base64_image}"
-                }
+        for file in files:
+            filename_lower = file.filename.lower()
+            content = await file.read()
+            
+            # --- CASO 1: EXCEL (.xlsx, .xls) ---
+            if filename_lower.endswith(('.xlsx', '.xls')):
+                try:
+                    excel_file = io.BytesIO(content)
+                    excel_data = pd.read_excel(excel_file, sheet_name=None)
+                    
+                    sheet_texts = []
+                    for sheet_name, df in excel_data.items():
+                        df_clean = df.fillna("")
+                        sheet_texts.append(f"### Hoja: {sheet_name}\n{df_clean.to_string(index=False)}")
+                    
+                    excel_text = "\n\n".join(sheet_texts)
+                    text_payloads.append(f"--- CONTENIDO EXCEL ({file.filename}) ---\n{excel_text}\n")
+                except Exception as excel_err:
+                    print(f"Error leyendo Excel {file.filename}: {excel_err}")
+                    try:
+                        df = pd.read_excel(io.BytesIO(content))
+                        csv_text = df.to_csv(index=False)
+                        text_payloads.append(f"--- CONTENIDO EXCEL CSV ({file.filename}) ---\n{csv_text}\n")
+                    except Exception as csv_err:
+                        print(f"Error secundario Excel CSV: {csv_err}")
+            
+            # --- CASO 2: PDF (.pdf) ---
+            elif filename_lower.endswith('.pdf'):
+                try:
+                    pdf_file = io.BytesIO(content)
+                    pdf_reader = pypdf.PdfReader(pdf_file)
+                    pdf_text_list = []
+                    for page_idx, page in enumerate(pdf_reader.pages):
+                        txt = page.extract_text()
+                        if txt:
+                            pdf_text_list.append(f"--- Página {page_idx + 1} ---\n{txt}")
+                    
+                    pdf_text = "\n\n".join(pdf_text_list)
+                    text_payloads.append(f"--- CONTENIDO PDF ({file.filename}) ---\n{pdf_text}\n")
+                except Exception as pdf_err:
+                    print(f"Error leyendo PDF {file.filename}: {pdf_err}")
+            
+            # --- CASO 3: IMÁGENES (png, jpg, jpeg, gif, webp) ---
+            else:
+                try:
+                    # OPCIÓN A: Preprocesamiento Pillow para mejorar el OCR
+                    img = Image.open(io.BytesIO(content))
+                    
+                    # 1. Escala de grises
+                    img_gray = img.convert('L')
+                    
+                    # 2. Subir contraste (factor 2.0 para resaltar las letras oscuras del papel gris)
+                    enhancer = ImageEnhance.Contrast(img_gray)
+                    img_enhanced = enhancer.enhance(2.0)
+                    
+                    # 3. Enfocar un poco
+                    sharpness = ImageEnhance.Sharpness(img_enhanced)
+                    img_final = sharpness.enhance(1.5)
+                    
+                    # Guardar a bytes
+                    out_io = io.BytesIO()
+                    img_final.save(out_io, format="PNG")
+                    enhanced_bytes = out_io.getvalue()
+                    
+                    base64_image = base64.b64encode(enhanced_bytes).decode('utf-8')
+                    user_content_blocks.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}"
+                        }
+                    })
+                except Exception as img_err:
+                    print(f"Error aplicando preprocesamiento de imagen: {img_err}")
+                    base64_image = base64.b64encode(content).decode('utf-8')
+                    mime_type = "image/png"
+                    if filename_lower.endswith(('.jpg', '.jpeg')):
+                        mime_type = "image/jpeg"
+                    elif filename_lower.endswith('.gif'):
+                        mime_type = "image/gif"
+                    elif filename_lower.endswith('.webp'):
+                        mime_type = "image/webp"
+                    
+                    user_content_blocks.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{base64_image}"
+                        }
+                    })
+
+        if text_payloads:
+            combined_text = "\n".join(text_payloads)
+            user_content_blocks.append({
+                "type": "text",
+                "text": (
+                    "Aquí tienes el contenido de texto extraído directamente del archivo Excel/PDF cargado.\n"
+                    "Analízalo con precisión para extraer los agentes, sus horarios, los vuelos y la fecha de la cabecera:\n\n"
+                    f"{combined_text}"
+                )
             })
 
-        if not image_contents:
+        if not user_content_blocks:
             return {
                 "success": True,
                 "is_real_ai": False,
-                "message": "No se recibieron imágenes válidas.",
+                "message": "No se recibieron archivos válidos para extraer.",
                 "date": "Fecha no detectada",
                 "agents": [],
                 "flights": []
@@ -807,10 +895,10 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
 
         system_prompt = (
             "Eres un asistente de inteligencia artificial experto en lectura y extracción de horarios de aeropuertos.\n"
-            "Tu tarea es analizar las imágenes proporcionadas y extraer:\n"
+            "Tu tarea es analizar los datos (imágenes y/o texto de archivos Excel/PDF) y extraer:\n"
             "1. La lista de vuelos programados (vuelos de salida/boarding gates).\n"
             "2. La lista de agentes de pasaje/handling disponibles con sus turnos de trabajo.\n"
-            "3. La fecha del horario (ej: 'DOMINGO 21 JUNIO' o 'SÁBADO 20 JUNIO') que suele estar en las cabeceras o esquinas superiores de los documentos.\n\n"
+            "3. La fecha del horario (ej: 'DOMINGO 21 JUNIO' o 'SÁBADO 20 JUNIO' o '22/06/26') que suele estar en las cabeceras o esquinas superiores de los documentos.\n\n"
             "Debes devolver un objeto JSON estricto con el siguiente esquema exacto de JSON:\n"
             "{\n"
             "  \"date\": \"DOMINGO 21 JUNIO\",\n"
@@ -824,8 +912,8 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "Reglas importantes:\n"
             "- 'date' debe ser la fecha leída de la cabecera del documento, por ejemplo 'DOMINGO 21 JUNIO'. Si no la encuentras o es ilegible, pon 'Sábado 20 Junio' por defecto.\n"
             "- ¡¡¡REGLA DE ORO DE EXTRACCIÓN PARCIAL (NO INVENTAR DATOS)!!!:\n"
-            "  * Si la imagen proporcionada SOLO contiene la Parrilla de Vuelos/Embarques y NO contiene los Turnos de Personal, la clave 'agents' del JSON DEBE ser un array vacío: '\"agents\": []'. ¡BAJO NINGÚN CONCEPTO te inventes agentes, roles ni horarios ficticios!\n"
-            "  * Si la imagen proporcionada SOLO contiene los Turnos de Personal y NO contiene los Vuelos/Embarques, la clave 'flights' del JSON DEBE ser un array vacío: '\"flights\": []'. ¡BAJO NINGÚN CONCEPTO te inventes destinos, números de vuelo ni horas ficticias!\n"
+            "  * Si el documento cargado SOLO contiene la Parrilla de Vuelos/Embarques y NO contiene los Turnos de Personal, la clave 'agents' del JSON DEBE ser un array vacío: '\"agents\": []'. ¡BAJO NINGÚN CONCEPTO te inventes agentes, roles ni horarios ficticios!\n"
+            "  * Si el documento cargado SOLO contiene los Turnos de Personal y NO contiene los Vuelos/Embarques, la clave 'flights' del JSON DEBE ser un array vacío: '\"flights\": []'. ¡BAJO NINGÚN CONCEPTO te inventes destinos, números de vuelo ni horas ficticias!\n"
             "- ¡¡¡REGLA PARA FILAS MULTIPERSONALES (separadas por '/')!!!:\n"
             "  Si en una misma fila del cuadrante aparecen dos personas separadas por una barra '/' (ej: 'JORGE / PATRI (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear DOS objetos de agente distintos e individuales en la lista JSON:\n"
             "  1. Un agente con nombre 'JORGE', horario '02:45-12:45' y rol 'PSM'.\n"
@@ -838,7 +926,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Cada vuelo debe tener un id numérico secuencial único.\n"
             "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA, SNN, OTP, PSA, ORK, PAD, LBC, BUD).\n"
             "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH).\n"
-            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
+            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
             "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
             "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
         )
@@ -852,7 +940,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                 },
                 {
                     "role": "user",
-                    "content": image_contents
+                    "content": user_content_blocks
                 }
             ],
             response_format={"type": "json_object"},
