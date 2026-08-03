@@ -757,7 +757,7 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Extracción multimodal por IA (GPT-4o-mini) que soporta imágenes (con preprocesamiento de contraste Pillow),
+    Extracción multimodal por IA (GPT-4o-mini) que soporta imágenes (enviando el archivo original de alta calidad),
     PDFs digitales (usando pypdf) y archivos de Excel (usando pandas),
     evitando por completo invenciones de datos parciales.
     """
@@ -775,7 +775,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
     try:
         import pandas as pd
         import pypdf
-        from PIL import Image, ImageEnhance
         from openai import OpenAI
         
         client = OpenAI(api_key=api_key)
@@ -828,34 +827,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             # --- CASO 3: IMÁGENES (png, jpg, jpeg, gif, webp) ---
             else:
                 try:
-                    # OPCIÓN A: Preprocesamiento Pillow para mejorar el OCR
-                    img = Image.open(io.BytesIO(content))
-                    
-                    # 1. Escala de grises
-                    img_gray = img.convert('L')
-                    
-                    # 2. Subir contraste (factor 2.0 para resaltar las letras oscuras del papel gris)
-                    enhancer = ImageEnhance.Contrast(img_gray)
-                    img_enhanced = enhancer.enhance(2.0)
-                    
-                    # 3. Enfocar un poco
-                    sharpness = ImageEnhance.Sharpness(img_enhanced)
-                    img_final = sharpness.enhance(1.5)
-                    
-                    # Guardar a bytes
-                    out_io = io.BytesIO()
-                    img_final.save(out_io, format="PNG")
-                    enhanced_bytes = out_io.getvalue()
-                    
-                    base64_image = base64.b64encode(enhanced_bytes).decode('utf-8')
-                    user_content_blocks.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}"
-                        }
-                    })
-                except Exception as img_err:
-                    print(f"Error aplicando preprocesamiento de imagen: {img_err}")
+                    # Enviamos la imagen original directamente sin preprocesar para evitar distorsiones o blanqueos de contraste de Pillow
                     base64_image = base64.b64encode(content).decode('utf-8')
                     mime_type = "image/png"
                     if filename_lower.endswith(('.jpg', '.jpeg')):
@@ -871,6 +843,8 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                             "url": f"data:{mime_type};base64,{base64_image}"
                         }
                     })
+                except Exception as img_err:
+                    print(f"Error cargando imagen {file.filename}: {img_err}")
 
         if text_payloads:
             combined_text = "\n".join(text_payloads)
@@ -926,7 +900,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Cada vuelo debe tener un id numérico secuencial único.\n"
             "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA, SNN, OTP, PSA, ORK, PAD, LBC, BUD).\n"
             "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH).\n"
-            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
+            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45' ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
             "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
             "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
         )
