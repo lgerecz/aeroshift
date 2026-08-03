@@ -757,9 +757,9 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Extracción multimodal por IA (GPT-4o-mini) que soporta imágenes (enviando el archivo original de alta calidad),
-    PDFs digitales (usando pypdf) y archivos de Excel (usando pandas),
-    evitando por completo invenciones de datos parciales.
+    Extracción multimodal ultra-ligera (GPT-4o-mini). Soporta imágenes (originales de alta calidad),
+    PDFs digitales (usando pypdf) y archivos de Excel (usando openpyxl directamente, sin el pesado pandas),
+    evitando por completo invenciones de datos parciales y asegurando despliegues ultrarrápidos en Render.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -773,7 +773,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         }
 
     try:
-        import pandas as pd
+        import openpyxl
         import pypdf
         from openai import OpenAI
         
@@ -789,24 +789,26 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             # --- CASO 1: EXCEL (.xlsx, .xls) ---
             if filename_lower.endswith(('.xlsx', '.xls')):
                 try:
+                    # Cargamos el Excel de forma ultra-ligera usando openpyxl (evita caídas de memoria por pandas)
                     excel_file = io.BytesIO(content)
-                    excel_data = pd.read_excel(excel_file, sheet_name=None)
+                    wb = openpyxl.load_workbook(excel_file, data_only=True)
                     
                     sheet_texts = []
-                    for sheet_name, df in excel_data.items():
-                        df_clean = df.fillna("")
-                        sheet_texts.append(f"### Hoja: {sheet_name}\n{df_clean.to_string(index=False)}")
+                    for sheet_name in wb.sheetnames:
+                        ws = wb[sheet_name]
+                        rows_str = []
+                        for row in ws.iter_rows(values_only=True):
+                            # Unimos los valores de las celdas con barras verticales
+                            row_str = " | ".join(str(val).strip() if val is not None else "" for val in row)
+                            if row_str.replace(" |", "").strip():
+                                rows_str.append(row_str)
+                        
+                        sheet_texts.append(f"### Hoja: {sheet_name}\n" + "\n".join(rows_str))
                     
                     excel_text = "\n\n".join(sheet_texts)
                     text_payloads.append(f"--- CONTENIDO EXCEL ({file.filename}) ---\n{excel_text}\n")
                 except Exception as excel_err:
                     print(f"Error leyendo Excel {file.filename}: {excel_err}")
-                    try:
-                        df = pd.read_excel(io.BytesIO(content))
-                        csv_text = df.to_csv(index=False)
-                        text_payloads.append(f"--- CONTENIDO EXCEL CSV ({file.filename}) ---\n{csv_text}\n")
-                    except Exception as csv_err:
-                        print(f"Error secundario Excel CSV: {csv_err}")
             
             # --- CASO 2: PDF (.pdf) ---
             elif filename_lower.endswith('.pdf'):
@@ -827,7 +829,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             # --- CASO 3: IMÁGENES (png, jpg, jpeg, gif, webp) ---
             else:
                 try:
-                    # Enviamos la imagen original directamente sin preprocesar para evitar distorsiones o blanqueos de contraste de Pillow
                     base64_image = base64.b64encode(content).decode('utf-8')
                     mime_type = "image/png"
                     if filename_lower.endswith(('.jpg', '.jpeg')):
@@ -900,7 +901,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Cada vuelo debe tener un id numérico secuencial único.\n"
             "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA, SNN, OTP, PSA, ORK, PAD, LBC, BUD).\n"
             "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH).\n"
-            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45' ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
+            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
             "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
             "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
         )
@@ -962,7 +963,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         return {
             "success": True,
             "is_real_ai": True,
-            "message": f"Extracción exitosa realizada por GPT-4o-mini a partir de {len(files)} imágenes.",
+            "message": f"Extracción exitosa realizada por GPT-4o-mini.",
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights
