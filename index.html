@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=26">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -207,9 +207,14 @@
       <!-- RECTÁNGULO 1 (IZQUIERDO): TURNOS DEL PERSONAL CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
         <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 460px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
-          <h3 id="detectedAgentsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
-            👥 Turnos del Personal — Sábado 20 Junio
-          </h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
+            <h3 id="detectedAgentsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
+              👥 Turnos del Personal — Sábado 20 Junio
+            </h3>
+            <button onclick="clearDetectedAgents()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+              🧹 Limpiar
+            </button>
+          </div>
           <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
               <thead>
@@ -231,9 +236,14 @@
       <!-- RECTÁNGULO 2 (DERECHO): PARRILLA DE EMBARQUES CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
         <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 460px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
-          <h3 id="detectedFlightsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
-            ✈️ Parrilla de Embarques — Sábado 20 Junio
-          </h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
+            <h3 id="detectedFlightsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
+              ✈️ Parrilla de Embarques — Sábado 20 Junio
+            </h3>
+            <button onclick="clearDetectedFlights()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+              🧹 Limpiar
+            </button>
+          </div>
           <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
               <thead>
@@ -604,6 +614,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>

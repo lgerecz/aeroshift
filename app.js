@@ -984,7 +984,7 @@ async function handleScheduleFileUpload(event) {
 
     const data = await response.json();
     if (data.success) {
-      // SMART MERGE: If we got new agents, map and store them. Otherwise, retain existing agents so they don't get erased!
+      // CLEAR SLATE: With each new file upload, we only load the newly extracted information. No retention of old data!
       let newAgents = [];
       if (data.agents && data.agents.length > 0) {
         newAgents = data.agents.map((a, idx) => {
@@ -996,13 +996,8 @@ async function handleScheduleFileUpload(event) {
             type: a.type || 'pasaje'
           };
         });
-      } else if (extractedData && extractedData.agents && extractedData.agents.length > 0) {
-        newAgents = extractedData.agents;
-      } else {
-        newAgents = [];
       }
 
-      // SMART MERGE: If we got new flights, map and store them. Otherwise, retain existing flights!
       let newFlights = [];
       if (data.flights && data.flights.length > 0) {
         newFlights = data.flights.map((f, index) => {
@@ -1015,14 +1010,10 @@ async function handleScheduleFileUpload(event) {
             agents: '' // Always blank initially as requested
           };
         });
-      } else if (extractedData && extractedData.flights && extractedData.flights.length > 0) {
-        newFlights = extractedData.flights;
-      } else {
-        newFlights = [];
       }
 
       extractedData = {
-        date: data.date || (extractedData ? extractedData.date : 'Sábado 20 Junio'),
+        date: data.date || 'Sábado 20 Junio',
         agents: newAgents,
         flights: newFlights
       };
@@ -2102,5 +2093,25 @@ function parseInlineMarkdown(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.*?)`/g, '<code>$1</code>');
+}
+
+function clearDetectedAgents() {
+  if (confirm('¿Deseas vaciar por completo la lista de turnos de personal?')) {
+    if (!extractedData) {
+      initializeMockExtractedData();
+    }
+    extractedData.agents = [];
+    renderDetectedAgents();
+  }
+}
+
+function clearDetectedFlights() {
+  if (confirm('¿Deseas vaciar por completo la parrilla de embarques?')) {
+    if (!extractedData) {
+      initializeMockExtractedData();
+    }
+    extractedData.flights = [];
+    renderDetectedFlights();
+  }
 }
 
