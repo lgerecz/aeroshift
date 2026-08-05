@@ -757,9 +757,8 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Extracción multimodal ultra-ligera (GPT-4o-mini). Soporta imágenes (originales de alta calidad),
-    PDFs digitales (usando pypdf) y archivos de Excel (usando openpyxl directamente, sin el pesado pandas),
-    evitando por completo invenciones de datos parciales y asegurando despliegues ultrarrápidos en Render.
+    Extracción multimodal ultra-ligera por IA (GPT-4o-mini). Soporta imágenes, PDFs y Excels (openpyxl).
+    Incorpora la descripción geográfica detallada de la hoja de turnos y las reglas de color de aerolíneas.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -789,7 +788,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             # --- CASO 1: EXCEL (.xlsx, .xls) ---
             if filename_lower.endswith(('.xlsx', '.xls')):
                 try:
-                    # Cargamos el Excel de forma ultra-ligera usando openpyxl (evita caídas de memoria por pandas)
                     excel_file = io.BytesIO(content)
                     wb = openpyxl.load_workbook(excel_file, data_only=True)
                     
@@ -798,7 +796,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                         ws = wb[sheet_name]
                         rows_str = []
                         for row in ws.iter_rows(values_only=True):
-                            # Unimos los valores de las celdas con barras verticales
                             row_str = " | ".join(str(val).strip() if val is not None else "" for val in row)
                             if row_str.replace(" |", "").strip():
                                 rows_str.append(row_str)
@@ -885,11 +882,18 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "  ]\n"
             "}\n\n"
             "Reglas importantes:\n"
-            "- 'date' debe ser la fecha leída de la cabecera del documento, por ejemplo 'DOMINGO 21 JUNIO'. Si no la encuentras o es ilegible, pon 'Sábado 20 Junio' por defecto.\n"
-            "- ¡¡¡REGLA DE ORO DE EXTRACCIÓN PARCIAL (NO INVENTAR DATOS)!!!:\n"
+            "- 'date' debe ser la fecha leída de la cabecera del documento, por ejemplo 'DOMINGO 21 JUNIO'. Si no la encuentras o es ilegible, pon 'Fecha no detectada' por defecto (¡bajo ningún concepto te inventes una fecha ficticia!).\n"
+            "\n"
+            "### ESTRUCTURA GEOGRÁFICA DE LA HOJA DE TURNOS (LEER CON ATENCIÓN):\n"
+            "- A LA MANO IZQUIERDA del documento se encuentran los turnos de la MAÑANA; A LA MANO DERECHA los turnos de la TARDE.\n"
+            "- EN LA PRIMERA PARTE (bloque superior de cada columna de mañana o tarde) encontrarás los turnos ADMINISTRATIVOS - OPERATIVOS (como DSM, PSM, OPS, TKT, LL), los cuales llevan siempre su departamento/rol entre paréntesis (ej: 'MARINA (DSM)', 'JORGE / PATRI (PSM)').\n"
+            "- EN LA SEGUNDA PARTE (bloque inferior de cada columna) se encuentran los turnos de PASAJE (CSA), que representa todo el personal apto para embarcar, salvo que tengan alguna restricción escrita entre paréntesis (ej: 'EVA (SOMBRA TKT)').\n"
+            "\n"
+            "### REGLA DE ORO DE EXTRACCIÓN PARCIAL (NO INVENTAR DATOS):\n"
             "  * Si el documento cargado SOLO contiene la Parrilla de Vuelos/Embarques y NO contiene los Turnos de Personal, la clave 'agents' del JSON DEBE ser un array vacío: '\"agents\": []'. ¡BAJO NINGÚN CONCEPTO te inventes agentes, roles ni horarios ficticios!\n"
             "  * Si el documento cargado SOLO contiene los Turnos de Personal y NO contiene los Vuelos/Embarques, la clave 'flights' del JSON DEBE ser un array vacío: '\"flights\": []'. ¡BAJO NINGÚN CONCEPTO te inventes destinos, números de vuelo ni horas ficticias!\n"
-            "- ¡¡¡REGLA PARA FILAS MULTIPERSONALES (separadas por '/')!!!:\n"
+            "\n"
+            "### REGLA PARA FILAS MULTIPERSONALES (separadas por '/'):\n"
             "  Si en una misma fila del cuadrante aparecen dos personas separadas por una barra '/' (ej: 'JORGE / PATRI (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear DOS objetos de agente distintos e individuales en la lista JSON:\n"
             "  1. Un agente con nombre 'JORGE', horario '02:45-12:45' y rol 'PSM'.\n"
             "  2. Un agente con nombre 'PATRI', horario '06:45-16:45' y rol 'PSM'.\n"
@@ -897,10 +901,10 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Cada agente debe tener un id numérico secuencial único.\n"
             "- 'hours' debe tener el formato exacto 'HH:MM-HH:MM' (ej: '04:35-11:25').\n"
             "- 'role' debe ser el código de rol (ej: CSA, DSM, PSM, OPS, TKT, LL).\n"
-            "- 'type' debe ser 'admin' si el rol es DSM, PSM, OPS, TKT, TKD, LL, SOMBRA, SHADOW, FAMI, SICK, CURSO, AUTOCHECKIN. En cualquier otro caso, debe ser 'pasaje'.\n"
+            "- 'type' debe ser 'pasaje' ÚNICAMENTE si la persona es un CSA o tiene el rol CSA (ej: 'CSA', 'CSA [TKT]', 'CSA [OPS]'). Para cualquier otro rol de la hoja (DSM, PSM, OPS, TKT, LL, etc.), 'type' debe ser estrictamente 'admin'. Únicamente el personal con 'type' = 'pasaje' es apto para embarcar.\n"
             "- Cada vuelo debe tener un id numérico secuencial único.\n"
             "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA, SNN, OTP, PSA, ORK, PAD, LBC, BUD).\n"
-            "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH).\n"
+            "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH, RR, RK).\n"
             "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
             "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
             "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
@@ -926,7 +930,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         raw_result = response.choices[0].message.content.strip()
         parsed_result = json.loads(raw_result)
 
-        extracted_date = parsed_result.get("date") or "Sábado 20 Junio"
+        extracted_date = parsed_result.get("date") or "Fecha no detectada"
         extracted_agents = parsed_result.get("agents", [])
         extracted_flights = parsed_result.get("flights", [])
 
@@ -934,13 +938,11 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         for idx, ag in enumerate(extracted_agents):
             role_upper = str(ag.get("role") or "CSA").upper().strip()
             
-            # Enforce deterministic classification of admin roles so they end up in the correct visual quadrant
-            agent_type = "pasaje"
-            for admin_role in ['DSM', 'PSM', 'OPS', 'TKT', 'TKD', 'LL', 'SOMBRA', 'SHADOW', 'FAMI', 'SICK', 'CURSO', 'AUTOCHECKIN']:
-                if admin_role in role_upper:
-                    agent_type = "admin"
-                    break
-            
+            # Enforce strict classification: type is "pasaje" ONLY if role contains CSA. Otherwise, it is strictly "admin" (non-boarding)
+            agent_type = "admin"
+            if "CSA" in role_upper:
+                agent_type = "pasaje"
+                
             formatted_agents.append({
                 "id": ag.get("id") or (idx + 1),
                 "name": str(ag.get("name") or f"AGENTE_{idx+1}").upper().strip(),
@@ -974,7 +976,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         return {
             "success": True,
             "is_real_ai": False,
-            "message": f"Error en la extracción por IA ({str(e)}). No se han cargado datos ficticios para evitar confusiones.",
+            "message": f"Error en la extracción por IA ({str(e)}). No se han cargado datos ficticios.",
             "date": "Fecha no detectada",
             "agents": [],
             "flights": []

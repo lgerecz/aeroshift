@@ -1210,7 +1210,7 @@ function renderDetectedAgents() {
         <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
           <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
           <td style="padding: 10px 8px; color: #a0a0a0;">${escapeHtml(a.hours)}</td>
-          <td style="padding: 10px 8px; color: #ff9f00; font-weight: bold;">${escapeHtml(a.role)}</td>
+          <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
           <td style="padding: 10px 8px; text-align: center;">
             <div style="display: flex; gap: 6px; justify-content: center;">
               <button onclick="startEditAgent(${a.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
@@ -1249,7 +1249,7 @@ function renderDetectedAgents() {
         <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
           <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
           <td style="padding: 10px 8px; color: #a0a0a0;">${escapeHtml(a.hours)}</td>
-          <td style="padding: 10px 8px; color: #ff9f00; font-weight: bold;">${escapeHtml(a.role)}</td>
+          <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
           <td style="padding: 10px 8px; text-align: center;">
             <div style="display: flex; gap: 6px; justify-content: center;">
               <button onclick="startEditAgent(${a.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
@@ -1377,7 +1377,7 @@ function renderDetectedFlights() {
         <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
           <td style="padding: 12px 8px; color: #555; font-weight: bold;">${idx + 1}</td>
           <td style="padding: 12px 8px; color: #fff; font-weight: bold;">${escapeHtml(f.destination)}</td>
-          <td style="padding: 12px 8px; color: #378add; font-weight: bold;">${escapeHtml(f.number)}</td>
+          <td style="padding: 12px 8px;">${getFlightNumberBadge(f.number)}</td>
           <td style="padding: 12px 8px; color: #a0a0a0;">${times.apertu}</td>
           <td style="padding: 12px 8px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
           <td style="padding: 12px 8px; color: #a0a0a0;">${times.emb}</td>
@@ -2112,6 +2112,33 @@ function clearDetectedFlights() {
     }
     extractedData.flights = [];
     renderDetectedFlights();
+  }
+}
+
+function getRoleBadge(roleStr) {
+  if (!roleStr) return '';
+  const role = roleStr.toUpperCase().trim();
+  let bg = 'rgba(255,255,255,0.06)';
+  let color = '#aaa';
+  
+  if (role.includes('DSM')) { bg = 'rgba(168, 85, 247, 0.15)'; color = '#c084fc'; }
+  else if (role.includes('PSM')) { bg = 'rgba(236, 72, 153, 0.15)'; color = '#f472b6'; }
+  else if (role.includes('OPS')) { bg = 'rgba(6, 182, 212, 0.15)'; color = '#22d3ee'; }
+  else if (role.includes('TKT')) { bg = 'rgba(234, 179, 8, 0.15)'; color = '#facc15'; }
+  else if (role.includes('LL')) { bg = 'rgba(16, 185, 129, 0.15)'; color = '#34d399'; }
+  else if (role.includes('CSA')) { bg = 'rgba(55, 138, 221, 0.15)'; color = '#60a5fa'; }
+  
+  return `<span style="background: ${bg}; color: ${color}; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; border: 1px solid ${color}30; letter-spacing: 0.5px; text-transform: uppercase; font-family: monospace;">${roleStr}</span>`;
+}
+
+function getFlightNumberBadge(numberStr) {
+  if (!numberStr) return '';
+  const num = numberStr.toUpperCase().trim();
+  if (num.startsWith('FR')) {
+    return `<span style="color: #378add; font-weight: bold;">${escapeHtml(numberStr)}</span>`;
+  } else {
+    // Other airlines (like RR, RK, etc.) in a vibrant highlight color pill!
+    return `<span style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid rgba(244,63,94,0.3); letter-spacing: 0.5px; font-size: 11.5px; font-family: monospace;">${escapeHtml(numberStr)}</span>`;
   }
 }
 
