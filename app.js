@@ -1176,89 +1176,107 @@ function renderDetectedAgents() {
     titleElem.innerHTML = `👥 Turnos del Personal — ${extractedData.date}`;
   }
 
-  // Filter agents by type
-  const admins = extractedData.agents.filter(a => a.type === 'admin');
-  const pasajes = extractedData.agents.filter(a => a.type === 'pasaje');
+  // Helper to determine shift
+  const getAgentShift = (a) => {
+    if (a.shift) return a.shift.toLowerCase().trim();
+    if (a.hours) {
+      const startHour = parseInt(a.hours.split(':')[0], 10);
+      if (isNaN(startHour)) return 'mañana';
+      return startHour >= 12 ? 'tarde' : 'mañana';
+    }
+    return 'mañana';
+  };
+
+  // Filter agents into 4 distinct groups
+  const mañanaAdmins = extractedData.agents.filter(a => a.type === 'admin' && getAgentShift(a) === 'mañana');
+  const mañanaPasajes = extractedData.agents.filter(a => a.type === 'pasaje' && getAgentShift(a) === 'mañana');
+  const tardeAdmins = extractedData.agents.filter(a => a.type === 'admin' && getAgentShift(a) === 'tarde');
+  const tardePasajes = extractedData.agents.filter(a => a.type === 'pasaje' && getAgentShift(a) === 'tarde');
 
   let html = '';
 
-  // 1. Group 1: Roles Administrativos - Operativos
+  const renderAgentRow = (a) => {
+    const isEditing = editingAgentId === a.id;
+    if (isEditing) {
+      return `
+        <tr style="border-bottom: 1px solid #282828; background: #1a1a1a;">
+          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.name)}" id="edit_agent_name_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.hours)}" id="edit_agent_hours_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
+          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.role)}" id="edit_agent_role_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px; text-align: center;">
+            <div style="display: flex; gap: 6px; justify-content: center;">
+              <button onclick="saveEditAgent(${a.id})" style="background: var(--success); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✓</button>
+              <button onclick="cancelEditAgent()" style="background: var(--text-muted); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✗</button>
+            </div>
+          </td>
+        </tr>`;
+    } else {
+      return `
+        <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
+          <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
+          <td style="padding: 10px 8px; color: #a0a0a0;">${escapeHtml(a.hours)}</td>
+          <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
+          <td style="padding: 10px 8px; text-align: center;">
+            <div style="display: flex; gap: 6px; justify-content: center;">
+              <button onclick="startEditAgent(${a.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
+              <button onclick="deleteAgentFromPreview(${a.id})" style="background: transparent; border: 1px solid #333; color: var(--danger); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Eliminar">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+    }
+  };
+
+  // 1. TURNO MAÑANA · Roles Administrativos - Operativos
   html += `
     <tr style="background: #1a1a1a;">
       <td colspan="4" style="padding: 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO MAÑANA · Roles Administrativos - Operativos
       </td>
     </tr>`;
-    
-  admins.forEach((a, idx) => {
-    const isEditing = editingAgentId === a.id;
-    if (isEditing) {
-      html += `
-        <tr style="border-bottom: 1px solid #282828; background: #1a1a1a;">
-          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.name)}" id="edit_agent_name_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.hours)}" id="edit_agent_hours_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
-          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.role)}" id="edit_agent_role_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center;">
-              <button onclick="saveEditAgent(${a.id})" style="background: var(--success); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✓</button>
-              <button onclick="cancelEditAgent()" style="background: var(--text-muted); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✗</button>
-            </div>
-          </td>
-        </tr>`;
-    } else {
-      html += `
-        <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
-          <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
-          <td style="padding: 10px 8px; color: #a0a0a0;">${escapeHtml(a.hours)}</td>
-          <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
-          <td style="padding: 10px 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center;">
-              <button onclick="startEditAgent(${a.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
-              <button onclick="deleteAgentFromPreview(${a.id})" style="background: transparent; border: 1px solid #333; color: var(--danger); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Eliminar">🗑️</button>
-            </div>
-          </td>
-        </tr>`;
-    }
-  });
+  if (mañanaAdmins.length === 0) {
+    html += `<tr><td colspan="4" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
+  } else {
+    mañanaAdmins.forEach(a => { html += renderAgentRow(a); });
+  }
 
-  // 2. Group 2: Agentes de Pasaje
+  // 2. TURNO MAÑANA · Agentes de Pasaje
   html += `
     <tr style="background: #1a1a1a;">
       <td colspan="4" style="padding: 18px 8px 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO MAÑANA · Agentes de Pasaje
       </td>
     </tr>`;
+  if (mañanaPasajes.length === 0) {
+    html += `<tr><td colspan="4" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
+  } else {
+    mañanaPasajes.forEach(a => { html += renderAgentRow(a); });
+  }
 
-  pasajes.forEach((a, idx) => {
-    const isEditing = editingAgentId === a.id;
-    if (isEditing) {
-      html += `
-        <tr style="border-bottom: 1px solid #282828; background: #1a1a1a;">
-          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.name)}" id="edit_agent_name_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.hours)}" id="edit_agent_hours_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
-          <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.role)}" id="edit_agent_role_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center;">
-              <button onclick="saveEditAgent(${a.id})" style="background: var(--success); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✓</button>
-              <button onclick="cancelEditAgent()" style="background: var(--text-muted); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✗</button>
-            </div>
-          </td>
-        </tr>`;
-    } else {
-      html += `
-        <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
-          <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
-          <td style="padding: 10px 8px; color: #a0a0a0;">${escapeHtml(a.hours)}</td>
-          <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
-          <td style="padding: 10px 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center;">
-              <button onclick="startEditAgent(${a.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
-              <button onclick="deleteAgentFromPreview(${a.id})" style="background: transparent; border: 1px solid #333; color: var(--danger); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Eliminar">🗑️</button>
-            </div>
-          </td>
-        </tr>`;
-    }
-  });
+  // 3. TURNO TARDE · Roles Administrativos - Operativos
+  html += `
+    <tr style="background: #1a1a1a;">
+      <td colspan="4" style="padding: 18px 8px 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+        — TURNO TARDE · Roles Administrativos - Operativos
+      </td>
+    </tr>`;
+  if (tardeAdmins.length === 0) {
+    html += `<tr><td colspan="4" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
+  } else {
+    tardeAdmins.forEach(a => { html += renderAgentRow(a); });
+  }
+
+  // 4. TURNO TARDE · Agentes de Pasaje
+  html += `
+    <tr style="background: #1a1a1a;">
+      <td colspan="4" style="padding: 18px 8px 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+        — TURNO TARDE · Agentes de Pasaje
+      </td>
+    </tr>`;
+  if (tardePasajes.length === 0) {
+    html += `<tr><td colspan="4" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
+  } else {
+    tardePasajes.forEach(a => { html += renderAgentRow(a); });
+  }
 
   container.innerHTML = html;
 }
@@ -2118,17 +2136,16 @@ function clearDetectedFlights() {
 function getRoleBadge(roleStr) {
   if (!roleStr) return '';
   const role = roleStr.toUpperCase().trim();
-  let bg = 'rgba(255,255,255,0.06)';
-  let color = '#aaa';
+  let color = '#ffffff'; // Default to white (which is also CSA)
   
-  if (role.includes('DSM')) { bg = 'rgba(168, 85, 247, 0.15)'; color = '#c084fc'; }
-  else if (role.includes('PSM')) { bg = 'rgba(236, 72, 153, 0.15)'; color = '#f472b6'; }
-  else if (role.includes('OPS')) { bg = 'rgba(6, 182, 212, 0.15)'; color = '#22d3ee'; }
-  else if (role.includes('TKT')) { bg = 'rgba(234, 179, 8, 0.15)'; color = '#facc15'; }
-  else if (role.includes('LL')) { bg = 'rgba(16, 185, 129, 0.15)'; color = '#34d399'; }
-  else if (role.includes('CSA')) { bg = 'rgba(55, 138, 221, 0.15)'; color = '#60a5fa'; }
+  if (role.includes('TKT')) { color = '#22c55e'; }      // Green for TKT (Ventas)
+  else if (role.includes('LL')) { color = '#eab308'; }   // Yellow for LL (Llegadas / Equipajes)
+  else if (role.includes('CSA')) { color = '#ffffff'; }  // White for CSA
+  else if (role.includes('DSM')) { color = '#c084fc'; }  // Purple for DSM
+  else if (role.includes('PSM')) { color = '#f472b6'; }  // Pink for PSM
+  else if (role.includes('OPS')) { color = '#22d3ee'; }  // Teal for OPS
   
-  return `<span style="background: ${bg}; color: ${color}; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; border: 1px solid ${color}30; letter-spacing: 0.5px; text-transform: uppercase; font-family: monospace;">${roleStr}</span>`;
+  return `<span style="color: ${color}; font-weight: bold; text-transform: uppercase; font-family: monospace; font-size: 12px; letter-spacing: 0.5px;">${roleStr}</span>`;
 }
 
 function getFlightNumberBadge(numberStr) {
