@@ -911,7 +911,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         )
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system",
