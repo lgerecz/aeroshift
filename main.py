@@ -757,8 +757,9 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Extracción multimodal ultra-ligera por IA (GPT-4o-mini). Soporta imágenes, PDFs y Excels (openpyxl).
-    Incorpora la descripción geográfica detallada de la hoja de turnos y las reglas de color de aerolíneas.
+    Extracción multimodal por IA (GPT-4o) de máxima precisión.
+    Utiliza el prompt de extracción estricto y las reglas geográficas del usuario,
+    unificando la respuesta en el formato esperado por el frontend.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -823,7 +824,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                 except Exception as pdf_err:
                     print(f"Error leyendo PDF {file.filename}: {pdf_err}")
             
-            # --- CASO 3: IMÁGENES (png, jpg, jpeg, gif, webp) ---
+            # --- CASO 3: IMÁGENES ---
             else:
                 try:
                     base64_image = base64.b64encode(content).decode('utf-8')
@@ -866,48 +867,73 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             }
 
         system_prompt = (
-            "Eres un asistente de inteligencia artificial experto en lectura y extracción de horarios de aeropuertos.\n"
-            "Tu tarea es analizar los datos (imágenes y/o texto de archivos Excel/PDF) y extraer:\n"
-            "1. La lista de vuelos programados (vuelos de salida/boarding gates).\n"
-            "2. La lista de agentes de pasaje/handling disponibles con sus turnos de trabajo.\n"
-            "3. La fecha del horario (ej: 'DOMINGO 21 JUNIO' o 'SÁBADO 20 JUNIO' o '22/06/26') que suele estar en las cabeceras o esquinas superiores de los documentos.\n\n"
-            "Debes devolver un objeto JSON estricto con el siguiente esquema exacto de JSON:\n"
+            "Eres un sistema especializado en la extracción documental de máxima precisión.\n"
+            "Tu única función es extraer literalmente todo el contenido visible de la imagen.\n"
+            "La imagen puede contener tablas, texto impreso, texto manuscrito, sellos, firmas, columnas, encabezados y anotaciones.\n"
+            "Debes analizar la imagen varias veces antes de generar la respuesta.\n\n"
+            "Normas obligatorias:\n"
+            "- No resumas el contenido.\n"
+            "- No traduzcas el texto.\n"
+            "- No interpretes el significado.\n"
+            "- No corrijas errores ortográficos.\n"
+            "- No inventes información.\n"
+            "- No completes información que no sea visible.\n"
+            "- Conserva exactamente las mayúsculas, las minúsculas, los acentos, la puntuación y el orden del documento.\n"
+            "- Si existe alguna duda sobre un valor, indícalo con el prefijo «INCERTIDUMBRE:».\n"
+            "- Comprueba varias veces el resultado antes de devolver la respuesta.\n"
+            "- Comprueba que todas las filas de la tabla se hayan extraído correctamente.\n"
+            "- Comprueba que no existan nombres sin horarios.\n"
+            "- Comprueba que no existan horarios sin nombres.\n"
+            "- Comprueba que el número de elementos extraídos coincida con el número de elementos visibles.\n"
+            "- Si la imagen contiene varias tablas, extrae cada una por separado.\n"
+            "- Si la imagen contiene una estructura de filas y columnas, respétala.\n"
+            "- Si una línea aparece cortada, extrae únicamente la parte visible.\n"
+            "- Si el texto está parcialmente oculto, indica que es ilegible.\n"
+            "- Nunca omitas información.\n\n"
+            "Proceso interno obligatorio:\n"
+            "1. Analiza la imagen completa.\n"
+            "2. Analiza la parte superior.\n"
+            "3. Analiza la parte central.\n"
+            "4. Analiza la parte inferior.\n"
+            "5. Analiza la columna izquierda.\n"
+            "6. Analiza la columna derecha.\n"
+            "7. Compara todos los resultados.\n"
+            "8. Corrige posibles errores.\n"
+            "9. Genera la respuesta final.\n\n"
+            "Devuelve exclusivamente un objeto JSON.\n"
+            "La estructura debe ser la siguiente:\n"
             "{\n"
-            "  \"date\": \"DOMINGO 21 JUNIO\",\n"
-            "  \"agents\": [\n"
-            "    {\"id\": 1, \"name\": \"NOMBRE\", \"hours\": \"HH:MM-HH:MM\", \"role\": \"CSA\", \"type\": \"pasaje\"}\n"
+            "  \"fecha\": \"DOMINGO 21 JUNIO\",\n"
+            "  \"titulo\": \"AZUL HANDLING\",\n"
+            "  \"observaciones\": \"\",\n"
+            "  \"manana\": [\n"
+            "    {\"tipo_elemento\": \"agente\", \"nombre\": \"CARO\", \"horario\": \"04:15-14:15\", \"rol\": \"DSM\"}\n"
             "  ],\n"
-            "  \"flights\": [\n"
-            "    {\"id\": 1, \"destination\": \"XXX\", \"airline\": \"FR\", \"number\": \"FR123\", \"time\": \"HH:MM\", \"agents\": \"\"}\n"
+            "  \"tarde\": [\n"
+            "    {\"tipo_elemento\": \"agente\", \"nombre\": \"SERGIO\", \"horario\": \"14:00-00:00\", \"rol\": \"DSM\"}\n"
             "  ]\n"
             "}\n\n"
-            "Reglas importantes:\n"
-            "- 'date' debe ser la fecha leída de la cabecera del documento, por ejemplo 'DOMINGO 21 JUNIO'. Si no la encuentras o es ilegible, pon 'Fecha no detectada' por defecto (¡bajo ningún concepto te inventes una fecha ficticia!).\n"
+            "### REGLAS DE ESTRUCTURA INTERNA PARA LOS ELEMENTOS EN \"manana\" y \"tarde\":\n"
+            "1. Para los Turnos de Personal (Horarios):\n"
+            "- A LA MANO IZQUIERDA de la hoja están los turnos de la MAÑANA (añade a la lista \"manana\"). A LA MANO DERECHA de la TARDE (añade a la lista \"tarde\").\n"
+            "- Bloque superior de la columna: turnos administrativos-operativos con el rol en paréntesis, ej: 'CARO (DSM)' se extrae con nombre 'CARO' y rol 'DSM'.\n"
+            "- Bloque inferior de la columna: turnos de Pasaje (CSA). Aquí el rol 'CSA' NO aparece escrito (aparece vacío, solo sale el nombre, ej: 'STEFANIA'). Debes extraerlos con rol 'CSA' de forma automática, salvo que lleven restricciones entre paréntesis (ej: 'EVA (SOMBRA TKT)', que se extrae con rol 'TKT').\n"
+            "- Si en una fila hay dos personas separadas por '/' (ej: 'JORGE / GASTÓN (PSM)' con horas '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
+            "  * Uno con nombre 'JORGE', horario '02:45-12:45', rol 'PSM'.\n"
+            "  * Otro con nombre 'GASTÓN', horario '06:45-16:45', rol 'PSM'.\n"
             "\n"
-            "### ESTRUCTURA GEOGRÁFICA DE LA HOJA DE TURNOS (LEER CON ATENCIÓN):\n"
-            "- A LA MANO IZQUIERDA del documento se encuentran los turnos de la MAÑANA; A LA MANO DERECHA los turnos de la TARDE.\n"
-            "- EN LA PRIMERA PARTE (bloque superior de cada columna de mañana o tarde) encontrarás los turnos ADMINISTRATIVOS - OPERATIVOS (como DSM, PSM, OPS, TKT, LL), los cuales llevan siempre su departamento/rol entre paréntesis (ej: 'MARINA (DSM)', 'JORGE / PATRI (PSM)').\n"
-            "- EN LA SEGUNDA PARTE (bloque inferior de cada columna) se encuentran los turnos de PASAJE (CSA), que representa todo el personal apto para embarcar, salvo que tengan alguna restricción escrita entre paréntesis (ej: 'EVA (SOMBRA TKT)').\n"
-            "\n"
-            "### REGLA DE ORO DE EXTRACCIÓN PARCIAL (NO INVENTAR DATOS):\n"
-            "  * Si el documento cargado SOLO contiene la Parrilla de Vuelos/Embarques y NO contiene los Turnos de Personal, la clave 'agents' del JSON DEBE ser un array vacío: '\"agents\": []'. ¡BAJO NINGÚN CONCEPTO te inventes agentes, roles ni horarios ficticios!\n"
-            "  * Si el documento cargado SOLO contiene los Turnos de Personal y NO contiene los Vuelos/Embarques, la clave 'flights' del JSON DEBE ser un array vacío: '\"flights\": []'. ¡BAJO NINGÚN CONCEPTO te inventes destinos, números de vuelo ni horas ficticias!\n"
-            "\n"
-            "### REGLA PARA FILAS MULTIPERSONALES (separadas por '/'):\n"
-            "  Si en una misma fila del cuadrante aparecen dos personas separadas por una barra '/' (ej: 'JORGE / PATRI (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear DOS objetos de agente distintos e individuales en la lista JSON:\n"
-            "  1. Un agente con nombre 'JORGE', horario '02:45-12:45' y rol 'PSM'.\n"
-            "  2. Un agente con nombre 'PATRI', horario '06:45-16:45' y rol 'PSM'.\n"
-            "  De esta forma, cada persona real tendrá su propio renglón individual en el JSON final.\n"
-            "- Cada agente debe tener un id numérico secuencial único.\n"
-            "- 'hours' debe tener el formato exacto 'HH:MM-HH:MM' (ej: '04:35-11:25').\n"
-            "- 'role' debe ser el código de rol (ej: CSA, DSM, PSM, OPS, TKT, LL).\n"
-            "- 'type' debe ser 'pasaje' ÚNICAMENTE si la persona es un CSA o tiene el rol CSA (ej: 'CSA', 'CSA [TKT]', 'CSA [OPS]'). Para cualquier otro rol de la hoja (DSM, PSM, OPS, TKT, LL, etc.), 'type' debe ser estrictamente 'admin'. Únicamente el personal con 'type' = 'pasaje' es apto para embarcar.\n"
-            "- Cada vuelo debe tener un id numérico secuencial único.\n"
-            "- 'destination' debe ser un código IATA de 3 letras (ej: MAN, CDG, FRA, SNN, OTP, PSA, ORK, PAD, LBC, BUD).\n"
-            "- 'airline' debe ser el código de 2 letras de la aerolínea (ej: FR, VY, LH, RR, RK).\n"
-            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DE LOS VUELOS (STD)!!!: Para el campo 'time' de los vuelos, DEBES extraer estrictamente el valor de la columna o celda 'STD' (ej: '5:45' -> '05:45'), que representa la hora de salida del vuelo. ¡BAJO NINGÚN CONCEPTO extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'time' del vuelo! Si la columna 'APERTU' dice '2:45' y la columna 'STD' dice '5:45', la hora que debes extraer es '05:45'.\n"
-            "- El campo 'agents' de los vuelos debe estar COMPLETAMENTE VACÍO (un string vacío \"\"). No asignes ningún agente a ningún vuelo en la extracción.\n\n"
-            "Devuelve SOLAMENTE el objeto JSON puro sin formato markdown, sin bloques de código ni texto adicional. Si no puedes extraer nada relevante o faltan datos, devuelve un JSON vacío respetando el esquema."
+            "2. Para la Parrilla de Vuelos / Embarques:\n"
+            "Cada vuelo debe extraerse en este formato dentro de \"manana\" (si es temprano) o \"tarde\" (si es tarde):\n"
+            "{\n"
+            "  \"tipo_elemento\": \"vuelo\",\n"
+            "  \"destino\": \"SNN\",\n"
+            "  \"linea_aerea\": \"FR\",\n"
+            "  \"numero_vuelo\": \"FR2849\",\n"
+            "  \"std\": \"05:45\"\n"
+            "}\n"
+            "- ¡¡¡MUY IMPORTANTE PARA LA HORA DEL VUELO (std)!!!: Extrae estrictamente de la columna o celda 'STD' (ej: '5:45' -> '05:45'). ¡NUNCA extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'std' del vuelo! Si la columna 'APERTU' dice '2:45' y 'STD' dice '5:45', el std que debes extraer es '05:45'.\n"
+            "- 'date' (fecha) debe ser la fecha de la cabecera. Si no la encuentras o es ilegible, pon 'Fecha no detectada' por defecto (¡nunca te inventes una fecha ficticia!).\n"
+            "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
         response = client.chat.completions.create(
@@ -930,42 +956,62 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         raw_result = response.choices[0].message.content.strip()
         parsed_result = json.loads(raw_result)
 
-        extracted_date = parsed_result.get("date") or "Fecha no detectada"
-        extracted_agents = parsed_result.get("agents", [])
-        extracted_flights = parsed_result.get("flights", [])
+        extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
+        if not extracted_date or extracted_date.strip() == "":
+            extracted_date = "Fecha no detectada"
+            
+        raw_manana = parsed_result.get("manana") or []
+        raw_tarde = parsed_result.get("tarde") or []
 
         formatted_agents = []
-        for idx, ag in enumerate(extracted_agents):
-            role_upper = str(ag.get("role") or "CSA").upper().strip()
-            
-            # Enforce strict classification: type is "pasaje" ONLY if role contains CSA. Otherwise, it is strictly "admin" (non-boarding)
-            agent_type = "admin"
-            if "CSA" in role_upper:
-                agent_type = "pasaje"
-                
-            formatted_agents.append({
-                "id": ag.get("id") or (idx + 1),
-                "name": str(ag.get("name") or f"AGENTE_{idx+1}").upper().strip(),
-                "hours": str(ag.get("hours") or "08:00-16:00").strip(),
-                "role": role_upper,
-                "type": agent_type
-            })
-
         formatted_flights = []
-        for idx, fl in enumerate(extracted_flights):
-            formatted_flights.append({
-                "id": fl.get("id") or (idx + 1),
-                "destination": str(fl.get("destination") or "MAD").upper().strip(),
-                "airline": str(fl.get("airline") or "FR").upper().strip(),
-                "number": str(fl.get("number") or f"FL{idx+1}").upper().strip(),
-                "time": str(fl.get("time") or "12:00").strip(),
-                "agents": ""
-            })
+        
+        def process_items(items, shift_name):
+            for idx, item in enumerate(items):
+                if not isinstance(item, dict):
+                    continue
+                tipo = str(item.get("tipo_elemento") or "").lower().strip()
+                
+                # Fallback check
+                if not tipo:
+                    if "horario" in item or "rol" in item:
+                        tipo = "agente"
+                    elif "std" in item or "numero_vuelo" in item:
+                        tipo = "vuelo"
+                        
+                if tipo == "agente":
+                    role_upper = str(item.get("rol") or "CSA").upper().strip()
+                    
+                    # Enforce strict classification: type is "pasaje" ONLY if role contains CSA. Otherwise, "admin"
+                    agent_type = "admin"
+                    if "CSA" in role_upper:
+                        agent_type = "pasaje"
+                        
+                    formatted_agents.append({
+                        "id": len(formatted_agents) + 1,
+                        "name": str(item.get("nombre") or f"AGENTE_{len(formatted_agents)+1}").upper().strip(),
+                        "hours": str(item.get("horario") or "08:00-16:00").strip(),
+                        "role": role_upper,
+                        "type": agent_type,
+                        "shift": shift_name
+                    })
+                elif tipo == "vuelo":
+                    formatted_flights.append({
+                        "id": len(formatted_flights) + 1,
+                        "destination": str(item.get("destino") or "MAD").upper().strip(),
+                        "airline": str(item.get("linea_aerea") or "FR").upper().strip(),
+                        "number": str(item.get("numero_vuelo") or f"FL{len(formatted_flights)+1}").upper().strip(),
+                        "time": str(item.get("std") or "12:00").strip(),
+                        "agents": ""
+                    })
+
+        process_items(raw_manana, "mañana")
+        process_items(raw_tarde, "tarde")
 
         return {
             "success": True,
             "is_real_ai": True,
-            "message": f"Extracción exitosa realizada por GPT-4o-mini.",
+            "message": f"Extracción exitosa realizada por GPT-4o.",
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights
