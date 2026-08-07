@@ -1,3 +1,4 @@
+import traceback
 import os
 import json
 import base64
@@ -1056,11 +1057,12 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         }
 
     except Exception as e:
-        print(f"Error calling OpenAI Vision API: {e}")
+        tb = traceback.format_exc()
+        print(f"Error calling OpenAI Vision API: {e}\nTraceback: {tb}")
         return {
             "success": True,
             "is_real_ai": False,
-            "message": f"Error en la extracción por IA ({str(e)}). No se han cargado datos ficticios.",
+            "message": f"Error en la extracción por IA ({str(e)}).\nTraceback: {tb}",
             "date": "Fecha no detectada",
             "agents": [],
             "flights": []

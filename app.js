@@ -1049,6 +1049,10 @@ async function handleScheduleFileUpload(event) {
           // Render high fidelity flights and agents tables
           renderDetectedAgents();
           renderDetectedFlights();
+          
+          if (!data.is_real_ai) {
+            alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: ${data.message}`);
+          }
         } catch (err) {
           console.error("Defensive catch in upload success timer:", err);
           alert("Error de renderizado (Exito): " + err.message + "\nStack: " + err.stack);
