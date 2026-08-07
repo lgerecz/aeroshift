@@ -1215,7 +1215,8 @@ function renderDetectedAgents() {
         </tr>`;
     } else {
       const especValue = (a.espec && a.espec.length > 0) ? a.espec[0] : '';
-      const selectHtml = `
+      // Only show the dropdown for non-admin agents (CSA pasajes)
+      const selectHtml = a.type === 'admin' ? '<span style="color:#555;">—</span>' : `
         <select onchange="updateAgentEspec(${a.id}, this.value)" style="background: #000; color: #fff; border: 1px solid #333; border-radius: 4px; padding: 2px 4px; font-family: inherit; font-size: 11px; width: 75px; text-align: center; cursor: pointer;">
           <option value="">—</option>
           <option value="OPS" ${especValue === 'OPS' ? 'selected' : ''}>OPS</option>
@@ -1224,9 +1225,9 @@ function renderDetectedAgents() {
         </select>
       `;
 
-      const isExcluded = a.excluir ? true : false;
-      const checkboxHtml = `
-        <input type="checkbox" onchange="toggleAgentExclusion(${a.id}, this.checked)" ${isExcluded ? 'checked' : ''} style="width: 15px; height: 16px; cursor: pointer; accent-color: var(--primary); vertical-align: middle;">
+      // Only show the checkbox for non-admin agents
+      const checkboxHtml = a.type === 'admin' ? '<span style="color:#555;">—</span>' : `
+        <input type="checkbox" onchange="toggleAgentExclusion(${a.id}, this.checked)" ${a.excluir ? 'checked' : ''} style="width: 15px; height: 16px; cursor: pointer; accent-color: var(--primary); vertical-align: middle;">
       `;
 
       return `
