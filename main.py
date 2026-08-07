@@ -947,7 +947,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                 ],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
-                temperature=0.0
+                reasoning_effort="high"  # ¡Activamos el razonamiento de nivel alto para máxima precisión de lectura!
             )
         except Exception as err_luna:
             print(f"Fallo gpt-5.6-luna: {err_luna}. Cayendo a gpt-5.4-nano...")
