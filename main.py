@@ -936,22 +936,60 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
-        response = client.chat.completions.create(
-            model="gpt-5.6-luna",
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": user_content_blocks
-                }
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=4000,
-            temperature=0.0
-        )
+        try:
+            # 1. Intentamos el modelo principal de alta precisión solicitado GPT-5.6-Luna
+            print("Intentando extracción con el modelo gpt-5.6-luna...")
+            response = client.chat.completions.create(
+                model="gpt-5.6-luna",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content_blocks}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=4000,
+                temperature=0.0
+            )
+        except Exception as err_luna:
+            print(f"Fallo gpt-5.6-luna: {err_luna}. Cayendo a gpt-5.4-nano...")
+            try:
+                # 2. Segundo recurso: gpt-5.4-nano (ligero de nueva generación)
+                response = client.chat.completions.create(
+                    model="gpt-5.4-nano",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content_blocks}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=4000,
+                    temperature=0.0
+                )
+            except Exception as err_54nano:
+                print(f"Fallo gpt-5.4-nano: {err_54nano}. Cayendo a gpt-5-mini...")
+                try:
+                    # 3. Tercer recurso: gpt-5-mini (económico y rápido)
+                    response = client.chat.completions.create(
+                        model="gpt-5-mini",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content_blocks}
+                        ],
+                        response_format={"type": "json_object"},
+                        max_tokens=4000,
+                        temperature=0.0
+                    )
+                except Exception as err_5mini:
+                    print(f"Fallo gpt-5-mini: {err_5mini}. Cayendo a gpt-5-nano...")
+                    # 4. Último recurso definitivo: gpt-5-nano (ultra ligero y económico)
+                    response = client.chat.completions.create(
+                        model="gpt-5-nano",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content_blocks}
+                        ],
+                        response_format={"type": "json_object"},
+                        max_tokens=4000,
+                        temperature=0.0
+                    )
 
         raw_result = response.choices[0].message.content.strip()
         parsed_result = json.loads(raw_result)
