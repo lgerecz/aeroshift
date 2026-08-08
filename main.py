@@ -1,3 +1,4 @@
+import re
 import traceback
 import os
 import json
@@ -758,16 +759,16 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Extracción multimodal por IA (GPT-4o) de máxima precisión.
-    Utiliza el prompt de extracción estricto y las reglas geográficas del usuario,
-    unificando la respuesta en el formato esperado por el frontend.
+    Extracción multimodal de máxima precisión y compatibilidad universal (GPT-5).
+    Soporta imágenes, PDFs y Excels. Adapta automáticamente los parámetros si el modelo
+    de razonamiento de GPT-5 (como Luna) rechaza parámetros como 'response_format' o roles 'system'.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return {
             "success": True,
             "is_real_ai": False,
-            "message": "Servidor sin clave API Key de OpenAI configurada. No se cargaron datos ficticios para evitar confusiones.",
+            "message": "Servidor sin clave API Key de OpenAI configurada. No se cargaron datos ficticios.",
             "date": "Fecha no detectada",
             "agents": [],
             "flights": []
@@ -919,7 +920,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- A LA MANO IZQUIERDA de la hoja están los turnos de la MAÑANA (añade a la lista \"manana\"). A LA MANO DERECHA de la TARDE (añade a la lista \"tarde\").\n"
             "- Bloque superior de la columna: turnos administrativos-operativos con el rol en paréntesis, ej: 'CARO (DSM)' se extrae con nombre 'CARO' y rol 'DSM'.\n"
             "- Bloque inferior de la columna: turnos de Pasaje (CSA). Aquí el rol 'CSA' NO aparece escrito (aparece vacío, solo sale el nombre, ej: 'STEFANIA'). Debes extraerlos con rol 'CSA' de forma automática, salvo que lleven restricciones entre paréntesis (ej: 'EVA (SOMBRA TKT)', que se extrae con rol 'TKT').\n"
-            "- Si en una fila hay dos personas separadas por '/' (ej: 'JORGE / GASTÓN (PSM)' con horas '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
+            "- Si en una fila hay dos personas separadas por '/' (ej: 'JORGE / GASTÓN (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
             "  * Uno con nombre 'JORGE', horario '02:45-12:45', rol 'PSM'.\n"
             "  * Otro con nombre 'GASTÓN', horario '06:45-16:45', rol 'PSM'.\n"
             "\n"
@@ -937,62 +938,88 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
-        try:
-            # 1. Intentamos el modelo principal de alta precisión solicitado GPT-5.6-Luna
-            print("Intentando extracción con el modelo gpt-5.6-luna...")
-            response = client.chat.completions.create(
-                model="gpt-5.6-luna",
-                messages=[
+        # Adaptador universal para llamadas seguras de OpenAI (soporta GPT-5 y modelos de razonamiento)
+        def safe_openai_call(model_name: str):
+            params = {
+                "model": model_name,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content_blocks}
                 ],
-                response_format={"type": "json_object"},
-                max_tokens=4000,
-                reasoning_effort="high"  # ¡Activamos el razonamiento de nivel alto para máxima precisión de lectura!
-            )
-        except Exception as err_luna:
-            print(f"Fallo gpt-5.6-luna: {err_luna}. Cayendo a gpt-5.4-nano...")
+                "max_completion_tokens": 4000
+            }
+            # JSON mode is only supported on certain models or if explicitly configured
+            params["response_format"] = {"type": "json_object"}
+            
+            if model_name == "gpt-5.6-luna":
+                params["reasoning_effort"] = "high"
+                
             try:
-                # 2. Segundo recurso: gpt-5.4-nano (ligero de nueva generación)
-                response = client.chat.completions.create(
-                    model="gpt-5.4-nano",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content_blocks}
-                    ],
-                    response_format={"type": "json_object"},
-                    max_tokens=4000,
-                    temperature=0.0
-                )
-            except Exception as err_54nano:
-                print(f"Fallo gpt-5.4-nano: {err_54nano}. Cayendo a gpt-5-mini...")
+                return client.chat.completions.create(**params)
+            except Exception as call_err:
+                err_msg = str(call_err).lower()
+                print(f"Fallo inicial con {model_name}: {call_err}. Adaptando parámetros...")
+                
+                # 1. Si el modelo no soporta response_format o json_object, lo removemos
+                if "response_format" in err_msg or "json" in err_msg:
+                    if "response_format" in params:
+                        del params["response_format"]
+                
+                # 2. Si el modelo de razonamiento no soporta el rol 'system', unimos los prompts
+                if "system" in err_msg or "role" in err_msg:
+                    merged_content = []
+                    merged_content.append({
+                        "type": "text",
+                        "text": f"INSTRUCCIONES DE EXTRACCIÓN DEL SISTEMA:\n{system_prompt}\n\n"
+                    })
+                    if isinstance(user_content_blocks, list):
+                        merged_content.extend(user_content_blocks)
+                    else:
+                        merged_content.append({"type": "text", "text": str(user_content_blocks)})
+                        
+                    params["messages"] = [
+                        {"role": "user", "content": merged_content}
+                    ]
+                
+                # Reintentamos la llamada con los parámetros adaptados
+                print(f"Reintentando llamada adaptada para {model_name}...")
+                return client.chat.completions.create(**params)
+
+        # Cascada de seguridad secuencial utilizando tu lista favorita de GPT-5
+        response = None
+        errors = []
+
+        # 1. gpt-5.6-luna
+        try:
+            response = safe_openai_call("gpt-5.6-luna")
+        except Exception as e_luna:
+            errors.append(f"gpt-5.6-luna: {str(e_luna)}")
+            # 2. gpt-5.4-nano
+            try:
+                response = safe_openai_call("gpt-5.4-nano")
+            except Exception as e_54nano:
+                errors.append(f"gpt-5.4-nano: {str(e_54nano)}")
+                # 3. gpt-5-mini
                 try:
-                    # 3. Tercer recurso: gpt-5-mini (económico y rápido)
-                    response = client.chat.completions.create(
-                        model="gpt-5-mini",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_content_blocks}
-                        ],
-                        response_format={"type": "json_object"},
-                        max_tokens=4000,
-                        temperature=0.0
-                    )
-                except Exception as err_5mini:
-                    print(f"Fallo gpt-5-mini: {err_5mini}. Cayendo a gpt-5-nano...")
-                    # 4. Último recurso definitivo: gpt-5-nano (ultra ligero y económico)
-                    response = client.chat.completions.create(
-                        model="gpt-5-nano",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_content_blocks}
-                        ],
-                        response_format={"type": "json_object"},
-                        max_tokens=4000,
-                        temperature=0.0
-                    )
+                    response = safe_openai_call("gpt-5-mini")
+                except Exception as e_5mini:
+                    errors.append(f"gpt-5-mini: {str(e_5mini)}")
+                    # 4. gpt-5-nano
+                    try:
+                        response = safe_openai_call("gpt-5-nano")
+                    except Exception as e_5nano:
+                        errors.append(f"gpt-5-nano: {str(e_5nano)}")
+                        # Lanzamos la excepción si todos fallaron
+                        raise Exception(f"Todos los modelos GPT-5 fallaron. Historial de errores: {'; '.join(errors)}")
 
         raw_result = response.choices[0].message.content.strip()
+        
+        # Limpieza defensiva de bloques de código markdown si se deshabilitó el modo JSON
+        if raw_result.startswith("```"):
+            raw_result = re.sub(r"^```(?:json)?\n", "", raw_result, flags=re.IGNORECASE)
+            raw_result = re.sub(r"\n```$", "", raw_result)
+            raw_result = raw_result.strip()
+
         parsed_result = json.loads(raw_result)
 
         extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
@@ -1011,7 +1038,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                     continue
                 tipo = str(item.get("tipo_elemento") or "").lower().strip()
                 
-                # Fallback check
                 if not tipo:
                     if "horario" in item or "rol" in item:
                         tipo = "agente"
@@ -1021,7 +1047,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                 if tipo == "agente":
                     role_upper = str(item.get("rol") or "CSA").upper().strip()
                     
-                    # Enforce strict classification: type is "pasaje" ONLY if role contains CSA. Otherwise, "admin"
                     agent_type = "admin"
                     if "CSA" in role_upper:
                         agent_type = "pasaje"
@@ -1050,7 +1075,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         return {
             "success": True,
             "is_real_ai": True,
-            "message": f"Extracción exitosa realizada por GPT-4o.",
+            "message": f"Extracción exitosa realizada por {response.model}.",
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights
