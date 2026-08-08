@@ -1057,20 +1057,46 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                         tipo = "vuelo"
                         
                 if tipo == "agente":
+                    name_raw = str(item.get("nombre") or "").upper().strip()
+                    hours_raw = str(item.get("horario") or "08:00-16:00").strip()
                     role_upper = str(item.get("rol") or "CSA").upper().strip()
                     
+                    # Dividimos nombres múltiples separados por '/' o ','
+                    names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
+                    
+                    # Clasificación estricta en base al rol
                     agent_type = "admin"
                     if "CSA" in role_upper:
                         agent_type = "pasaje"
-                        
-                    formatted_agents.append({
-                        "id": len(formatted_agents) + 1,
-                        "name": str(item.get("nombre") or f"AGENTE_{len(formatted_agents)+1}").upper().strip(),
-                        "hours": str(item.get("horario") or "08:00-16:00").strip(),
-                        "role": role_upper,
-                        "type": agent_type,
-                        "shift": shift_name
-                    })
+
+                    if len(names) <= 1:
+                        # ¡Un solo agente! Conservamos su horario exactamente igual (preservando turnos partidos con '/')
+                        formatted_agents.append({
+                            "id": len(formatted_agents) + 1,
+                            "name": name_raw,
+                            "hours": hours_raw,
+                            "role": role_upper,
+                            "type": agent_type,
+                            "shift": shift_name
+                        })
+                    else:
+                        # Múltiples agentes en la misma fila (como Jorge / Gastón o Liz / Carol)
+                        hours_list = [h.strip() for h in hours_raw.split("/") if h.strip()]
+                        for idx_name, name_val in enumerate(names):
+                            hours_val = hours_raw
+                            if len(hours_list) == len(names):
+                                hours_val = hours_list[idx_name]
+                            elif len(hours_list) > 0:
+                                hours_val = hours_list[min(idx_name, len(hours_list) - 1)]
+                                
+                            formatted_agents.append({
+                                "id": len(formatted_agents) + 1,
+                                "name": name_val,
+                                "hours": hours_val,
+                                "role": role_upper,
+                                "type": agent_type,
+                                "shift": shift_name
+                            })
                 elif tipo == "vuelo":
                     formatted_flights.append({
                         "id": len(formatted_flights) + 1,
