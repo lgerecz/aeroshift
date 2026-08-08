@@ -947,7 +947,7 @@ async function handleScheduleFileUpload(event) {
     { p: 35, msg: 'Escanenando imágenes y detectando texto...' },
     { p: 55, msg: 'Procesando rostros, tablas de horarios y vuelos vacíos...' },
     { p: 75, msg: 'Estructurando cuadrante de agentes y lista de embarques...' },
-    { p: 90, msg: 'Esperando respuesta final del modelo de lenguaje GPT-4o...' }
+    { p: 90, msg: 'Esperando respuesta final del modelo de inteligencia artificial...' }
   ];
 
   const interval = setInterval(() => {

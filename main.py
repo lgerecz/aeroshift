@@ -1012,7 +1012,18 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                         # Lanzamos la excepción si todos fallaron
                         raise Exception(f"Todos los modelos GPT-5 fallaron. Historial de errores: {'; '.join(errors)}")
 
-        raw_result = response.choices[0].message.content.strip()
+        raw_result = response.choices[0].message.content
+        if not raw_result:
+            try:
+                raw_result = response.choices[0].message.reasoning_content
+            except:
+                pass
+                
+        if not raw_result:
+            raw_result = ""
+            
+        raw_result = raw_result.strip()
+        print(f"Resultado bruto de OpenAI: '{raw_result}'")
         
         # Limpieza defensiva de bloques de código markdown si se deshabilitó el modo JSON
         if raw_result.startswith("```"):
@@ -1020,7 +1031,18 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             raw_result = re.sub(r"\n```$", "", raw_result)
             raw_result = raw_result.strip()
 
-        parsed_result = json.loads(raw_result)
+        try:
+            parsed_result = json.loads(raw_result)
+        except json.JSONDecodeError as json_err:
+            # Buscamos un bloque JSON con expresión regular por si el modelo devolvió texto conversacional inicial
+            match_json = re.search(r"\{.*\}", raw_result, re.DOTALL)
+            if match_json:
+                try:
+                    parsed_result = json.loads(match_json.group(0))
+                except Exception as match_err:
+                    raise Exception(f"Fallo al decodificar el bloque JSON detectado. Texto recibido: '{raw_result}'. Error: {match_err}")
+            else:
+                raise Exception(f"No se pudo encontrar ningún bloque JSON válido en la respuesta. Texto recibido: '{raw_result}'. Error: {json_err}")
 
         extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
         if not extracted_date or extracted_date.strip() == "":
