@@ -759,9 +759,9 @@ DEMO_FLIGHTS = [
 @app.post("/extract")
 async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
-    Extracción multimodal de máxima precisión y compatibilidad universal (GPT-5).
-    Soporta imágenes, PDFs y Excels. Adapta automáticamente los parámetros si el modelo
-    de razonamiento de GPT-5 (como Luna) rechaza parámetros como 'response_format' o roles 'system'.
+    Extracción multimodal por IA (catálogo de GPT-5) de compatibilidad absoluta.
+    Realiza una cascada inteligente unificada (Llamada + Decodificación JSON)
+    para asegurar éxito absoluto en cualquier condición.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -847,6 +847,12 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                 except Exception as img_err:
                     print(f"Error cargando imagen {file.filename}: {img_err}")
 
+        # Añadimos una instrucción textual de seguridad al usuario para que los modelos de visión de GPT-5 tengan texto guía obligatorio
+        user_content_blocks.append({
+            "type": "text",
+            "text": "Analiza esta imagen o contenido de texto y extrae la fecha, los agentes y los vuelos en el formato JSON de rellenado solicitado."
+        })
+
         if text_payloads:
             combined_text = "\n".join(text_payloads)
             user_content_blocks.append({
@@ -857,16 +863,6 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                     f"{combined_text}"
                 )
             })
-
-        if not user_content_blocks:
-            return {
-                "success": True,
-                "is_real_ai": False,
-                "message": "No se recibieron archivos válidos para extraer.",
-                "date": "Fecha no detectada",
-                "agents": [],
-                "flights": []
-            }
 
         system_prompt = (
             "Eres un sistema especializado en la extracción documental de máxima precisión.\n"
@@ -938,111 +934,105 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
-        # Adaptador universal para llamadas seguras de OpenAI (soporta GPT-5 y modelos de razonamiento)
-        def safe_openai_call(model_name: str):
-            params = {
-                "model": model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content_blocks}
-                ],
-                "max_completion_tokens": 4000
-            }
-            # JSON mode is only supported on certain models or if explicitly configured
-            params["response_format"] = {"type": "json_object"}
-            
-            if model_name == "gpt-5.6-luna":
-                params["reasoning_effort"] = "high"
-                
-            try:
-                return client.chat.completions.create(**params)
-            except Exception as call_err:
-                err_msg = str(call_err).lower()
-                print(f"Fallo inicial con {model_name}: {call_err}. Adaptando parámetros...")
-                
-                # 1. Si el modelo no soporta response_format o json_object, lo removemos
-                if "response_format" in err_msg or "json" in err_msg:
-                    if "response_format" in params:
-                        del params["response_format"]
-                
-                # 2. Si el modelo de razonamiento no soporta el rol 'system', unimos los prompts
-                if "system" in err_msg or "role" in err_msg:
-                    merged_content = []
-                    merged_content.append({
-                        "type": "text",
-                        "text": f"INSTRUCCIONES DE EXTRACCIÓN DEL SISTEMA:\n{system_prompt}\n\n"
-                    })
-                    if isinstance(user_content_blocks, list):
-                        merged_content.extend(user_content_blocks)
-                    else:
-                        merged_content.append({"type": "text", "text": str(user_content_blocks)})
-                        
-                    params["messages"] = [
-                        {"role": "user", "content": merged_content}
-                    ]
-                
-                # Reintentamos la llamada con los parámetros adaptados
-                print(f"Reintentando llamada adaptada para {model_name}...")
-                return client.chat.completions.create(**params)
+        models_to_try = [
+            ("gpt-5.6-luna", True),
+            ("gpt-5.4-nano", False),
+            ("gpt-5-mini", False),
+            ("gpt-5-nano", False)
+        ]
 
-        # Cascada de seguridad secuencial utilizando tu lista favorita de GPT-5
-        response = None
+        parsed_result = None
+        extracted_model_name = ""
         errors = []
 
-        # 1. gpt-5.6-luna
-        try:
-            response = safe_openai_call("gpt-5.6-luna")
-        except Exception as e_luna:
-            errors.append(f"gpt-5.6-luna: {str(e_luna)}")
-            # 2. gpt-5.4-nano
+        for model_name, use_high_reasoning in models_to_try:
             try:
-                response = safe_openai_call("gpt-5.4-nano")
-            except Exception as e_54nano:
-                errors.append(f"gpt-5.4-nano: {str(e_54nano)}")
-                # 3. gpt-5-mini
-                try:
-                    response = safe_openai_call("gpt-5-mini")
-                except Exception as e_5mini:
-                    errors.append(f"gpt-5-mini: {str(e_5mini)}")
-                    # 4. gpt-5-nano
-                    try:
-                        response = safe_openai_call("gpt-5-nano")
-                    except Exception as e_5nano:
-                        errors.append(f"gpt-5-nano: {str(e_5nano)}")
-                        # Lanzamos la excepción si todos fallaron
-                        raise Exception(f"Todos los modelos GPT-5 fallaron. Historial de errores: {'; '.join(errors)}")
-
-        raw_result = response.choices[0].message.content
-        if not raw_result:
-            try:
-                raw_result = response.choices[0].message.reasoning_content
-            except:
-                pass
+                print(f"Intentando llamada a {model_name}...")
+                params = {
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content_blocks}
+                    ],
+                    "max_completion_tokens": 4000
+                }
                 
-        if not raw_result:
-            raw_result = ""
-            
-        raw_result = raw_result.strip()
-        print(f"Resultado bruto de OpenAI: '{raw_result}'")
-        
-        # Limpieza defensiva de bloques de código markdown si se deshabilitó el modo JSON
-        if raw_result.startswith("```"):
-            raw_result = re.sub(r"^```(?:json)?\n", "", raw_result, flags=re.IGNORECASE)
-            raw_result = re.sub(r"\n```$", "", raw_result)
-            raw_result = raw_result.strip()
-
-        try:
-            parsed_result = json.loads(raw_result)
-        except json.JSONDecodeError as json_err:
-            # Buscamos un bloque JSON con expresión regular por si el modelo devolvió texto conversacional inicial
-            match_json = re.search(r"\{.*\}", raw_result, re.DOTALL)
-            if match_json:
+                # Intentamos activar el formato JSON
+                params["response_format"] = {"type": "json_object"}
+                
+                if use_high_reasoning:
+                    params["reasoning_effort"] = "high"
+                    
+                # Realizamos llamada OpenAI
                 try:
-                    parsed_result = json.loads(match_json.group(0))
-                except Exception as match_err:
-                    raise Exception(f"Fallo al decodificar el bloque JSON detectado. Texto recibido: '{raw_result}'. Error: {match_err}")
-            else:
-                raise Exception(f"No se pudo encontrar ningún bloque JSON válido en la respuesta. Texto recibido: '{raw_result}'. Error: {json_err}")
+                    response = client.chat.completions.create(**params)
+                except Exception as call_err:
+                    err_msg = str(call_err).lower()
+                    print(f"Ajuste defensivo para {model_name} por error: {call_err}")
+                    
+                    # 1. Si no soporta JSON mode, lo borramos
+                    if "response_format" in err_msg or "json" in err_msg:
+                        if "response_format" in params:
+                            del params["response_format"]
+                            
+                    # 2. Si no soporta rol system, unimos prompts
+                    if "system" in err_msg or "role" in err_msg:
+                        merged_content = [
+                            {"type": "text", "text": f"INSTRUCCIONES DEL SISTEMA:\n{system_prompt}\n\n"}
+                        ]
+                        if isinstance(user_content_blocks, list):
+                            merged_content.extend(user_content_blocks)
+                        else:
+                            merged_content.append({"type": "text", "text": str(user_content_blocks)})
+                            
+                        params["messages"] = [
+                            {"role": "user", "content": merged_content}
+                        ]
+                    
+                    # Reintento con parámetros limpios
+                    response = client.chat.completions.create(**params)
+
+                # Procesamiento del resultado de este modelo
+                raw_result = response.choices[0].message.content
+                if not raw_result:
+                    try:
+                        raw_result = response.choices[0].message.reasoning_content
+                    except:
+                        pass
+                if not raw_result:
+                    raise Exception("El servidor OpenAI devolvió contenido vacío.")
+
+                raw_result = raw_result.strip()
+                print(f"Respuesta recibida de {model_name} (primeros 150 caracteres): '{raw_result[:150]}'")
+
+                # Limpieza de markdown
+                if raw_result.startswith("```"):
+                    raw_result = re.sub(r"^```(?:json)?\n", "", raw_result, flags=re.IGNORECASE)
+                    raw_result = re.sub(r"\n```$", "", raw_result)
+                    raw_result = raw_result.strip()
+
+                # Intento de parseo JSON para este modelo
+                try:
+                    parsed_result = json.loads(raw_result)
+                except json.JSONDecodeError as json_err:
+                    # Intento defensivo usando búsqueda de llaves con regex
+                    match_json = re.search(r"\{.*\}", raw_result, re.DOTALL)
+                    if match_json:
+                        parsed_result = json.loads(match_json.group(0))
+                    else:
+                        raise json_err
+
+                # Si logramos decodificar con éxito, detenemos la cascada
+                extracted_model_name = model_name
+                break
+
+            except Exception as model_err:
+                print(f"Fallo de llamada o decodificación con {model_name}: {model_err}")
+                errors.append(f"{model_name}: {str(model_err)}")
+                continue
+
+        if parsed_result is None:
+            raise Exception(f"Ningún modelo del catálogo logró generar un JSON de rellenado decodificable. Historial de errores: {'; '.join(errors)}")
 
         extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
         if not extracted_date or extracted_date.strip() == "":
@@ -1097,7 +1087,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
         return {
             "success": True,
             "is_real_ai": True,
-            "message": f"Extracción exitosa realizada por {response.model}.",
+            "message": f"Extracción exitosa completada por {extracted_model_name}.",
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights
