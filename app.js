@@ -903,18 +903,8 @@ function switchView(view) {
 // FILE UPLOAD HANDLER (WEB 3 HIGH-FIDELITY DESIGN WITH DUAL SCROLL RECTANGLES)
 // ========================================== 
 
-async function handleScheduleFileUpload(event) {
-  const files = event.target.files;
+async function uploadFileToBackend(files, type) {
   if (!files || files.length === 0) return;
-
-  // Copy names and create ObjectURLs immediately to prevent browser event recycling!
-  const filesCopy = [];
-  for (let i = 0; i < files.length; i++) {
-    filesCopy.push({
-      name: files[i].name,
-      blobUrl: URL.createObjectURL(files[i])
-    });
-  }
 
   const modal = document.getElementById('processingModal');
   const title = document.getElementById('procTitle');
@@ -929,6 +919,15 @@ async function handleScheduleFileUpload(event) {
 
   if (!modal) return;
 
+  // Setup file list copies for preview tags
+  const filesCopy = [];
+  for (let i = 0; i < files.length; i++) {
+    filesCopy.push({
+      name: files[i].name,
+      blobUrl: URL.createObjectURL(files[i])
+    });
+  }
+
   // Reset progress bar & texts
   progress.style.width = '0%';
   status.textContent = 'PROCESANDO 0%';
@@ -938,17 +937,17 @@ async function handleScheduleFileUpload(event) {
   } else {
     title.textContent = 'Analizando ' + filesCopy.length + ' archivos seleccionados...';
   }
-  sub.textContent = 'Conectando con el motor de Visión Artificial de AeroShift...';
+  sub.textContent = 'Conectando con el motor de Visión de AeroShift...';
 
   modal.classList.add('active');
 
   // Let's animate a smooth progress bar from 0% to 90%
   let currentPercent = 0;
   const stages = [
-    { p: 15, msg: 'Conectando con el motor de Visión Artificial de AeroShift...' },
-    { p: 35, msg: 'Escanenando imágenes y detectando texto...' },
-    { p: 55, msg: 'Procesando rostros, tablas de horarios y vuelos vacíos...' },
-    { p: 75, msg: 'Estructurando cuadrante de agentes y lista de embarques...' },
+    { p: 15, msg: 'Conectando con el motor de Visión de AeroShift...' },
+    { p: 35, msg: 'Escaneando imágenes y detectando texto...' },
+    { p: 55, msg: 'Procesando tablas de horarios y vuelos...' },
+    { p: 75, msg: 'Estructurando datos en la base de datos de planificación...' },
     { p: 90, msg: 'Esperando respuesta final del modelo de inteligencia artificial...' }
   ];
 
@@ -972,7 +971,7 @@ async function handleScheduleFileUpload(event) {
   }
 
   try {
-    const response = await fetch(`${backendUrl}/extract?model=${selectedModel}`, {
+    const response = await fetch(`${backendUrl}/extract?model=${selectedModel}&type=${type}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiKey}`
@@ -986,23 +985,31 @@ async function handleScheduleFileUpload(event) {
 
     const data = await response.json();
     if (data.success) {
-      // CLEAR SLATE: With each new file upload, we only load the newly extracted information. No retention of old data!
-      let newAgents = [];
-      if (data.agents && data.agents.length > 0) {
-        newAgents = data.agents.map((a, idx) => {
+      // Ensure extractedData is initialized
+      if (!extractedData) {
+        extractedData = { date: 'Fecha no detectada', agents: [], flights: [] };
+      }
+
+      // 1. Process agents if type is "agents" (or both if type is not specified)
+      if (type === 'agents' || type === 'all') {
+        const newAgents = data.agents.map((a, idx) => {
           return {
             id: a.id || (idx + 1),
             name: a.name || 'Agente',
             hours: a.hours || '08:00-16:00',
             role: a.role || 'CSA',
-            type: a.type || 'pasaje'
+            type: a.type || 'pasaje',
+            shift: a.shift || 'mañana',
+            espec: a.espec || [],
+            excluir: a.excluir || false
           };
         });
+        extractedData.agents = newAgents;
       }
 
-      let newFlights = [];
-      if (data.flights && data.flights.length > 0) {
-        newFlights = data.flights.map((f, index) => {
+      // 2. Process flights if type is "flights" or "all"
+      if (type === 'flights' || type === 'all') {
+        const newFlights = data.flights.map((f, index) => {
           return {
             id: f.id || (index + 1),
             destination: f.destination || 'MAD',
@@ -1012,18 +1019,15 @@ async function handleScheduleFileUpload(event) {
             agents: '' // Always blank initially as requested
           };
         });
+        extractedData.flights = newFlights;
       }
 
+      // Update extractedData Date safely with dynamic fallback
       const isDateValid = (d) => d && d !== 'Fecha no detectada' && d !== 'Sábado 20 Junio';
-      const fallbackDate = isDateValid(extractedData?.date) ? extractedData.date : 'Fecha no detectada';
+      const fallbackDate = isDateValid(extractedData.date) ? extractedData.date : 'Fecha no detectada';
       const finalDate = isDateValid(data.date) ? data.date : fallbackDate;
+      extractedData.date = finalDate;
 
-      extractedData = {
-        date: finalDate,
-        agents: newAgents,
-        flights: newFlights
-      };
-      
       clearInterval(interval);
       progress.style.width = '100%';
       status.textContent = 'PROCESANDO 100%';
@@ -1120,6 +1124,19 @@ async function handleScheduleFileUpload(event) {
       }
     }, 1000);
   }
+}
+
+// Concrete upload handlers
+function handleScheduleFileUpload(event) {
+  uploadFileToBackend(event.target.files, 'all');
+}
+
+function handleAgentsFileUpload(event) {
+  uploadFileToBackend(event.target.files, 'agents');
+}
+
+function handleFlightsFileUpload(event) {
+  uploadFileToBackend(event.target.files, 'flights');
 }
 
 function tryUploadAgain() {

@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=50">
+  <link rel="stylesheet" href="style.css?v=51">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -123,7 +123,7 @@
       
       <div class="welcome-options" style="display: flex; gap: 20px; width: 100%; margin-top: 8px;">
         <!-- OPCIÓN 1: CREAR -->
-        <div class="welcome-card" onclick="switchView('metodo-creacion')" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 20px; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <div class="welcome-card" onclick="switchView('extractor-preview')" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 20px; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
           <div class="welcome-card-icon" style="width: 48px; height: 48px; background: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(59, 130, 246, 0.2);">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -255,9 +255,15 @@
             <h3 id="detectedAgentsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
               👥 Turnos del Personal — Sábado 20 Junio
             </h3>
-            <button onclick="clearDetectedAgents()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
-              🧹 Limpiar
-            </button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="background: var(--primary); border: 1px solid var(--primary); color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; margin: 0; height: 18px; line-height: 18px; transition: background 0.15s;" onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">
+                📤 Subir Turnos
+                <input type="file" id="agentsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleAgentsFileUpload(event)" style="display: none;">
+              </label>
+              <button onclick="clearDetectedAgents()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 24px;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+                🧹 Limpiar
+              </button>
+            </div>
           </div>
           <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
@@ -302,9 +308,15 @@
             <h3 id="detectedFlightsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
               ✈️ Parrilla de Embarques — Sábado 20 Junio
             </h3>
-            <button onclick="clearDetectedFlights()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
-              🧹 Limpiar
-            </button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="background: var(--primary); border: 1px solid var(--primary); color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; margin: 0; height: 18px; line-height: 18px; transition: background 0.15s;" onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">
+                📤 Subir Vuelos
+                <input type="file" id="flightsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleFlightsFileUpload(event)" style="display: none;">
+              </label>
+              <button onclick="clearDetectedFlights()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 24px;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+                🧹 Limpiar
+              </button>
+            </div>
           </div>
           <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
@@ -694,6 +706,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=50"></script>
+  <script src="app.js?v=51"></script>
 </body>
 </html>
