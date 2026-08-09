@@ -939,7 +939,7 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
         use_high_reasoning_default = (selected_model == "gpt-5.6-luna")
         
         models_to_try = [(selected_model, use_high_reasoning_default)]
-        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5-mini", False), ("gpt-5-nano", False)]:
+        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False), ("gpt-5-mini", False), ("gpt-4.1-mini", False)]:
             if m != selected_model:
                 models_to_try.append((m, h))
 
@@ -962,8 +962,8 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                 # Intentamos activar el formato JSON
                 params["response_format"] = {"type": "json_object"}
                 
-                if use_high_reasoning:
-                    params["reasoning_effort"] = "high"
+                # Intentamos razonamiento alto para todos los modelos por defecto
+                params["reasoning_effort"] = "high"
                     
                 # Realizamos llamada OpenAI
                 try:
@@ -977,7 +977,12 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                         if "response_format" in params:
                             del params["response_format"]
                             
-                    # 2. Si no soporta rol system, unimos prompts
+                    # 2. Si el modelo no soporta el razonamiento (reasoning_effort), lo borramos
+                    if "reasoning_effort" in err_msg or "unsupported_parameter" in err_msg or "parameter" in err_msg:
+                        if "reasoning_effort" in params:
+                            del params["reasoning_effort"]
+                            
+                    # 3. Si no soporta rol system, unimos prompts
                     if "system" in err_msg or "role" in err_msg:
                         merged_content = [
                             {"type": "text", "text": f"INSTRUCCIONES DEL SISTEMA:\n{system_prompt}\n\n"}
