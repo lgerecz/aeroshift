@@ -1008,11 +1008,12 @@ async function uploadFileToBackend(files, type) {
         extractedData.agents = newAgents;
       }
 
-      // 2. Process flights if type is "flights" or "all"
+      // 2. Process flights if type is "flights" or "all" (accumulates flights programmatically!)
       if (type === 'flights' || type === 'all') {
+        const currentLength = (type === 'flights') ? extractedData.flights.length : 0;
         const newFlights = data.flights.map((f, index) => {
           return {
-            id: f.id || (index + 1),
+            id: f.id + currentLength, // Auto-increment ID to prevent duplicate key collisions!
             destination: f.destination || 'MAD',
             airline: f.airline || 'FR',
             number: f.number || 'FR000',
@@ -1020,7 +1021,11 @@ async function uploadFileToBackend(files, type) {
             agents: '' // Always blank initially as requested
           };
         });
-        extractedData.flights = newFlights;
+        if (type === 'flights') {
+          extractedData.flights = [...extractedData.flights, ...newFlights];
+        } else {
+          extractedData.flights = newFlights;
+        }
       }
 
       // Update extractedData Date safely with dynamic fallback
@@ -1038,24 +1043,17 @@ async function uploadFileToBackend(files, type) {
         try {
           modal.classList.remove('active');
           
-          // Populate the uploaded files list with actual previews and click-to-zoom!
-          const filesListContainer = document.getElementById('uploadedFilesListPage');
-          if (filesListContainer) {
-            let listHtml = '';
-            for (let i = 0; i < filesCopy.length; i++) {
-              listHtml += `
-                <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
-                  <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" style="stroke:var(--success); flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span style="font-weight:700; font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; color:#fff;" title="${escapeHtml(filesCopy[i].name)}">${escapeHtml(filesCopy[i].name)}</span>
-                  </div>
-                  <div style="width: 100%; height: 110px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${filesCopy[i].blobUrl}')" title="Haga clic para ampliar">
-                    <img src="${filesCopy[i].blobUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
-                  </div>
-                </div>`;
-            }
-            filesListContainer.innerHTML = listHtml;
-          }
+          // Accumulate the new files into our global array with their associated type!
+          filesCopy.forEach(f => {
+            uploadedFilesCopy.push({
+              name: f.name,
+              blobUrl: f.blobUrl,
+              type: type
+            });
+          });
+
+          // Populate the uploaded files list with accumulative previews!
+          renderUploadedFilesList();
 
           // Render high fidelity flights and agents tables
           renderDetectedAgents();
