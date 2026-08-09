@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=53">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -223,10 +223,6 @@
         <p style="color: var(--text-secondary); font-size: 13px; margin: 4px 0 0 0;">Verifica que los turnos del personal y los embarques coincidan con tus capturas originales antes de importarlos.</p>
       </div>
       <div style="display: flex; gap: 12px;">
-        <button class="btn btn-secondary" onclick="tryUploadAgain()" style="font-weight: 600; padding: 10px 20px; display: flex; align-items: center; gap: 8px; border-color: var(--text-muted); color: var(--text-primary);">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-          Escanear otra vez
-        </button>
         <button class="btn btn-primary" onclick="validateUploadedData()" style="font-weight: 700; background: var(--success); border-color: var(--success); padding: 10px 24px; display: flex; align-items: center; gap: 8px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="stroke:currentColor;"><polyline points="20 6 9 17 4 12"/></svg>
           Validar e Importar Datos
@@ -256,8 +252,13 @@
               👥 Turnos del Personal — Sábado 20 Junio
             </h3>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <label style="background: var(--primary); border: 1px solid var(--primary); color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; margin: 0; height: 18px; line-height: 18px; transition: background 0.15s;" onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">
-                📤 Subir Turnos
+              <label style="background: transparent; border: 1px solid var(--primary); color: var(--primary); padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 24px; box-sizing: border-box; vertical-align: middle;" onmouseover="this.style.background='rgba(55,138,221,0.1)'" onmouseout="this.style.background='transparent'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="stroke: currentColor; vertical-align: middle;">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Subir Turnos
                 <input type="file" id="agentsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleAgentsFileUpload(event)" style="display: none;">
               </label>
               <button onclick="clearDetectedAgents()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 24px;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
@@ -309,8 +310,13 @@
               ✈️ Parrilla de Embarques — Sábado 20 Junio
             </h3>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <label style="background: var(--primary); border: 1px solid var(--primary); color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; margin: 0; height: 18px; line-height: 18px; transition: background 0.15s;" onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">
-                📤 Subir Vuelos
+              <label style="background: transparent; border: 1px solid var(--primary); color: var(--primary); padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 24px; box-sizing: border-box; vertical-align: middle;" onmouseover="this.style.background='rgba(55,138,221,0.1)'" onmouseout="this.style.background='transparent'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="stroke: currentColor; vertical-align: middle;">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Subir Vuelos
                 <input type="file" id="flightsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleFlightsFileUpload(event)" style="display: none;">
               </label>
               <button onclick="clearDetectedFlights()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 24px;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
@@ -706,6 +712,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=52"></script>
+  <script src="app.js?v=53"></script>
 </body>
 </html>
