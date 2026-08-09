@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=47">
+  <link rel="stylesheet" href="style.css?v=48">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -35,7 +35,7 @@
       padding: 12px;
       position: absolute;
       z-index: 100;
-      bottom: 135%;
+      top: 135%; /* Se despliega hacia abajo para que el overflow no lo corte */
       left: 50%;
       transform: translateX(-50%);
       opacity: 0;
@@ -51,12 +51,12 @@
     .tooltip-box::after {
       content: "";
       position: absolute;
-      top: 100%;
+      bottom: 100%; /* La flecha apunta hacia arriba */
       left: 50%;
       margin-left: -6px;
       border-width: 6px;
       border-style: solid;
-      border-color: #161616 transparent transparent transparent;
+      border-color: transparent transparent #161616 transparent;
     }
     .tooltip-container:hover .tooltip-box {
       visibility: visible;
@@ -262,29 +262,29 @@
           <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
               <thead>
-                <tr style="border-top: 2px double #444; border-bottom: 2px double #444; color: #888; font-weight: 700; text-transform: uppercase;">
-                  <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5;">AGENTE</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5;">HORARIO</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 85px; position: sticky; top: 0; background: #121212; z-index: 5;">ROL</th>
-                  <th style="padding: 10px 4px; text-align: center; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5;">
+                <tr style="color: #888; font-weight: 700; text-transform: uppercase;">
+                  <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">AGENTE</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">HORARIO</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 85px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">ROL</th>
+                  <th style="padding: 10px 4px; text-align: center; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">
                     <div class="tooltip-container">
                       COBERTURA <span style="color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; display: inline-block; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;">i</span>
                       <div class="tooltip-box">
-                        <strong style="color: var(--primary); font-size: 12px; display: block; margin-bottom: 6px;">Especialidad Cobertura</strong>
+                        <strong style="color: var(--primary); font-size: 11px; display: block; margin-bottom: 4px;">Especialidad Cobertura</strong>
                         IMPORTANTE señalar si el CSA cuenta con especialidad en otro departamento para cubrir descansos o imprevistos de OPS, TKT o LL.
                       </div>
                     </div>
                   </th>
-                  <th style="padding: 10px 4px; text-align: center; width: 85px; position: sticky; top: 0; background: #121212; z-index: 5;">
+                  <th style="padding: 10px 4px; text-align: center; width: 85px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">
                     <div class="tooltip-container">
                       EXCLUSIÓN <span style="color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; display: inline-block; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;">i</span>
                       <div class="tooltip-box">
-                        <strong style="color: var(--primary); font-size: 12px; display: block; margin-bottom: 6px;">Exclusión de Turno</strong>
-                        Marcar si este CSA está enfermo (baja) o si prefieres que cubra otras tareas (como facturación o check-in), excluyéndolo de la optimización de embarques.
+                        <strong style="color: var(--primary); font-size: 11px; display: block; margin-bottom: 4px;">Exclusión de Turno</strong>
+                        Marcar si este CSA está de baja (enfermo) o si prefieres que cubra check-in u otras tareas, excluyéndolo de la optimización de embarques.
                       </div>
                     </div>
                   </th>
-                  <th style="padding: 10px 4px; text-align: center; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5;">ACCIONES</th>
+                  <th style="padding: 10px 4px; text-align: center; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">ACCIONES</th>
                 </tr>
               </thead>
               <tbody id="detectedAgentsBody" style="color: var(--text-secondary); line-height: 1.6;">
@@ -309,15 +309,15 @@
           <div style="overflow-y: auto; height: 360px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: collapse; color: #e0e0e0; font-size: 12.5px;">
               <thead>
-                <tr style="border-top: 2px double #444; border-bottom: 2px double #444; color: #888; font-weight: 700; text-transform: uppercase;">
-                  <th style="padding: 10px 4px; text-align: left; width: 40px; position: sticky; top: 0; background: #121212; z-index: 5;">Nº</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 60px; position: sticky; top: 0; background: #121212; z-index: 5;">DEST</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 90px; position: sticky; top: 0; background: #121212; z-index: 5;">VUELO</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5;">APERTU</th>
-                  <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5;">AGENTES</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5;">EMB</th>
-                  <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5;">STD</th>
-                  <th style="padding: 10px 4px; text-align: center; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5;">ACCIONES</th>
+                <tr style="color: #888; font-weight: 700; text-transform: uppercase;">
+                  <th style="padding: 10px 4px; text-align: left; width: 40px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">Nº</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 60px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">DEST</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 90px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">VUELO</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">APERTU</th>
+                  <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">AGENTES</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">EMB</th>
+                  <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">STD</th>
+                  <th style="padding: 10px 4px; text-align: center; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">ACCIONES</th>
                 </tr>
               </thead>
               <tbody id="detectedFlightsBody" style="line-height: 1.6;">
@@ -676,6 +676,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>
