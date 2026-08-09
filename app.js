@@ -26,6 +26,7 @@ let dragData = null;
 let extractedData = null; // Stores extracted agents and flights from backend
 let editingFlightId = null; // Tracks which flight row is being edited
 let editingAgentId = null; // Tracks which agent row is being edited
+let uploadedFilesCopy = []; // Accumulative list of uploaded file previews
 
 // ===== PERSISTENCE =====
 function loadData() {
@@ -2169,7 +2170,11 @@ function clearDetectedAgents() {
       initializeMockExtractedData();
     }
     extractedData.agents = [];
+    
+    // Filter out turnos files from the global file preview list!
+    uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'agents');
     renderDetectedAgents();
+    renderUploadedFilesList();
   }
 }
 
@@ -2179,7 +2184,11 @@ function clearDetectedFlights() {
       initializeMockExtractedData();
     }
     extractedData.flights = [];
+    
+    // Filter out flights files from the global file list!
+    uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'flights');
     renderDetectedFlights();
+    renderUploadedFilesList();
   }
 }
 
@@ -2270,5 +2279,26 @@ function insertFlightAfter(id) {
     extractedData.flights.splice(idx + 1, 0, newFlight);
     editingFlightId = newId; // Abre la edición en línea al instante para facilitar la escritura!
     renderDetectedFlights();
+  }
+}
+
+
+function renderUploadedFilesList() {
+  const filesListContainer = document.getElementById('uploadedFilesListPage');
+  if (filesListContainer) {
+    let listHtml = '';
+    for (let i = 0; i < uploadedFilesCopy.length; i++) {
+      listHtml += `
+        <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
+          <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" style="stroke:var(--success); flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="font-weight:700; font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; color:#fff;" title="${escapeHtml(uploadedFilesCopy[i].name)}">${escapeHtml(uploadedFilesCopy[i].name)}</span>
+          </div>
+          <div style="width: 100%; height: 110px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${uploadedFilesCopy[i].blobUrl}')" title="Haga clic para ampliar">
+            <img src="${uploadedFilesCopy[i].blobUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          </div>
+        </div>`;
+    }
+    filesListContainer.innerHTML = listHtml;
   }
 }
