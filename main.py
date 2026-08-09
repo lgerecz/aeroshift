@@ -914,7 +914,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "### REGLAS DE ESTRUCTURA INTERNA PARA LOS ELEMENTOS EN \"manana\" y \"tarde\":\n"
             "1. Para los Turnos de Personal (Horarios):\n"
             "- A LA MANO IZQUIERDA de la hoja están los turnos de la MAÑANA (añade a la lista \"manana\"). A LA MANO DERECHA de la TARDE (añade a la lista \"tarde\").\n"
-            "- Bloque superior de la columna: turnos administrativos-operativos con el rol en paréntesis, ej: 'CARO (DSM)' se extrae con nombre 'CARO' y rol 'DSM'.\n"
+            "- Bloque superior de la columna: turnos administrativos-operativos con el rol en paréntesis, ej: 'CARO (DSM)' se extrae con nombre 'CARO' y rol 'DSM'. El bloque superior de cada columna tiene exactamente 5 filas impresas (ej: DSM, PSM, OPS, TKT, LL). La quinta fila siempre pertenece al departamento de Llegadas (LL) (ej: 'CARMEN L (LL) // CRISTI R (LL)'). Asegúrate de extraer SIEMPRE a estas personas de la 5ª fila como de rol 'LL' y de tipo 'admin' (¡nunca los desplaces al bloque inferior de agentes de pasaje!).\n"
             "- Bloque inferior de la columna: turnos de Pasaje (CSA). Aquí el rol 'CSA' NO aparece escrito (aparece vacío, solo sale el nombre, ej: 'STEFANIA'). Debes extraerlos con rol 'CSA' de forma automática, salvo que lleven restricciones entre paréntesis (ej: 'EVA (SOMBRA TKT)', que se extrae con rol 'TKT').\n"
             "- Si en una fila hay dos personas separadas por '/' (ej: 'JORGE / GASTÓN (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
             "  * Uno con nombre 'JORGE', horario '02:45-12:45', rol 'PSM'.\n"
@@ -930,7 +930,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "  \"std\": \"05:45\"\n"
             "}\n"
             "- ¡¡¡MUY IMPORTANTE PARA LA HORA DEL VUELO (std)!!!: Extrae estrictamente de la columna o celda 'STD' (ej: '5:45' -> '05:45'). ¡NUNCA extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'std' del vuelo! Si la columna 'APERTU' dice '2:45' y 'STD' dice '5:45', el std que debes extraer es '05:45'.\n"
-            "- 'date' (fecha) debe ser la fecha de la cabecera. Si no la encuentras o es ilegible, pon 'Fecha no detectada' por defecto (¡nunca te inventes una fecha ficticia!).\n"
+            "- 'date' (fecha) debe ser la fecha del documento. PRIORIZA siempre leer cualquier fecha manuscrita con bolígrafo de cualquier tinta o color (azul, negro, rojo, etc.) que aparezca anotada a mano en el papel (ej: '24/06/26' o '21/06/26'). Si no la hay, lee la fecha impresa en la cabecera (ej: 'DOMINGO 21 JUNIO'). Si no encuentras ninguna, pon 'Fecha no detectada' por defecto (¡bajo ningún concepto te inventes una fecha ficticia!).\n"
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
@@ -1064,7 +1064,7 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                     # Dividimos nombres múltiples separados por '/' o ','
                     names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
                     
-                    # Clasificación estricta en base al rol
+                    # Clasificación estricta: type es "pasaje" (CSA) solo si el rol contiene CSA. De lo contrario, es "admin"
                     agent_type = "admin"
                     if "CSA" in role_upper:
                         agent_type = "pasaje"
@@ -1080,23 +1080,36 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
                             "shift": shift_name
                         })
                     else:
-                        # Múltiples agentes en la misma fila (como Jorge / Gastón o Liz / Carol)
-                        hours_list = [h.strip() for h in hours_raw.split("/") if h.strip()]
-                        for idx_name, name_val in enumerate(names):
-                            hours_val = hours_raw
-                            if len(hours_list) == len(names):
-                                hours_val = hours_list[idx_name]
-                            elif len(hours_list) > 0:
-                                hours_val = hours_list[min(idx_name, len(hours_list) - 1)]
-                                
-                            formatted_agents.append({
-                                "id": len(formatted_agents) + 1,
-                                "name": name_val,
-                                "hours": hours_val,
-                                "role": role_upper,
-                                "type": agent_type,
-                                "shift": shift_name
-                            })
+                        # Múltiples agentes en la misma fila (como Evelin, Paola o Liz / Carol)
+                        if agent_type == "pasaje":
+                            # Los CSA (pasaje) que comparten fila SIEMPRE comparten el mismo turno partido completo. ¡NO se dividen sus horas!
+                            for name_val in names:
+                                formatted_agents.append({
+                                    "id": len(formatted_agents) + 1,
+                                    "name": name_val,
+                                    "hours": hours_raw, # Ambos reciben el turno partido completo
+                                    "role": role_upper,
+                                    "type": agent_type,
+                                    "shift": shift_name
+                                })
+                        else:
+                            # Los administrativos (admin) sí que tienen turnos individuales distintos separados por la barra
+                            hours_list = [h.strip() for h in hours_raw.replace("//", "/").split("/") if h.strip()]
+                            for idx_name, name_val in enumerate(names):
+                                hours_val = hours_raw
+                                if len(hours_list) == len(names):
+                                    hours_val = hours_list[idx_name]
+                                elif len(hours_list) > 0:
+                                    hours_val = hours_list[min(idx_name, len(hours_list) - 1)]
+                                    
+                                formatted_agents.append({
+                                    "id": len(formatted_agents) + 1,
+                                    "name": name_val,
+                                    "hours": hours_val,
+                                    "role": role_upper,
+                                    "type": agent_type,
+                                    "shift": shift_name
+                                })
                 elif tipo == "vuelo":
                     formatted_flights.append({
                         "id": len(formatted_flights) + 1,

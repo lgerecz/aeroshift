@@ -1012,8 +1012,12 @@ async function handleScheduleFileUpload(event) {
         });
       }
 
+      const isDateValid = (d) => d && d !== 'Fecha no detectada' && d !== 'Sábado 20 Junio';
+      const fallbackDate = isDateValid(extractedData?.date) ? extractedData.date : 'Fecha no detectada';
+      const finalDate = isDateValid(data.date) ? data.date : fallbackDate;
+
       extractedData = {
-        date: data.date || 'Sábado 20 Junio',
+        date: finalDate,
         agents: newAgents,
         flights: newFlights
       };

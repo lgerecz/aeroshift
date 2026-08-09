@@ -17,8 +17,52 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=44">
+  <link rel="stylesheet" href="style.css?v=47">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .tooltip-container {
+      position: relative;
+      display: inline-block;
+    }
+    .tooltip-box {
+      visibility: hidden;
+      width: 240px;
+      background-color: #161616;
+      color: #e0e0e0;
+      text-align: left;
+      border: 1px solid #2d2d2d;
+      border-radius: 6px;
+      padding: 12px;
+      position: absolute;
+      z-index: 100;
+      bottom: 135%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.2s, visibility 0.2s;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .tooltip-box::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -6px;
+      border-width: 6px;
+      border-style: solid;
+      border-color: #161616 transparent transparent transparent;
+    }
+    .tooltip-container:hover .tooltip-box {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
 </head>
 <body>
   <!-- HEADER -->
@@ -223,10 +267,22 @@
                   <th style="padding: 10px 4px; text-align: left; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5;">HORARIO</th>
                   <th style="padding: 10px 4px; text-align: left; width: 85px; position: sticky; top: 0; background: #121212; z-index: 5;">ROL</th>
                   <th style="padding: 10px 4px; text-align: center; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5;">
-                    COBERTURA <span style="position: relative; display: inline-block; cursor: pointer; color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;" title="IMPORTANTE: Señalar si el CSA cuenta con especialidad en otro departamento para cubrir descansos o imprevistos de OPS, TKT o LL.">i</span>
+                    <div class="tooltip-container">
+                      COBERTURA <span style="color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; display: inline-block; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;">i</span>
+                      <div class="tooltip-box">
+                        <strong style="color: var(--primary); font-size: 12px; display: block; margin-bottom: 6px;">Especialidad Cobertura</strong>
+                        IMPORTANTE señalar si el CSA cuenta con especialidad en otro departamento para cubrir descansos o imprevistos de OPS, TKT o LL.
+                      </div>
+                    </div>
                   </th>
                   <th style="padding: 10px 4px; text-align: center; width: 85px; position: sticky; top: 0; background: #121212; z-index: 5;">
-                    EXCLUSIÓN <span style="position: relative; display: inline-block; cursor: pointer; color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;" title="Marcar si este CSA está de baja (enfermo) o si prefieres que cubra check-in u otras tareas, excluyéndolo de la optimización de embarques.">i</span>
+                    <div class="tooltip-container">
+                      EXCLUSIÓN <span style="color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; display: inline-block; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;">i</span>
+                      <div class="tooltip-box">
+                        <strong style="color: var(--primary); font-size: 12px; display: block; margin-bottom: 6px;">Exclusión de Turno</strong>
+                        Marcar si este CSA está enfermo (baja) o si prefieres que cubra otras tareas (como facturación o check-in), excluyéndolo de la optimización de embarques.
+                      </div>
+                    </div>
                   </th>
                   <th style="padding: 10px 4px; text-align: center; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5;">ACCIONES</th>
                 </tr>
@@ -620,6 +676,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=44"></script>
+  <script src="app.js?v=47"></script>
 </body>
 </html>
