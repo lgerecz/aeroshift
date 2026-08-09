@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=48">
+  <link rel="stylesheet" href="style.css?v=50">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -314,7 +314,15 @@
                   <th style="padding: 10px 4px; text-align: left; width: 60px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">DEST</th>
                   <th style="padding: 10px 4px; text-align: left; width: 90px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">VUELO</th>
                   <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">APERTU</th>
-                  <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">AGENTES</th>
+                  <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">
+                    <div class="tooltip-container">
+                      AGENTES <span style="color: var(--primary); font-size: 10px; font-weight: bold; background: rgba(55,138,221,0.15); border-radius: 50%; width: 14px; height: 14px; display: inline-block; text-align: center; line-height: 14px; margin-left: 2px; vertical-align: middle;">i</span>
+                      <div class="tooltip-box">
+                        <strong style="color: var(--primary); font-size: 11px; display: block; margin-bottom: 4px;">Asignación Forzada</strong>
+                        Escribe el nombre de un agente específico únicamente si quieres forzar que realice este embarque sí o sí, bloqueando al optimizador.
+                      </div>
+                    </div>
+                  </th>
                   <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">EMB</th>
                   <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">STD</th>
                   <th style="padding: 10px 4px; text-align: center; width: 100px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">ACCIONES</th>
@@ -452,6 +460,16 @@
             <label for="backendUrl">URL del Servidor Backend</label>
             <input type="text" id="backendUrl" value="http://localhost:8000" placeholder="Ej: http://localhost:8000" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--bg-body); color:var(--text-primary);">
             <small class="form-help">Dirección del servicio local FastAPI que corre Google OR-Tools.</small>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="backendModel">Modelo de Extracción IA</label>
+            <select id="backendModel" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--bg-body); color:var(--text-primary); cursor: pointer;">
+              <option value="gpt-5.4-nano" selected>gpt-5.4-nano (OCR Rápido y Fiel)</option>
+              <option value="gpt-5.6-luna">gpt-5.6-luna (Razonamiento Alto)</option>
+              <option value="gpt-5-mini">gpt-5-mini (Rápido y Económico)</option>
+              <option value="gpt-5-nano">gpt-5-nano (Básico y Ligero)</option>
+            </select>
+            <small class="form-help">Elige qué cerebro de GPT-5 procesará tu imagen o archivo.</small>
           </div>
         </div>
 
@@ -676,6 +694,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=48"></script>
+  <script src="app.js?v=50"></script>
 </body>
 </html>

@@ -924,6 +924,8 @@ async function handleScheduleFileUpload(event) {
   const openaiKey = localStorage.getItem('aeroshift_openai_key') || '';
   const backendInput = document.getElementById('backendUrl');
   const backendUrl = backendInput ? backendInput.value.trim() : 'http://localhost:8000';
+  const backendModelInput = document.getElementById('backendModel');
+  const selectedModel = backendModelInput ? backendModelInput.value : 'gpt-5.4-nano';
 
   if (!modal) return;
 
@@ -970,7 +972,7 @@ async function handleScheduleFileUpload(event) {
   }
 
   try {
-    const response = await fetch(`${backendUrl}/extract`, {
+    const response = await fetch(`${backendUrl}/extract?model=${selectedModel}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiKey}`
@@ -1431,9 +1433,10 @@ function renderDetectedFlights() {
           <td style="padding: 12px 8px; color: #a0a0a0;">${times.emb}</td>
           <td style="padding: 12px 8px; color: #ff9f00; font-weight: bold;">${times.std}</td>
           <td style="padding: 12px 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center;">
+            <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
               <button onclick="startEditFlight(${f.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
               <button onclick="deleteFlightFromPreview(${f.id})" style="background: transparent; border: 1px solid #333; color: var(--danger); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Eliminar">🗑️</button>
+              <button onclick="insertFlightAfter(${f.id})" style="background: transparent; border: 1px solid #333; color: var(--success); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;" title="Insertar vuelo debajo">+</button>
             </div>
           </td>
         </tr>`;
@@ -2228,5 +2231,27 @@ function insertAgentAfter(id) {
     extractedData.agents.splice(idx + 1, 0, newAgent);
     editingAgentId = newId; // Abre la edición en línea al instante para facilitar la escritura!
     renderDetectedAgents();
+  }
+}
+
+
+function insertFlightAfter(id) {
+  const currentFlight = extractedData.flights.find(f => f.id === id);
+  const newId = Math.max(...extractedData.flights.map(f => f.id), 0) + 1;
+  
+  const newFlight = {
+    id: newId,
+    destination: currentFlight ? currentFlight.destination : 'MAD',
+    airline: currentFlight ? currentFlight.airline : 'FR',
+    number: currentFlight ? currentFlight.number + 'A' : 'FR000',
+    time: currentFlight ? currentFlight.time : '12:00',
+    agents: ''
+  };
+
+  const idx = extractedData.flights.findIndex(f => f.id === id);
+  if (idx !== -1) {
+    extractedData.flights.splice(idx + 1, 0, newFlight);
+    editingFlightId = newId; // Abre la edición en línea al instante para facilitar la escritura!
+    renderDetectedFlights();
   }
 }

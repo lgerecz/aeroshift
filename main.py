@@ -757,7 +757,7 @@ DEMO_FLIGHTS = [
 ]
 
 @app.post("/extract")
-async def extract_data(files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
+async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
     """
     Extracción multimodal por IA (catálogo de GPT-5) de compatibilidad absoluta.
     Realiza una cascada inteligente unificada (Llamada + Decodificación JSON)
@@ -934,12 +934,14 @@ async def extract_data(files: List[UploadFile] = File(...), authorization: Optio
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
-        models_to_try = [
-            ("gpt-5.6-luna", True),
-            ("gpt-5.4-nano", False),
-            ("gpt-5-mini", False),
-            ("gpt-5-nano", False)
-        ]
+        # We build the models list, placing the user's selected model at the very front of the cascade!
+        selected_model = model or "gpt-5.4-nano"
+        use_high_reasoning_default = (selected_model == "gpt-5.6-luna")
+        
+        models_to_try = [(selected_model, use_high_reasoning_default)]
+        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5-mini", False), ("gpt-5-nano", False)]:
+            if m != selected_model:
+                models_to_try.append((m, h))
 
         parsed_result = None
         extracted_model_name = ""
