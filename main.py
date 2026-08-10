@@ -1079,6 +1079,10 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                     hours_raw = str(item.get("horario") or "08:00-16:00").strip()
                     role_upper = str(item.get("rol") or "CSA").upper().strip()
                     
+                    # Corrección automática de TKD a TKT para evitar errores ortográficos del papel impreso
+                    if "TKD" in role_upper:
+                        role_upper = role_upper.replace("TKD", "TKT")
+                    
                     # Dividimos nombres múltiples separados por '/' o ','
                     names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
                     

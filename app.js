@@ -27,6 +27,8 @@ let extractedData = null; // Stores extracted agents and flights from backend
 let editingFlightId = null; // Tracks which flight row is being edited
 let editingAgentId = null; // Tracks which agent row is being edited
 let uploadedFilesCopy = []; // Accumulative list of uploaded file previews
+let newlyCreatedAgentId = null;
+let newlyCreatedFlightId = null;
 
 // ===== PERSISTENCE =====
 function loadData() {
@@ -1335,11 +1337,19 @@ function startEditAgent(id) {
 }
 
 function cancelEditAgent() {
+  if (editingAgentId === newlyCreatedAgentId) {
+    // Si cancelamos la edición de una fila recién creada con '+', la descartamos por completo
+    extractedData.agents = extractedData.agents.filter(a => a.id !== newlyCreatedAgentId);
+  }
   editingAgentId = null;
+  newlyCreatedAgentId = null;
   renderDetectedAgents();
 }
 
 function saveEditAgent(id) {
+  if (id === newlyCreatedAgentId) {
+    newlyCreatedAgentId = null; // Si se guarda con éxito, reseteamos la variable de creación
+  }
   const nameInput = document.getElementById(`edit_agent_name_${id}`);
   const hoursInput = document.getElementById(`edit_agent_hours_${id}`);
   const roleInput = document.getElementById(`edit_agent_role_${id}`);
@@ -1467,11 +1477,19 @@ function startEditFlight(id) {
 }
 
 function cancelEditFlight() {
+  if (editingFlightId === newlyCreatedFlightId) {
+    // Descartamos la fila de vuelo recién creada con '+' si se pulsa cancelar
+    extractedData.flights = extractedData.flights.filter(f => f.id !== newlyCreatedFlightId);
+  }
   editingFlightId = null;
+  newlyCreatedFlightId = null;
   renderDetectedFlights();
 }
 
 function saveEditFlight(id) {
+  if (id === newlyCreatedFlightId) {
+    newlyCreatedFlightId = null; // Guardado con éxito, reseteamos la variable
+  }
   const numberInput = document.getElementById(`edit_flight_number_${id}`);
   const destInput = document.getElementById(`edit_flight_dest_${id}`);
   const timeInput = document.getElementById(`edit_flight_time_${id}`);
@@ -2238,6 +2256,7 @@ function toggleAgentExclusion(id, checked) {
 function insertAgentAfter(id) {
   const currentAgent = extractedData.agents.find(a => a.id === id);
   const newId = Math.max(...extractedData.agents.map(a => a.id), 0) + 1;
+  newlyCreatedAgentId = newId; // Guardamos el ID de la fila recién insertada
   
   const newAgent = {
     id: newId,
@@ -2262,6 +2281,7 @@ function insertAgentAfter(id) {
 function insertFlightAfter(id) {
   const currentFlight = extractedData.flights.find(f => f.id === id);
   const newId = Math.max(...extractedData.flights.map(f => f.id), 0) + 1;
+  newlyCreatedFlightId = newId; // Guardamos el ID de la fila recién insertada
   
   const newFlight = {
     id: newId,
