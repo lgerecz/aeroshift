@@ -950,7 +950,7 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
         use_high_reasoning_default = (selected_model == "gpt-5.6-luna")
         
         models_to_try = [(selected_model, use_high_reasoning_default)]
-        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False), ("gpt-5-mini", False), ("gpt-4.1-mini", False)]:
+        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False), ("gpt-5-mini", False), ("gpt-4.1-mini", False), ("gpt-4o", False)]:
             if m != selected_model:
                 models_to_try.append((m, h))
 
