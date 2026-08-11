@@ -1086,18 +1086,19 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                     # Dividimos nombres múltiples separados por '/' o ','
                     names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
                     
-                    # CLASIFICACIÓN DETERMINISTA POR ÍNDICE FÍSICO DE FILA (LASZLO RULE):
-                    # El bloque superior de oficina tiene exactamente 5 filas impresas (indices 0 a 4).
-                    # Todas las demás filas (indice >= 5) pertenecen al bloque inferior de agentes de pasaje (CSA).
-                    if idx < 5:
+                    # CLASIFICACIÓN DETERMINISTA POR SECCIÓN GEOGRÁFICA REAL (LASZLO RULE V2):
+                    # Usamos el campo "block" ("top" para oficina/admins, "bottom" para agentes de pasaje/CSA).
+                    # Esto evita cualquier desalineación por filas divididas y es 100% robusto con todos los modelos.
+                    block_raw = str(item.get("block") or "").lower().strip()
+                    if block_raw == "top" or idx < 5:
                         agent_type = "admin"
-                        # Salvaguarda: si el rol se leyó mal como CSA, le devolvemos su rol administrativo correspondiente
+                        # Salvaguarda: si el rol se leyó vacío, le asignamos su rol operativo por fila
                         if role_upper == "CSA" or not role_upper:
                             roles_by_row = ["DSM", "PSM", "OPS", "TKT", "LL"]
-                            role_upper = roles_by_row[idx]
+                            role_upper = roles_by_row[min(idx, 4)]
                     else:
                         agent_type = "pasaje"
-                        # Salvaguarda: todos los del bloque inferior son de tipo pasaje (CSA), no importa si tienen rol de oficina
+                        # Salvaguarda: todos los CSA de abajo se quedan abajo con tipo pasaje
                         if not role_upper:
                             role_upper = "CSA"
 
