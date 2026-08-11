@@ -1086,14 +1086,22 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                     # Dividimos nombres múltiples separados por '/' o ','
                     names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
                     
-                    # CLASIFICACIÓN DETERMINISTA BASADA EN EL ROL (SIN LÍMITES DE ÍNDICES NI FILAS):
-                    # - Si el rol contiene "CSA" (o está vacío), pertenece estrictamente al bloque inferior de agentes de pasaje ("pasaje").
-                    # - Si el rol es puramente de oficina (DSM, PSM, OPS, TKT, LL) sin la palabra "CSA", pertenece al bloque superior ("admin").
-                    agent_type = "admin"
-                    if "CSA" in role_upper or not role_upper:
+                    # CLASIFICACIÓN DETERMINISTA BASADA EN LA SECCIÓN DEL DOCUMENTO (oficina vs pasaje):
+                    # - Si la sección es "oficina", pertenece estrictamente al bloque superior ("admin").
+                    # - Si la sección es "pasaje", pertenece estrictamente al bloque inferior de agentes de pasaje ("pasaje").
+                    # - Esto evita cualquier desalineación por filas divididas y es 100% robusto con todos los modelos.
+                    seccion_raw = str(item.get("seccion") or "").lower().strip()
+                    if seccion_raw == "oficina":
+                        agent_type = "admin"
+                    elif seccion_raw == "pasaje":
                         agent_type = "pasaje"
-                        if not role_upper:
-                            role_upper = "CSA"
+                    else:
+                        # Fallback por si la sección está vacía
+                        agent_type = "admin"
+                        if "CSA" in role_upper or not role_upper:
+                            agent_type = "pasaje"
+                            if not role_upper:
+                                role_upper = "CSA"
 
                     if len(names) <= 1:
                         # ¡Un solo agente! Conservamos su horario exactamente igual (preservando turnos partidos con '/')
