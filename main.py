@@ -1086,10 +1086,20 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                     # Dividimos nombres múltiples separados por '/' o ','
                     names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
                     
-                    # Clasificación estricta: type es "pasaje" (CSA) solo si el rol contiene CSA. De lo contrario, es "admin"
-                    agent_type = "admin"
-                    if "CSA" in role_upper:
+                    # CLASIFICACIÓN DETERMINISTA POR ÍNDICE FÍSICO DE FILA (LASZLO RULE):
+                    # El bloque superior de oficina tiene exactamente 5 filas impresas (indices 0 a 4).
+                    # Todas las demás filas (indice >= 5) pertenecen al bloque inferior de agentes de pasaje (CSA).
+                    if idx < 5:
+                        agent_type = "admin"
+                        # Salvaguarda: si el rol se leyó mal como CSA, le devolvemos su rol administrativo correspondiente
+                        if role_upper == "CSA" or not role_upper:
+                            roles_by_row = ["DSM", "PSM", "OPS", "TKT", "LL"]
+                            role_upper = roles_by_row[idx]
+                    else:
                         agent_type = "pasaje"
+                        # Salvaguarda: todos los del bloque inferior son de tipo pasaje (CSA), no importa si tienen rol de oficina
+                        if not role_upper:
+                            role_upper = "CSA"
 
                     if len(names) <= 1:
                         # ¡Un solo agente! Conservamos su horario exactamente igual (preservando turnos partidos con '/')
