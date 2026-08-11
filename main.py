@@ -91,6 +91,20 @@ def t2m_fin(ini_s: str, fin_s: str) -> int:
         f += 1440
     return f
 
+def parse_mixed_role_exclusion(role_str: str) -> Optional[tuple]:
+    """
+    Parses a mixed role string like 'CSA (11:15-15:00 TKT)' and returns
+    the interval in minutes (inicio, fin) and the restricted role, or None.
+    """
+    if not role_str:
+        return None
+    # Look for patterns like (11:15-15:00 TKT) or (11:15-15:00 TKD)
+    match = re.search(r"\((\d{2}:\d{2})-(\d{2}:\d{2})\s+([A-Z]+)\)", role_str)
+    if match:
+        ini_str, fin_str, r_role = match.groups()
+        return hms(ini_str), t2m_fin(ini_str, fin_str), r_role.upper().strip()
+    return None
+
 def m2t(m: int) -> str:
     m = m % 1440
     return f"{m//60:02d}:{m%60:02d}"
@@ -197,6 +211,18 @@ def optimize_schedule(req: OptimizeRequest):
             ag_dict['_jornada'] = ag_dict['_t_fin'] - ag_dict['_t_ini']
         
         ag_dict['_midpoint'] = ag_dict['_t_ini'] + ag_dict['_jornada'] // 2
+        
+        # Check for mixed role exclusions or split shifts
+        ag_dict['_excl_intervals'] = []
+        if ag_dict.get('bloque2'):
+            ag_dict['_excl_intervals'].append((ag_dict['_pausa_ini'], ag_dict['_pausa_fin']))
+        
+        mixed_info = parse_mixed_role_exclusion(ag_dict['rol'])
+        if mixed_info:
+            ex_ini, ex_fin, restricted_role = mixed_info
+            if restricted_role in ROLES_NO_EMBARCAN:
+                ag_dict['_excl_intervals'].append((ex_ini, ex_fin))
+                
         AGENTES.append(ag_dict)
 
     # Filter pools
@@ -260,12 +286,21 @@ def optimize_schedule(req: OptimizeRequest):
             if v['emb_inicio'] < disp_desde or v['std_min'] > disp_hasta:
                 model.Add(x[ai][vi] == 0)
                 continue
-            if ag['_pausa_ini'] is not None:
-                if v['emb_inicio'] < ag['_pausa_fin'] and v['emb_fin'] > ag['_pausa_ini']:
-                    model.Add(x[ai][vi] == 0)
-                    continue
-                if v['emb_inicio'] < ag['_pausa_ini'] and v['std_min'] > ag['_pausa_ini'] + TOL_SAL:
-                    model.Add(x[ai][vi] == 0)
+            
+            # Check overlap with exclusion intervals (like split shift pause or mixed role TKT interval)
+            overlap = False
+            for ex_ini, ex_fin in ag.get('_excl_intervals', []):
+                if v['emb_inicio'] < ex_fin and v['emb_fin'] > ex_ini:
+                    overlap = True
+                    break
+                # Special check: flight starts before pause, but departs after pause starts + TOL_SAL
+                # (applies only to the split shift pause to prevent agent getting trapped at gate)
+                if ag.get('bloque2') and ex_ini == ag['_pausa_ini']:
+                    if v['emb_inicio'] < ag['_pausa_ini'] and v['std_min'] > ag['_pausa_ini'] + TOL_SAL:
+                        overlap = True
+                        break
+            if overlap:
+                model.Add(x[ai][vi] == 0)
 
     # Constraint: No overlapping flights (simultaneous flights)
     for ai in range(A):
@@ -919,6 +954,11 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
             "- Si en una fila hay dos personas separadas por '/' (ej: 'AGENTE6 / AGENTE7 (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
             "  * Uno con nombre 'AGENTE6', horario '02:45-12:45', rol 'PSM'.\n"
             "  * Otro con nombre 'AGENTE7', horario '06:45-16:45', rol 'PSM'.\n"
+            "- ¡¡¡REGLA PARA ROLES MIXTOS / RESTRICCIONES HORARIAS EN EL BLOQUE INFERIOR (PASAJE/CSA)!!!:\n"
+            "  * Si un agente de pasaje (CSA) tiene una restricción horaria o rol mixto anotado al lado de su nombre entre paréntesis (ej: 'EVA (11:15-15:00 TKD)' o 'EVA (11:15-15:00 TKT)'), debes extraer su rol exactamente como 'CSA (11:15-15:00 TKT)' de forma que la restricción quede incorporada en el campo 'rol' de su JSON, y su nombre sea simplemente 'EVA'. Nunca unas la restricción al nombre del agente (el nombre debe quedar limpio, ej: 'EVA').\n"
+            "- ¡¡¡REGLA DE ORO PARA TURNOS PARTIDOS COMPARTIDOS EN EL BLOQUE INFERIOR (PASAJE) (ej: 'VICTORIA, GUILLE' con '12:30-15:35 // 19:45-21:45')!!!:\n"
+            "  * Si varios agentes de pasaje aparecen en la misma fila separados por comas o barras (ej: 'VICTORIA, GUILLE') y tienen un horario con doble barra (ej: '12:30-15:35 // 19:45-21:45'), esto representa un Turno Partido COMPLETO que realizan AMBOS agentes. NO es que uno haga la mañana y el otro la noche. Ambos realizan el horario completo con los dos tramos.\n"
+            "  * Por lo tanto, debes extraer cada agente por separado en la lista, pero conservando obligatoriamente el horario completo de los dos tramos para cada uno de ellos (ej: objeto para 'VICTORIA' con horario '12:30-15:35 / 19:45-21:45' y objeto para 'GUILLE' con horario '12:30-15:35 / 19:45-21:45'). Nunca recortes el segundo tramo ni asumas que solo trabaja el primero.\n"
             "\n"
             "2. Para la Parrilla de Vuelos / Embarques:\n"
             "Cada vuelo debe extraerse en este formato dentro de \"manana\" (si es temprano) o \"tarde\" (si es tarde):\n"

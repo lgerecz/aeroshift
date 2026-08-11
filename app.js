@@ -31,15 +31,97 @@ let newlyCreatedAgentId = null;
 let newlyCreatedFlightId = null;
 
 // ===== PERSISTENCE =====
+function normalizeAgents(agentsList) {
+  if (!Array.isArray(agentsList)) return [];
+  return agentsList.map(a => {
+    const hoursStr = a.hours || '08:00-16:00';
+    const blocks = hoursStr.replace(/\/\//g, '/').split('/').map(b => b.trim()).filter(b => b);
+    
+    let inicio = '08:00';
+    let fin = '16:00';
+    let bloque2 = null;
+    
+    if (blocks.length > 0) {
+      const parts1 = blocks[0].split('-');
+      if (parts1.length === 2) {
+        inicio = parts1[0].trim();
+        fin = parts1[1].trim();
+      }
+    }
+    if (blocks.length > 1) {
+      const parts2 = blocks[1].split('-');
+      if (parts2.length === 2) {
+        bloque2 = {
+          inicio: parts2[0].trim(),
+          fin: parts2[1].trim()
+        };
+      }
+    }
+    
+    const timeToMins = (t) => {
+      if (!t || !t.includes(':')) return 0;
+      const [h, m] = t.split(':').map(Number);
+      return (isNaN(h) || isNaN(m)) ? 0 : h * 60 + m;
+    };
+    
+    const startMins = timeToMins(inicio);
+    const endMins = bloque2 ? timeToMins(bloque2.fin) : timeToMins(fin);
+    
+    const shifts = [];
+    if (a.shift === 'mañana' || startMins < 720) {
+      shifts.push('morning');
+    }
+    if (a.shift === 'tarde' || (startMins >= 720 && startMins < 1080) || endMins > 840) {
+      shifts.push('afternoon');
+    }
+    if (endMins >= 1320 || startMins >= 1080) {
+      shifts.push('night');
+    }
+    if (shifts.length === 0) {
+      shifts.push('morning');
+    }
+    
+    return {
+      id: a.id,
+      name: a.name || 'Agente',
+      code: a.code || `AG-${String(a.id).padStart(3, '0')}`,
+      hours: hoursStr,
+      role: a.role || 'CSA',
+      rol: a.role || 'CSA',
+      type: a.type || 'pasaje',
+      shift: a.shift || (startMins < 720 ? 'mañana' : 'tarde'),
+      shifts: a.shifts || shifts,
+      espec: a.espec || [],
+      excluir: a.excluir || false,
+      excluir_embarque: a.excluir || false,
+      airline: a.airline || '',
+      inicio: inicio,
+      fin: fin,
+      bloque2: bloque2
+    };
+  });
+}
+
 function loadData() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.agents) {
+        parsed.agents = normalizeAgents(parsed.agents);
+      }
+      return parsed;
+    }
   } catch(e) {}
-  return getDefaultData();
+  const def = getDefaultData();
+  def.agents = normalizeAgents(def.agents);
+  return def;
 }
 
 function saveData() {
+  if (state && state.agents) {
+    state.agents = normalizeAgents(state.agents);
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
@@ -1150,7 +1232,7 @@ function tryUploadAgain() {
 function validateUploadedData() {
   // Overwrite the daily flights list for simulation
   if (extractedData) {
-    state.agents = extractedData.agents;
+    state.agents = normalizeAgents(extractedData.agents);
     state.flights = extractedData.flights.map((f) => {
       return {
         id: f.id,
@@ -1714,6 +1796,38 @@ async function runOrToolsOptimization() {
 }
 
 // Local Heuristic Solver in JS
+function getAgentExclusionIntervals(agent) {
+  const intervals = [];
+  const timeToMins = (t) => {
+    if (!t || !t.includes(':')) return 0;
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+  
+  // 1. Split shift pause
+  if (agent.bloque2 && agent.fin) {
+    const b1_fin = timeToMins(agent.fin);
+    const b2_ini = timeToMins(agent.bloque2.inicio);
+    intervals.push({ ini: b1_fin, fin: b2_ini });
+  }
+  
+  // 2. Mixed role interval
+  const roleStr = agent.role || agent.rol || '';
+  const match = roleStr.match(/\((\d{2}:\d{2})-(\d{2}:\d{2})\s+([A-Z]+)\)/);
+  if (match) {
+    const [_, iniStr, finStr, restrictedRole] = match;
+    const ROLES_NO_EMBARCAN = ['DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','FAMI','SICK','CURSO','AUTOCHECKIN'];
+    if (ROLES_NO_EMBARCAN.includes(restrictedRole.toUpperCase().trim())) {
+      intervals.push({
+        ini: timeToMins(iniStr),
+        fin: timeToMins(finStr)
+      });
+    }
+  }
+  
+  return intervals;
+}
+
 function clientSideOptimize(agents, flights, minSep, preferAirlines) {
   const sortedFlights = [...flights].sort((a, b) => a.time.localeCompare(b.time));
   const assignments = {};
@@ -1743,6 +1857,20 @@ function clientSideOptimize(agents, flights, minSep, preferAirlines) {
     const candidates = agents.filter(agent => {
       // 1. Shift check
       if (!agent.shifts.includes(fShift)) return false;
+
+      // 1b. Check overlap with exclusion intervals (mixed role / split shift pause)
+      const exclIntervals = getAgentExclusionIntervals(agent);
+      const flightStart = fMins - 40; // emb_inicio is STD - 40 mins
+      const flightEnd = fMins + 15;   // emb_fin is STD + 15 mins
+      
+      let isExcluded = false;
+      for (const interval of exclIntervals) {
+        if (flightStart < interval.fin && flightEnd > interval.ini) {
+          isExcluded = true;
+          break;
+        }
+      }
+      if (isExcluded) return false;
 
       // 2. Overlap check
       let overlap = false;
@@ -2027,6 +2155,38 @@ function clientSideAudit(agents, flights, assignments, minSep) {
         });
       }
 
+      // Check mixed role exclusions or split shift pauses in audit
+      const exclIntervals = getAgentExclusionIntervals(agent);
+      const fMins = timeToMinutes(f.time);
+      const flightStart = fMins - 40;
+      const flightEnd = fMins + 15;
+      
+      let isExcluded = false;
+      let violatedInterval = null;
+      for (const interval of exclIntervals) {
+        if (flightStart < interval.fin && flightEnd > interval.ini) {
+          isExcluded = true;
+          violatedInterval = interval;
+          break;
+        }
+      }
+      if (isExcluded) {
+        const minsToHms = (m) => {
+          const hrs = Math.floor(m / 60);
+          const mns = m % 60;
+          return `${String(hrs).padStart(2, '0')}:${String(mns).padStart(2, '0')}`;
+        };
+        shift_violations.push({
+          agentName: agent.name,
+          flightNumber: f.number,
+          flightTime: f.time,
+          flightShift: fShift,
+          agentShifts: agent.shifts,
+          isExclusionInterval: true,
+          intervalStr: `${minsToHms(violatedInterval.ini)}-${minsToHms(violatedInterval.fin)}`
+        });
+      }
+
       // Preference
       if (agent.airline && agent.airline.toUpperCase() === f.airline.toUpperCase()) {
         successful_preferences++;
@@ -2082,8 +2242,12 @@ function clientSideAudit(agents, flights, assignments, minSep) {
     md += '✅ **Cumplimiento total.** Todos los agentes asignados operan dentro de su jornada laboral contratada.\n';
   } else {
     shift_violations.forEach(sv => {
-      const shiftsStr = sv.agentShifts.map(sh => getShiftLabel(sh)).join(', ');
-      md += `- **${sv.agentName}** está asignado al vuelo \`${sv.flightNumber}\` (${sv.flightTime}) en el turno de **${getShiftLabel(sv.flightShift)}**, pero su contrato es de **${shiftsStr}**.\n`;
+      if (sv.isExclusionInterval) {
+        md += `- **${sv.agentName}** está asignado al vuelo \`${sv.flightNumber}\` (${sv.flightTime}), pero tiene una restricción horaria / de rol mixto o pausa durante el intervalo **${sv.intervalStr}**.\n`;
+      } else {
+        const shiftsStr = sv.agentShifts.map(sh => getShiftLabel(sh)).join(', ');
+        md += `- **${sv.agentName}** está asignado al vuelo \`${sv.flightNumber}\` (${sv.flightTime}) en el turno de **${getShiftLabel(sv.flightShift)}**, pero su contrato es de **${shiftsStr}**.\n`;
+      }
     });
   }
 
