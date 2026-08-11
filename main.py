@@ -914,11 +914,11 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
             "### REGLAS DE ESTRUCTURA INTERNA PARA LOS ELEMENTOS EN \"manana\" y \"tarde\":\n"
             "1. Para los Turnos de Personal (Horarios):\n"
             "- A LA MANO IZQUIERDA de la hoja están los turnos de la MAÑANA (añade a la lista \"manana\"). A LA MANO DERECHA de la TARDE (añade a la lista \"tarde\").\n"
-            "- Bloque superior de la columna: turnos administrativos-operativos con el rol en paréntesis, ej: 'CARO (DSM)' se extrae con nombre 'CARO' y rol 'DSM'. El bloque superior de cada columna tiene exactamente 5 filas impresas (ej: DSM, PSM, OPS, TKT, LL). La quinta fila siempre pertenece al departamento de Llegadas (LL) (ej: 'CARMEN L (LL) // CRISTI R (LL)'). Asegúrate de extraer SIEMPRE a estas personas de la 5ª fila como de rol 'LL' y de tipo 'admin' (¡nunca los desplaces al bloque inferior de agentes de pasaje!).\n"
-            "- Bloque inferior de la columna: turnos de Pasaje (CSA). Aquí el rol 'CSA' NO aparece escrito (aparece vacío, solo sale el nombre, ej: 'STEFANIA'). Debes extraerlos con rol 'CSA' de forma automática, salvo que lleven restricciones entre paréntesis (ej: 'EVA (SOMBRA TKT)', que se extrae con rol 'TKT').\n"
-            "- Si en una fila hay dos personas separadas por '/' (ej: 'JORGE / GASTÓN (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
-            "  * Uno con nombre 'JORGE', horario '02:45-12:45', rol 'PSM'.\n"
-            "  * Otro con nombre 'GASTÓN', horario '06:45-16:45', rol 'PSM'.\n"
+            "- Bloque superior de la columna: turnos administrativos-operativos con el rol en paréntesis, ej: 'AGENTE1 (DSM)' se extrae con nombre 'AGENTE1' y rol 'DSM'. El bloque superior de cada columna tiene exactamente 5 filas impresas (ej: DSM, PSM, OPS, TKT, LL). La quinta fila siempre pertenece al departamento de Llegadas (LL) (ej: 'AGENTE2 (LL) // AGENTE3 (LL)'). Asegúrate de extraer SIEMPRE a estas personas de la 5ª fila como de rol 'LL' y de tipo 'admin' (¡nunca los desplaces al bloque inferior de agentes de pasaje!).\n"
+            "- Bloque inferior de la columna: turnos de Pasaje (CSA). Aquí el rol 'CSA' NO aparece escrito (aparece vacío, solo sale el nombre, ej: 'AGENTE4'). Debes extraerlos con rol 'CSA' de forma automática, salvo que lleven restricciones entre paréntesis (ej: 'AGENTE5 (SOMBRA TKT)', que se extrae con rol 'TKT').\n"
+            "- Si en una fila hay dos personas separadas por '/' (ej: 'AGENTE6 / AGENTE7 (PSM)' con horarios '02:45-12:45 / 06:45-16:45'), debes crear dos objetos individuales en la lista correspondientemente:\n"
+            "  * Uno con nombre 'AGENTE6', horario '02:45-12:45', rol 'PSM'.\n"
+            "  * Otro con nombre 'AGENTE7', horario '06:45-16:45', rol 'PSM'.\n"
             "\n"
             "2. Para la Parrilla de Vuelos / Embarques:\n"
             "Cada vuelo debe extraerse en este formato dentro de \"manana\" (si es temprano) o \"tarde\" (si es tarde):\n"
@@ -950,7 +950,7 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
         use_high_reasoning_default = (selected_model == "gpt-5.6-luna")
         
         models_to_try = [(selected_model, use_high_reasoning_default)]
-        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False), ("gpt-5-mini", False), ("gpt-4.1-mini", False), ("gpt-4o", False)]:
+        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False), ("gpt-4o", False)]:
             if m != selected_model:
                 models_to_try.append((m, h))
 
@@ -1114,7 +1114,7 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                             "shift": shift_name
                         })
                     else:
-                        # Múltiples agentes en la misma fila (como Evelin, Paola o Liz / Carol)
+                        # Múltiples agentes en la misma fila (como AgenteA, AgenteB o AgenteC / AgenteD)
                         if agent_type == "pasaje":
                             # Los CSA (pasaje) que comparten fila SIEMPRE comparten el mismo turno partido completo. ¡NO se dividen sus horas!
                             for name_val in names:
