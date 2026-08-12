@@ -1528,11 +1528,11 @@ function renderDetectedFlights() {
           <td style="padding: 8px 4px; color:#888;">${idx + 1}</td>
           <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.destination)}" id="edit_flight_dest_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
           <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.number)}" id="edit_flight_number_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 8px 4px;"><input type="number" value="${f.pax || 186}" id="edit_flight_pax_${f.id}" min="10" max="300" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
           <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.apertu}</td>
           <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.agents)}" id="edit_flight_agents_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
           <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.emb}</td>
           <td style="padding: 8px 4px;"><input type="time" value="${f.time}" id="edit_flight_time_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
+          <td style="padding: 8px 4px;"><input type="number" value="${f.pax || 186}" id="edit_flight_pax_${f.id}" min="10" max="300" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
           <td style="padding: 8px 4px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center;">
               <button onclick="saveEditFlight(${f.id})" style="background: var(--success); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✓</button>
@@ -1550,11 +1550,11 @@ function renderDetectedFlights() {
           <td style="padding: 10px 4px; color: #555; font-weight: bold;">${idx + 1}</td>
           <td style="padding: 10px 4px; color: #fff; font-weight: bold;">${escapeHtml(f.destination)}</td>
           <td style="padding: 10px 4px;">${getFlightNumberBadge(f.number)}</td>
-          <td style="padding: 10px 4px; color: ${paxColor}; font-weight: ${paxWeight};">${f.pax || 186}</td>
           <td style="padding: 10px 4px; color: #a0a0a0;">${times.apertu}</td>
           <td style="padding: 10px 4px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
           <td style="padding: 10px 4px; color: #a0a0a0;">${times.emb}</td>
           <td style="padding: 10px 4px; color: #ff9f00; font-weight: bold;">${times.std}</td>
+          <td style="padding: 10px 4px; color: ${paxColor}; font-weight: ${paxWeight};">${f.pax || 186}</td>
           <td style="padding: 10px 4px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
               <button onclick="startEditFlight(${f.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
