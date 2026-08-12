@@ -241,7 +241,8 @@
         <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
           <label for="backendModel" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cerebro IA de Extracción</label>
           <select id="backendModel" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; width: 230px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); outline: none;">
-            <option value="gpt-5.4-nano" selected>gpt-5.4-nano (OCR Rápido y Fiel)</option>
+            <option value="gpt-5" selected>gpt-5 (Modelo de Frontera)</option>
+            <option value="gpt-5.4-nano">gpt-5.4-nano (OCR Rápido y Fiel)</option>
             <option value="gpt-5.6-luna">gpt-5.6-luna (Razonamiento Alto)</option>
             <option value="gpt-5.4-mini">gpt-5.4-mini (Precisión Balanceada)</option>
             <option value="gpt-4o">gpt-4o (ChatGPT Web - Requiere Permitir)</option>
@@ -271,7 +272,7 @@
       
       <!-- RECTÁNGULO 1 (IZQUIERDO): TURNOS DEL PERSONAL CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
-        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 500px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
+        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 575px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
             <h3 id="detectedAgentsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
               👥 Turnos del Personal — Sábado 20 Junio
@@ -291,7 +292,7 @@
               </button>
             </div>
           </div>
-          <div style="overflow-y: auto; height: 390px; padding-right: 4px; box-sizing: border-box;">
+          <div style="overflow-y: auto; height: 450px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: separate; border-spacing: 0; color: #e0e0e0; font-size: 12.5px;">
               <thead>
                 <tr style="color: #888; font-weight: 700; text-transform: uppercase;">
@@ -329,7 +330,7 @@
 
       <!-- RECTÁNGULO 2 (DERECHO): PARRILLA DE EMBARQUES CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
-        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 500px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
+        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; height: 575px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
             <h3 id="detectedFlightsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
               ✈️ Parrilla de Embarques — Sábado 20 Junio
@@ -349,7 +350,7 @@
               </button>
             </div>
           </div>
-          <div style="overflow-y: auto; height: 390px; padding-right: 4px; box-sizing: border-box;">
+          <div style="overflow-y: auto; height: 450px; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: separate; border-spacing: 0; color: #e0e0e0; font-size: 12.5px;">
               <thead>
                 <tr style="color: #888; font-weight: 700; text-transform: uppercase;">

@@ -967,8 +967,10 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
             "  \"destino\": \"SNN\",\n"
             "  \"linea_aerea\": \"FR\",\n"
             "  \"numero_vuelo\": \"FR2849\",\n"
-            "  \"std\": \"05:45\"\n"
+            "  \"std\": \"05:45\",\n"
+            "  \"pax\": 189\n"
             "}\n"
+            "- ¡¡¡EXTRACCIÓN DE PASAJEROS (pax)!!!: Busca en la tabla de vuelos la columna titulada 'WEBS' (que representa la cantidad aproximada de pasajeros facturados) y extrae obligatoriamente ese número como entero en el campo 'pax' (ej: si la columna 'WEBS' dice '189', extrae el número entero 189). Si la columna está vacía, no la encuentras o es ilegible, pon 186 por defecto.\n"
             "- ¡¡¡MUY IMPORTANTE PARA LA HORA DEL VUELO (std)!!!: Extrae estrictamente de la columna o celda 'STD' (ej: '5:45' -> '05:45'). ¡NUNCA extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'std' del vuelo! Si la columna 'APERTU' dice '2:45' y 'STD' dice '5:45', el std que debes extraer es '05:45'.\n"
             "- ¡¡¡REGLA PARA PÁGINAS DE CONTINUACIÓN (SIN CABECERAS) (ej: filas 41 a 80)!!!:\n"
             "  * Si la imagen cargada empieza directamente con números de fila como 41 o superiores y carece de cabecera impresa arriba, las columnas siguen exactamente la misma estructura de la página 1:\n"
@@ -1185,13 +1187,20 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                                     "shift": shift_name
                                 })
                 elif tipo == "vuelo":
+                    pax_val = item.get("pax") or item.get("webs")
+                    try:
+                        pax_num = int(pax_val) if pax_val is not None else 186
+                    except ValueError:
+                        pax_num = 186
+                    
                     formatted_flights.append({
                         "id": len(formatted_flights) + 1,
                         "destination": str(item.get("destino") or "MAD").upper().strip(),
                         "airline": str(item.get("linea_aerea") or "FR").upper().strip(),
                         "number": str(item.get("numero_vuelo") or f"FL{len(formatted_flights)+1}").upper().strip(),
                         "time": str(item.get("std") or "12:00").strip(),
-                        "agents": ""
+                        "agents": "",
+                        "pax": pax_num
                     })
 
         process_items(raw_manana, "mañana")
