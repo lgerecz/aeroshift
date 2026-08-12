@@ -173,31 +173,40 @@ function init() {
   }
 
   // Pre-render the preview tables so they are ready on load!
+  const savedModo = localStorage.getItem('aeroshift_opt_modo');
+  if (savedModo && document.getElementById('optModo')) {
+    document.getElementById('optModo').value = savedModo;
+  }
+
   renderDetectedAgents();
   renderDetectedFlights();
 
   renderAll();
 }
 
+function saveOptModo(val) {
+  localStorage.setItem('aeroshift_opt_modo', val);
+}
+
 function seedDemoFlights() {
   const date = document.getElementById('currentDate').value;
   const demoFlights = [
-    { id: 1, airline: 'IB',  number: 'IB3214', time: '06:30', gate: 'B23', destination: 'LHR',  type: 'departure' },
-    { id: 2, airline: 'VY',  number: 'VY1234', time: '07:00', gate: 'A12', destination: 'FCO',  type: 'departure' },
-    { id: 3, airline: 'IB',  number: 'IB576',  time: '07:45', gate: 'C05', destination: 'MIA',  type: 'departure' },
-    { id: 4, airline: 'FR',  number: 'FR8321', time: '08:15', gate: 'D14', destination: 'STN',  type: 'departure' },
-    { id: 5, airline: 'UX',  number: 'UX1023', time: '08:50', gate: 'B08', destination: 'BOG',  type: 'departure' },
-    { id: 6, airline: 'LH',  number: 'LH1802', time: '09:20', gate: 'C12', destination: 'FRA',  type: 'departure' },
-    { id: 7, airline: 'AF',  number: 'AF1081', time: '09:55', gate: 'A03', destination: 'CDG',  type: 'departure' },
-    { id: 8, airline: 'IB',  number: 'IB3222', time: '14:30', gate: 'B30', destination: 'AMS',  type: 'departure' },
-    { id: 9, airline: 'VY',  number: 'VY5501', time: '15:00', gate: 'A08', destination: 'PMI',  type: 'departure' },
-    { id: 10, airline: 'BA', number: 'BA458',  time: '15:30', gate: 'C20', destination: 'LHR',  type: 'departure' },
-    { id: 11, airline: 'TK', number: 'TK1858', time: '16:15', gate: 'D02', destination: 'IST',  type: 'departure' },
-    { id: 12, airline: 'EW', number: 'EW9501', time: '17:00', gate: 'B16', destination: 'DUS',  type: 'departure' },
-    { id: 13, airline: 'IB', number: 'IB6251', time: '22:30', gate: 'A15', destination: 'MEX',  type: 'departure' },
-    { id: 14, airline: 'UX', number: 'UX55',   time: '23:15', gate: 'C08', destination: 'EZE',  type: 'departure' },
-    { id: 15, airline: 'IB', number: 'IB3201', time: '07:20', gate: 'B10', destination: 'MAD',  type: 'arrival' },
-    { id: 16, airline: 'FR', number: 'FR8322', time: '14:45', gate: 'D18', destination: 'STN',  type: 'arrival' },
+    { id: 1, airline: 'IB',  number: 'IB3214', time: '06:30', gate: 'B23', destination: 'LHR',  pax: 180, type: 'departure' },
+    { id: 2, airline: 'VY',  number: 'VY1234', time: '07:00', gate: 'A12', destination: 'FCO',  pax: 165, type: 'departure' },
+    { id: 3, airline: 'IB',  number: 'IB576',  time: '07:45', gate: 'C05', destination: 'MIA',  pax: 90,  type: 'departure' }, // Low Pax <= 100
+    { id: 4, airline: 'FR',  number: 'FR8321', time: '08:15', gate: 'D14', destination: 'STN',  pax: 189, type: 'departure' },
+    { id: 5, airline: 'UX',  number: 'UX1023', time: '08:50', gate: 'B08', destination: 'BOG',  pax: 250, type: 'departure' },
+    { id: 6, airline: 'LH',  number: 'LH1802', time: '09:20', gate: 'C12', destination: 'FRA',  pax: 140, type: 'departure' },
+    { id: 7, airline: 'AF',  number: 'AF1081', time: '09:55', gate: 'A03', destination: 'CDG',  pax: 75,  type: 'departure' }, // Low Pax <= 100
+    { id: 8, airline: 'IB',  number: 'IB3222', time: '14:30', gate: 'B30', destination: 'AMS',  pax: 180, type: 'departure' },
+    { id: 9, airline: 'VY',  number: 'VY5501', time: '15:00', gate: 'A08', destination: 'PMI',  pax: 150, type: 'departure' },
+    { id: 10, airline: 'BA', number: 'BA458',  time: '15:30', gate: 'C20', destination: 'LHR',  pax: 85,  type: 'departure' }, // Low Pax <= 100
+    { id: 11, airline: 'TK', number: 'TK1858', time: '16:15', gate: 'D02', destination: 'IST',  pax: 200, type: 'departure' },
+    { id: 12, airline: 'EW', number: 'EW9501', time: '17:00', gate: 'B16', destination: 'DUS',  pax: 120, type: 'departure' },
+    { id: 13, airline: 'IB', number: 'IB6251', time: '22:30', gate: 'A15', destination: 'MEX',  pax: 240, type: 'departure' },
+    { id: 14, airline: 'UX', number: 'UX55',   time: '23:15', gate: 'C08', destination: 'EZE',  pax: 280, type: 'departure' },
+    { id: 15, airline: 'IB', number: 'IB3201', time: '07:20', gate: 'B10', destination: 'MAD',  pax: 150, type: 'arrival' },
+    { id: 16, airline: 'FR', number: 'FR8322', time: '14:45', gate: 'D18', destination: 'STN',  pax: 189, type: 'arrival' },
   ];
   state.flights = demoFlights;
 
@@ -1516,35 +1525,41 @@ function renderDetectedFlights() {
     if (isEditing) {
       return `
         <tr style="border-bottom: 1px solid #282828; background: #1a1a1a;">
-          <td style="padding: 10px 8px; color:#888;">${idx + 1}</td>
-          <td style="padding: 10px 8px;"><input type="text" value="${escapeHtml(f.destination)}" id="edit_flight_dest_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 10px 8px;"><input type="text" value="${escapeHtml(f.number)}" id="edit_flight_number_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 10px 8px; color: var(--text-muted); font-size: 11px;">${times.apertu}</td>
-          <td style="padding: 10px 8px;"><input type="text" value="${escapeHtml(f.agents)}" id="edit_flight_agents_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 10px 8px; color: var(--text-muted); font-size: 11px;">${times.emb}</td>
-          <td style="padding: 10px 8px;"><input type="time" value="${f.time}" id="edit_flight_time_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
-          <td style="padding: 10px 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center;">
+          <td style="padding: 8px 4px; color:#888;">${idx + 1}</td>
+          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.destination)}" id="edit_flight_dest_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.number)}" id="edit_flight_number_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px 4px;"><input type="number" value="${f.pax || 186}" id="edit_flight_pax_${f.id}" min="10" max="300" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
+          <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.apertu}</td>
+          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.agents)}" id="edit_flight_agents_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.emb}</td>
+          <td style="padding: 8px 4px;"><input type="time" value="${f.time}" id="edit_flight_time_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
+          <td style="padding: 8px 4px; text-align: center;">
+            <div style="display: flex; gap: 4px; justify-content: center;">
               <button onclick="saveEditFlight(${f.id})" style="background: var(--success); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✓</button>
               <button onclick="cancelEditFlight()" style="background: var(--text-muted); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✗</button>
             </div>
           </td>
         </tr>`;
     } else {
+      const isLowPax = (f.pax || 186) <= 100;
+      const paxColor = isLowPax ? '#22c55e' : '#a0a0a0';
+      const paxWeight = isLowPax ? 'bold' : 'normal';
+      
       return `
         <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
-          <td style="padding: 12px 8px; color: #555; font-weight: bold;">${idx + 1}</td>
-          <td style="padding: 12px 8px; color: #fff; font-weight: bold;">${escapeHtml(f.destination)}</td>
-          <td style="padding: 12px 8px;">${getFlightNumberBadge(f.number)}</td>
-          <td style="padding: 12px 8px; color: #a0a0a0;">${times.apertu}</td>
-          <td style="padding: 12px 8px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
-          <td style="padding: 12px 8px; color: #a0a0a0;">${times.emb}</td>
-          <td style="padding: 12px 8px; color: #ff9f00; font-weight: bold;">${times.std}</td>
-          <td style="padding: 12px 8px; text-align: center;">
-            <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
-              <button onclick="startEditFlight(${f.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
-              <button onclick="deleteFlightFromPreview(${f.id})" style="background: transparent; border: 1px solid #333; color: var(--danger); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Eliminar">🗑️</button>
-              <button onclick="insertFlightAfter(${f.id})" style="background: transparent; border: 1px solid #333; color: var(--success); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;" title="Insertar vuelo debajo">+</button>
+          <td style="padding: 10px 4px; color: #555; font-weight: bold;">${idx + 1}</td>
+          <td style="padding: 10px 4px; color: #fff; font-weight: bold;">${escapeHtml(f.destination)}</td>
+          <td style="padding: 10px 4px;">${getFlightNumberBadge(f.number)}</td>
+          <td style="padding: 10px 4px; color: ${paxColor}; font-weight: ${paxWeight};">${f.pax || 186}</td>
+          <td style="padding: 10px 4px; color: #a0a0a0;">${times.apertu}</td>
+          <td style="padding: 10px 4px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
+          <td style="padding: 10px 4px; color: #a0a0a0;">${times.emb}</td>
+          <td style="padding: 10px 4px; color: #ff9f00; font-weight: bold;">${times.std}</td>
+          <td style="padding: 10px 4px; text-align: center;">
+            <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
+              <button onclick="startEditFlight(${f.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
+              <button onclick="deleteFlightFromPreview(${f.id})" style="background: transparent; border: 1px solid #333; color: var(--danger); padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Eliminar">🗑️</button>
+              <button onclick="insertFlightAfter(${f.id})" style="background: transparent; border: 1px solid #333; color: var(--success); padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;" title="Insertar vuelo debajo">+</button>
             </div>
           </td>
         </tr>`;
@@ -1576,6 +1591,7 @@ function saveEditFlight(id) {
   const destInput = document.getElementById(`edit_flight_dest_${id}`);
   const timeInput = document.getElementById(`edit_flight_time_${id}`);
   const agentsInput = document.getElementById(`edit_flight_agents_${id}`);
+  const paxInput = document.getElementById(`edit_flight_pax_${id}`);
 
   if (!numberInput || !timeInput || !destInput) return;
 
@@ -1583,6 +1599,7 @@ function saveEditFlight(id) {
   const destination = destInput.value.trim().toUpperCase();
   const time = timeInput.value.trim();
   const agents = agentsInput ? agentsInput.value.trim().toUpperCase() : '';
+  const pax = paxInput ? parseInt(paxInput.value, 10) || 186 : 186;
 
   if (!number || !time || !destination) {
     alert('El número de vuelo, destino y la hora son obligatorios.');
@@ -1596,6 +1613,7 @@ function saveEditFlight(id) {
     extractedData.flights[flightIndex].destination = destination;
     extractedData.flights[flightIndex].time = time;
     extractedData.flights[flightIndex].agents = agents;
+    extractedData.flights[flightIndex].pax = pax;
   }
 
   editingFlightId = null;
@@ -1718,6 +1736,8 @@ async function runOrToolsOptimization() {
   const minSep = parseInt(document.getElementById('optMinSep').value) || 45;
   const preferAirlines = document.getElementById('optPreferAirlines').checked;
   const backendUrl = document.getElementById('backendUrl').value.trim() || 'http://localhost:8000';
+  const optModoElem = document.getElementById('optModo');
+  const optModo = optModoElem ? optModoElem.value : 'PROPORCIONAL';
 
   if (!optStatus) return;
 
@@ -1729,7 +1749,8 @@ async function runOrToolsOptimization() {
     agents: state.agents,
     flights: state.flights,
     min_separation: minSep,
-    prefer_airlines: preferAirlines
+    prefer_airlines: preferAirlines,
+    modo: optModo
   };
 
   try {
