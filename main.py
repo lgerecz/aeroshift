@@ -988,11 +988,11 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
         )
 
         # We build the models list, placing the user's selected model at the very front of the cascade!
-        selected_model = model or "gpt-5.4-nano"
-        use_high_reasoning_default = (selected_model == "gpt-5.6-luna")
+        selected_model = model or "gpt-5.1"
+        use_high_reasoning_default = (selected_model in ["gpt-5.6-luna", "gpt-5.1", "gpt-5.2"])
         
         models_to_try = [(selected_model, use_high_reasoning_default)]
-        for m, h in [("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False), ("gpt-4o", False)]:
+        for m, h in [("gpt-5.1", True), ("gpt-5.2", True), ("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False)]:
             if m != selected_model:
                 models_to_try.append((m, h))
 
