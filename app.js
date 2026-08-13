@@ -1111,7 +1111,8 @@ async function uploadFileToBackend(files, type) {
             airline: f.airline || 'FR',
             number: f.number || 'FR000',
             time: f.time || '12:00',
-            agents: '' // Always blank initially as requested
+            agents: '', // Always blank initially as requested
+            pax: f.pax !== undefined && f.pax !== null ? f.pax : ''
           };
         });
         if (type === 'flights') {
@@ -1250,6 +1251,7 @@ function validateUploadedData() {
         time: f.time, // STD
         gate: f.gate || '---',
         destination: f.destination,
+        pax: f.pax !== undefined && f.pax !== null && f.pax !== '' ? parseInt(f.pax, 10) || 186 : 186,
         type: 'departure'
       };
     });
@@ -1263,6 +1265,7 @@ function validateUploadedData() {
         time: f.time,
         gate: f.gate || '---',
         destination: f.destination,
+        pax: f.pax !== undefined && f.pax !== null && f.pax !== '' ? parseInt(f.pax, 10) || 186 : 186,
         type: 'departure'
       };
     });
@@ -1532,7 +1535,7 @@ function renderDetectedFlights() {
           <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.agents)}" id="edit_flight_agents_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
           <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.emb}</td>
           <td style="padding: 8px 4px;"><input type="time" value="${f.time}" id="edit_flight_time_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
-          <td style="padding: 8px 4px;"><input type="number" value="${f.pax || 186}" id="edit_flight_pax_${f.id}" min="10" max="300" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
+          <td style="padding: 8px 4px;"><input type="number" value="${f.pax !== undefined && f.pax !== null && f.pax !== '' ? f.pax : ''}" id="edit_flight_pax_${f.id}" min="10" max="300" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;" placeholder="—"></td>
           <td style="padding: 8px 4px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center;">
               <button onclick="saveEditFlight(${f.id})" style="background: var(--success); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:700;">✓</button>
@@ -1541,9 +1544,12 @@ function renderDetectedFlights() {
           </td>
         </tr>`;
     } else {
-      const isLowPax = (f.pax || 186) <= 100;
+      const hasPax = f.pax !== undefined && f.pax !== null && f.pax !== '';
+      const paxInt = hasPax ? parseInt(f.pax, 10) : NaN;
+      const isLowPax = hasPax && !isNaN(paxInt) && paxInt <= 100;
       const paxColor = isLowPax ? '#22c55e' : '#a0a0a0';
       const paxWeight = isLowPax ? 'bold' : 'normal';
+      const paxDisplay = hasPax ? f.pax : '—';
       
       return `
         <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
@@ -1554,7 +1560,7 @@ function renderDetectedFlights() {
           <td style="padding: 10px 4px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
           <td style="padding: 10px 4px; color: #a0a0a0;">${times.emb}</td>
           <td style="padding: 10px 4px; color: #ff9f00; font-weight: bold;">${times.std}</td>
-          <td style="padding: 10px 4px; color: ${paxColor}; font-weight: ${paxWeight};">${f.pax || 186}</td>
+          <td style="padding: 10px 4px; color: ${paxColor}; font-weight: ${paxWeight};">${paxDisplay}</td>
           <td style="padding: 10px 4px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
               <button onclick="startEditFlight(${f.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
@@ -1599,7 +1605,12 @@ function saveEditFlight(id) {
   const destination = destInput.value.trim().toUpperCase();
   const time = timeInput.value.trim();
   const agents = agentsInput ? agentsInput.value.trim().toUpperCase() : '';
-  const pax = paxInput ? parseInt(paxInput.value, 10) || 186 : 186;
+  
+  let pax = '';
+  if (paxInput && paxInput.value.trim() !== '') {
+    pax = parseInt(paxInput.value, 10);
+    if (isNaN(pax)) pax = '';
+  }
 
   if (!number || !time || !destination) {
     alert('El número de vuelo, destino y la hora son obligatorios.');
@@ -2474,7 +2485,8 @@ function insertFlightAfter(id) {
     airline: currentFlight ? currentFlight.airline : 'FR',
     number: currentFlight ? currentFlight.number + 'A' : 'FR000',
     time: currentFlight ? currentFlight.time : '12:00',
-    agents: ''
+    agents: '',
+    pax: currentFlight ? (currentFlight.pax || '') : ''
   };
 
   const idx = extractedData.flights.findIndex(f => f.id === id);
