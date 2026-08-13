@@ -173,11 +173,6 @@ function init() {
   }
 
   // Pre-render the preview tables so they are ready on load!
-  const savedModo = localStorage.getItem('aeroshift_opt_modo');
-  if (savedModo && document.getElementById('optModo')) {
-    document.getElementById('optModo').value = savedModo;
-  }
-
   renderDetectedAgents();
   renderDetectedFlights();
 
@@ -1240,6 +1235,12 @@ function tryUploadAgain() {
 }
 
 function validateUploadedData() {
+  const optModoElem = document.getElementById('optModo');
+  if (optModoElem && optModoElem.value === '') {
+    alert('Por favor, selecciona una estrategia para el optimizador (PROPORCIONAL o EQUILIBRADA) antes de importar los datos.');
+    return;
+  }
+
   // Overwrite the daily flights list for simulation
   if (extractedData) {
     state.agents = normalizeAgents(extractedData.agents);
