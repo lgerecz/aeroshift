@@ -1149,7 +1149,7 @@ async function uploadFileToBackend(files, type) {
           renderDetectedFlights();
           
           if (!data.is_real_ai) {
-            alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: ${data.message}`);
+            alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
           }
         } catch (err) {
           console.error("Defensive catch in upload success timer:", err);
@@ -1207,7 +1207,7 @@ async function uploadFileToBackend(files, type) {
         switchView('extractor-preview');
         
         setTimeout(() => {
-          alert(`Aviso de Simulación:\nNo se pudo conectar con el motor de extracción real o hubo un problema en el servidor.\n\nDetalle técnico: ${error.message}\n\nSe ha cargado un listado estructurado de demostración con 26 vuelos vacíos y 24 agentes. Puedes ver las imágenes reales subidas arriba en la pantalla.`);
+          alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
         }, 150);
       }
     }, 1000);
