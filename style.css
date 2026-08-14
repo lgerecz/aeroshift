@@ -1367,7 +1367,7 @@ select option {
   border: 1px solid var(--primary) !important;
   color: #ffffff !important;
   font-weight: 700 !important;
-  padding: 2px 10px !important;
+  padding: 10px 24px !important;
   border-radius: 4px !important;
   cursor: pointer !important;
   font-size: 13px !important;
@@ -1378,7 +1378,7 @@ select option {
   gap: 4px !important;
   transition: all 0.15s !important;
   margin: 0 !important;
-  height: 24px !important;
+  height: 38px !important;
   box-sizing: border-box !important;
   vertical-align: middle !important;
 }
