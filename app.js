@@ -1183,12 +1183,12 @@ async function uploadFileToBackend(files, type) {
           let listHtml = '';
           for (let i = 0; i < filesCopy.length; i++) {
             listHtml += `
-              <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
-                <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+              <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 0px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
+                <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; padding: 6px 8px 0px 8px;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="3" style="stroke:#f59e0b; flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>
                   <span style="font-weight:700; font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; color:#fff;" title="${escapeHtml(filesCopy[i].name)}">&nbsp;${escapeHtml(filesCopy[i].name)}</span>
                 </div>
-                <div style="width: 100%; height: 110px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${filesCopy[i].blobUrl}')" title="Haga clic para ampliar">
+                <div style="width: 100%; height: 80px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${filesCopy[i].blobUrl}')" title="Haga clic para ampliar">
                   <img src="${filesCopy[i].blobUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
                 </div>
               </div>`;
@@ -2505,12 +2505,12 @@ function renderUploadedFilesList() {
     let listHtml = '';
     for (let i = 0; i < uploadedFilesCopy.length; i++) {
       listHtml += `
-        <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
-          <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+        <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 0px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
+          <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; padding: 6px 8px 0px 8px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" style="stroke:var(--success); flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>
             <span style="font-weight:700; font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; color:#fff;" title="${escapeHtml(uploadedFilesCopy[i].name)}">${escapeHtml(uploadedFilesCopy[i].name)}</span>
           </div>
-          <div style="width: 100%; height: 110px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${uploadedFilesCopy[i].blobUrl}')" title="Haga clic para ampliar">
+          <div style="width: 100%; height: 80px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${uploadedFilesCopy[i].blobUrl}')" title="Haga clic para ampliar">
             <img src="${uploadedFilesCopy[i].blobUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
           </div>
         </div>`;
