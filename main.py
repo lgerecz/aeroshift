@@ -6,7 +6,7 @@ import base64
 import sys
 import io
 import contextlib
-from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -792,21 +792,29 @@ DEMO_FLIGHTS = [
 ]
 
 @app.post("/extract")
-async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[UploadFile] = File(...), authorization: Optional[str] = Header(None)):
-    """
-    Extracción multimodal por IA (catálogo de GPT-5) de compatibilidad absoluta.
-    Realiza una cascada inteligente unificada (Llamada + Decodificación JSON)
-    para asegurar éxito absoluto en cualquier condición.
-    """
+async def extract_data(
+    model: Optional[str] = "gpt-5.6-luna",
+    document_type: str = Query("all", alias="type"),
+    files: List[UploadFile] = File(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Extrae turnos o vuelos mediante visión IA."""
+    document_type = (document_type or "all").lower().strip()
+    if document_type not in {"agents", "flights", "all"}:
+        raise HTTPException(
+            status_code=422,
+            detail="El parámetro type debe ser 'agents', 'flights' o 'all'.",
+        )
+
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return {
-            "success": True,
+            "success": False,
             "is_real_ai": False,
-            "message": "Servidor sin clave API Key de OpenAI configurada. No se cargaron datos ficticios.",
+            "message": "El servidor no tiene configurada la clave de OpenAI.",
             "date": "Fecha no detectada",
             "agents": [],
-            "flights": []
+            "flights": [],
         }
 
     try:
@@ -987,20 +995,25 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
-        # We build the models list, placing the user's selected model at the very front of the cascade!
-        selected_model = model or "gpt-5.1"
-        use_high_reasoning_default = (selected_model in ["gpt-5.6-luna", "gpt-5.1", "gpt-5.2"])
-        
-        models_to_try = [(selected_model, use_high_reasoning_default)]
-        for m, h in [("gpt-5.1", True), ("gpt-5.2", True), ("gpt-5.6-luna", True), ("gpt-5.4-nano", False), ("gpt-5.4-mini", False)]:
-            if m != selected_model:
-                models_to_try.append((m, h))
+        # Se intenta primero el modelo elegido en la web. Si falla, se sigue
+        # la cascada acordada, sin repetir modelos.
+        selected_model = (model or "gpt-5.6-luna").strip()
+        fallback_order = [
+            "gpt-5.6-luna",
+            "gpt-5.6-nano",
+            "gpt-5.4-mini",
+            "gpt-5.1",
+            "gpt-5.2",
+        ]
+        models_to_try = [selected_model] + [
+            candidate for candidate in fallback_order if candidate != selected_model
+        ]
 
         parsed_result = None
         extracted_model_name = ""
         errors = []
 
-        for model_name, use_high_reasoning in models_to_try:
+        for model_name in models_to_try:
             try:
                 print(f"Intentando llamada a {model_name}...")
                 params = {
@@ -1009,13 +1022,13 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content_blocks}
                     ],
-                    "max_completion_tokens": 4000
+                    # Incluye tanto los tokens de razonamiento como el JSON final.
+                    # La parrilla patrón contiene 87 agentes, por lo que 4.000
+                    # tokens resultaban insuficientes con razonamiento alto.
+                    "max_completion_tokens": 16000,
                 }
-                
-                # Intentamos activar el formato JSON
+
                 params["response_format"] = {"type": "json_object"}
-                
-                # Intentamos razonamiento alto para todos los modelos por defecto
                 params["reasoning_effort"] = "high"
                     
                 # Realizamos llamada OpenAI
@@ -1052,18 +1065,25 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
                     # Reintento con parámetros limpios
                     response = client.chat.completions.create(**params)
 
-                # Procesamiento del resultado de este modelo
-                raw_result = response.choices[0].message.content
+                # Procesamiento y diagnóstico del resultado de este modelo.
+                choice = response.choices[0]
+                finish_reason = getattr(choice, "finish_reason", None)
+                usage = getattr(response, "usage", None)
+                raw_result = choice.message.content
+
                 if not raw_result:
-                    try:
-                        raw_result = response.choices[0].message.reasoning_content
-                    except:
-                        pass
-                if not raw_result:
-                    raise Exception("El servidor OpenAI devolvió contenido vacío.")
+                    usage_text = str(usage) if usage is not None else "no disponible"
+                    raise Exception(
+                        "El servidor OpenAI devolvió contenido vacío "
+                        f"(finish_reason={finish_reason}, usage={usage_text})."
+                    )
 
                 raw_result = raw_result.strip()
-                print(f"Respuesta recibida de {model_name} (primeros 150 caracteres): '{raw_result[:150]}'")
+                print(
+                    f"Respuesta recibida de {model_name}; "
+                    f"finish_reason={finish_reason}; "
+                    f"primeros 150 caracteres: '{raw_result[:150]}'"
+                )
 
                 # Limpieza de markdown
                 if raw_result.startswith("```"):
@@ -1209,22 +1229,31 @@ async def extract_data(model: Optional[str] = "gpt-5.4-nano", files: List[Upload
         return {
             "success": True,
             "is_real_ai": True,
-            "message": f"Extracción exitosa completada por {extracted_model_name}.",
+            "message": f"Extracción completada por {extracted_model_name}.",
+            "document_type": document_type,
+            "requested_model": selected_model,
+            "used_model": extracted_model_name,
+            "used_fallback": extracted_model_name != selected_model,
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
-            "flights": formatted_flights
+            "flights": formatted_flights,
         }
 
     except Exception as e:
+        # El detalle completo queda en los logs de Render, no se expone al navegador.
         tb = traceback.format_exc()
         print(f"Error calling OpenAI Vision API: {e}\nTraceback: {tb}")
         return {
-            "success": True,
+            "success": False,
             "is_real_ai": False,
-            "message": f"Error en la extracción por IA ({str(e)}).\nTraceback: {tb}",
+            "message": f"No se pudo completar la extracción: {str(e)}",
+            "document_type": document_type,
+            "requested_model": model or "gpt-5.6-luna",
+            "used_model": None,
+            "used_fallback": False,
             "date": "Fecha no detectada",
             "agents": [],
-            "flights": []
+            "flights": [],
         }
 
 if __name__ == "__main__":

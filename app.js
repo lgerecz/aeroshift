@@ -1163,54 +1163,22 @@ async function uploadFileToBackend(files, type) {
       throw new Error(data.message || 'El servicio de Visión no devolvió un set de datos de éxito.');
     }
   } catch (error) {
-    console.warn('Servidor de extracción offline, ejecutando maqueta demostrativa:', error);
-    
+    console.error('La extracción no se completó:', error);
+
     clearInterval(interval);
     progress.style.width = '100%';
-    status.textContent = 'PROCESANDO 100%';
-    sub.textContent = `Error: ${error.message}. Cargando datos de previsualización...`;
+    status.textContent = 'ERROR DE EXTRACCIÓN';
+    sub.textContent = error.message || 'No se pudieron extraer los datos.';
 
+    // No se cargan agentes ni vuelos ficticios. Conservamos intactos los
+    // datos que el usuario ya tuviera antes de esta operación fallida.
     setTimeout(() => {
-      try {
-        modal.classList.remove('active');
-        
-        // Load fallback demo data in extractedData (the exact 26 flights from the screenshot, agents blank!)
-        initializeMockExtractedData();
-
-        // Populate file tags with image previews
-        const filesListContainer = document.getElementById('uploadedFilesListPage');
-        if (filesListContainer) {
-          let listHtml = '';
-          for (let i = 0; i < filesCopy.length; i++) {
-            listHtml += `
-              <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 0px; border-radius: 6px; border: 1px solid var(--border); max-width: 240px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0; text-align: left;">
-                <div style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; padding: 6px 8px 0px 8px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="3" style="stroke:#f59e0b; flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span style="font-weight:700; font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; color:#fff;" title="${escapeHtml(filesCopy[i].name)}">&nbsp;${escapeHtml(filesCopy[i].name)}</span>
-                </div>
-                <div style="width: 100%; height: 80px; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="zoomPreviewImage('${filesCopy[i].blobUrl}')" title="Haga clic para ampliar">
-                  <img src="${filesCopy[i].blobUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
-                </div>
-              </div>`;
-          }
-          filesListContainer.innerHTML = listHtml;
-        }
-
-        // Render tables
-        renderDetectedAgents();
-        renderDetectedFlights();
-      } catch (err) {
-        console.error("Defensive catch in upload fallback timer:", err);
-        alert("Error de renderizado (Fallback): " + err.message + "\nStack: " + err.stack);
-      } finally {
-        // ALWAYS SWITCH VIEW!
-        switchView('extractor-preview');
-        
-        setTimeout(() => {
-          alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
-        }, 150);
-      }
-    }, 1000);
+      modal.classList.remove('active');
+      alert(
+        'La extracción por IA no se completó.\n\n' +
+        (error.message || 'Error desconocido del servidor.')
+      );
+    }, 500);
   }
 }
 
