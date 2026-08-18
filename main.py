@@ -84,6 +84,50 @@ def hms(t: str) -> int:
     except Exception:
         return 0
 
+
+def normalize_and_measure_schedule(schedule: str) -> tuple[str, Optional[int]]:
+    """
+    Normaliza uno o dos tramos y calcula los minutos realmente trabajados.
+    Si la salida es anterior a la entrada, se interpreta como el día siguiente.
+    Devuelve (horario_normalizado, minutos) o ("ILEGIBLE", None).
+    """
+    text = str(schedule or "").strip().upper()
+    if text == "ILEGIBLE":
+        return "ILEGIBLE", None
+
+    text = text.replace("–", "-").replace("—", "-").replace("//", "/")
+    raw_segments = [segment.strip() for segment in text.split("/") if segment.strip()]
+    if not 1 <= len(raw_segments) <= 2:
+        raise ValueError(f"Número de tramos inválido: {schedule}")
+
+    normalized_segments = []
+    total_minutes = 0
+    pattern = re.compile(r"^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$")
+
+    for segment in raw_segments:
+        match = pattern.fullmatch(segment)
+        if not match:
+            raise ValueError(f"Formato de horario inválido: {schedule}")
+        start_h, start_m, end_h, end_m = map(int, match.groups())
+        if start_h > 23 or end_h > 23 or start_m > 59 or end_m > 59:
+            raise ValueError(f"Hora fuera de rango: {schedule}")
+
+        start = start_h * 60 + start_m
+        end = end_h * 60 + end_m
+        if end < start:
+            end += 1440
+        duration = end - start
+        if duration <= 0:
+            raise ValueError(f"Tramo de duración nula: {schedule}")
+
+        total_minutes += duration
+        normalized_segments.append(
+            f"{start_h:02d}:{start_m:02d}-{end_h:02d}:{end_m:02d}"
+        )
+
+    return " / ".join(normalized_segments), total_minutes
+
+
 def t2m_fin(ini_s: str, fin_s: str) -> int:
     i = hms(ini_s)
     f = hms(fin_s)
@@ -884,8 +928,10 @@ async def extract_data(
                     user_content_blocks.append({
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:{mime_type};base64,{base64_image}"
-                        }
+                            "url": f"data:{mime_type};base64,{base64_image}",
+                            # Las parrillas contienen texto pequeño y horarios muy próximos.
+                            "detail": "high" if document_type == "agents" else "auto",
+                        },
                     })
                 except Exception as img_err:
                     print(f"Error cargando imagen {file.filename}: {img_err}")
@@ -1060,10 +1106,20 @@ ASIGNACIÓN DE HORARIOS
 - Pasaje: si el horario tiene dos tramos separados por "/" o "//", es un turno partido completo. Repite los dos tramos completos para cada persona de esa fila.
 - Normaliza el separador del turno partido como " / ", sin perder ningún tramo.
 - No intercambies horas de filas contiguas y no inventes horarios predeterminados.
+- Lee dos veces cada horario, dígito por dígito, antes de asociarlo al nombre.
+- En filas con varios horarios, verifica por separado entrada y salida de cada persona; no copies ni completes un horario basándote en la fila vecina.
+- Una salida con hora de reloj menor que la entrada significa que el turno termina al día siguiente.
+- Ninguna jornada puede superar 10 horas reales de trabajo.
+- En turnos partidos, suma únicamente la duración de los tramos trabajados; el descanso intermedio no forma parte de la jornada.
+- Si tu primera lectura produce más de 10 horas, vuelve a inspeccionar la celda porque la lectura es incorrecta.
 
 ROLES
-- En oficina, extrae el rol indicado entre paréntesis.
+- En oficina, el rol administrativo-operativo indicado en una fila se aplica a TODAS las personas de esa fila, aunque el paréntesis solo aparezca junto al último nombre.
+- Ejemplo de oficina: "DÉBORA / GASTÓN (PSM)" produce DÉBORA=PSM y GASTÓN=PSM.
+- Ejemplo de oficina: "MOI / BEGO (OPS)" produce MOI=OPS y BEGO=OPS.
+- Ninguna persona del bloque de oficina puede tener rol CSA.
 - En pasaje, usa CSA cuando no haya un rol o restricción explícitos junto a esa persona.
+- En pasaje, un rol escrito junto a una persona afecta solamente a esa persona, no a toda la fila.
 - Si una persona de pasaje lleva PSM, OPS, TKT o LL entre paréntesis, conserva ese rol para esa persona, pero mantiene seccion="pasaje".
 - Convierte silenciosamente TKD a TKT. En el JSON final solo debe aparecer TKT.
 - Para una restricción horaria mixta, usa el formato "CSA (HH:MM-HH:MM TKT)" y deja limpio el nombre.
@@ -1126,14 +1182,35 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                     raise ValueError(
                         f"El agente {index} contiene varios nombres: {name}."
                     )
-                if not str(agent.get("horario") or "").strip():
+                schedule = str(agent.get("horario") or "").strip()
+                if not schedule:
                     raise ValueError(f"El agente {index} no tiene horario.")
-                if not str(agent.get("rol") or "").strip():
+                normalized_schedule, work_minutes = normalize_and_measure_schedule(schedule)
+                if work_minutes is not None and work_minutes > 600:
+                    raise ValueError(
+                        f"Jornada imposible superior a 10 horas para {name}: "
+                        f"{normalized_schedule} ({work_minutes} minutos)."
+                    )
+                agent["horario"] = normalized_schedule
+
+                role = str(agent.get("rol") or "").upper().strip().replace("TKD", "TKT")
+                if not role:
                     raise ValueError(f"El agente {index} no tiene rol.")
-                if str(agent.get("seccion") or "").lower().strip() not in allowed_sections:
+                agent["rol"] = role
+
+                section = str(agent.get("seccion") or "").lower().strip()
+                if section not in allowed_sections:
                     raise ValueError(f"Sección inválida en el agente {index}.")
-                if str(agent.get("turno") or "").lower().strip() not in allowed_shifts:
+                if section == "oficina" and role.startswith("CSA"):
+                    raise ValueError(
+                        f"El agente de oficina {name} no puede tener rol CSA."
+                    )
+                agent["seccion"] = section
+
+                shift = str(agent.get("turno") or "").lower().strip()
+                if shift not in allowed_shifts:
                     raise ValueError(f"Turno inválido en el agente {index}.")
+                agent["turno"] = shift
 
         parsed_result = None
         extracted_model_name = ""
