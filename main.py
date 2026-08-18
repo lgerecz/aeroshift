@@ -890,10 +890,26 @@ async def extract_data(
                 except Exception as img_err:
                     print(f"Error cargando imagen {file.filename}: {img_err}")
 
-        # Añadimos una instrucción textual de seguridad al usuario para que los modelos de visión de GPT-5 tengan texto guía obligatorio
+        # La interfaz ya informa de qué botón procede el archivo. No pedimos al
+        # modelo que mezcle turnos y vuelos cuando el tipo es conocido.
+        if document_type == "agents":
+            task_instruction = (
+                "Extrae exclusivamente la fecha y los turnos del personal. "
+                "Devuelve un solo objeto por persona siguiendo el esquema JSON solicitado."
+            )
+        elif document_type == "flights":
+            task_instruction = (
+                "Extrae exclusivamente la fecha y la parrilla de vuelos o embarques "
+                "siguiendo el esquema JSON solicitado."
+            )
+        else:
+            task_instruction = (
+                "Extrae la fecha, los agentes y los vuelos siguiendo el esquema JSON solicitado."
+            )
+
         user_content_blocks.append({
             "type": "text",
-            "text": "Analiza esta imagen o contenido de texto y extrae la fecha, los agentes y los vuelos en el formato JSON de rellenado solicitado."
+            "text": task_instruction,
         })
 
         if text_payloads:
@@ -902,9 +918,9 @@ async def extract_data(
                 "type": "text",
                 "text": (
                     "Aquí tienes el contenido de texto extraído directamente del archivo Excel/PDF cargado.\n"
-                    "Analízalo con precisión para extraer los agentes, sus horarios, los vuelos y la fecha de la cabecera:\n\n"
+                    f"Tarea: {task_instruction}\n\n"
                     f"{combined_text}"
-                )
+                ),
             })
 
         system_prompt = (
@@ -995,6 +1011,80 @@ async def extract_data(
             "- Si el documento SOLO contiene vuelos, las listas de agentes deben estar vacías, y viceversa. No inventes datos ficticios."
         )
 
+        if document_type == "agents":
+            system_prompt = """
+Eres un extractor especializado exclusivamente en turnos de personal de handling aeroportuario.
+Devuelve únicamente JSON válido, sin Markdown ni explicaciones.
+
+OBJETIVO
+Extrae la fecha y todas las personas visibles. Cada persona debe ocupar exactamente un objeto independiente. Nunca coloques dos nombres en el mismo objeto.
+
+ESQUEMA EXACTO
+{
+  "fecha": "25/6/26",
+  "agentes": [
+    {
+      "nombre": "MARINA",
+      "horario": "04:15-14:15",
+      "rol": "DSM",
+      "seccion": "oficina",
+      "turno": "mañana"
+    }
+  ],
+  "incertidumbres": []
+}
+
+CAMPOS OBLIGATORIOS DE CADA AGENTE
+- nombre: una sola persona, sin rol ni restricción entre paréntesis.
+- horario: un tramo "HH:MM-HH:MM" o un turno partido "HH:MM-HH:MM / HH:MM-HH:MM".
+- rol: rol final de esa persona.
+- seccion: exclusivamente "oficina" o "pasaje".
+- turno: exclusivamente "mañana" o "tarde".
+
+ESTRUCTURA DEL DOCUMENTO
+1. La columna izquierda corresponde a "mañana" y la derecha a "tarde".
+2. En cada columna, el bloque superior, antes de la línea horizontal separadora, es "oficina". Habitualmente contiene cinco filas fuente: DSM, PSM, OPS, TKT/TKD y LL. Todas las personas de estas filas tienen seccion="oficina".
+3. El bloque inferior, después de la separadora, es "pasaje". Todas sus personas tienen seccion="pasaje", incluso si una persona lleva un rol explícito como PSM, OPS, TKT o LL.
+4. La sección depende de la posición en el documento, no del rol.
+
+UNA PERSONA POR OBJETO
+- Si una fila contiene varios nombres, crea un objeto separado para cada nombre.
+- El campo nombre nunca puede contener comas, "//" ni barras usadas como separadores de personas.
+- Un rol escrito junto a una persona afecta solo a esa persona, no a las demás de la fila.
+Ejemplo fuente: "SUSANA, AMINA, EMI (TKD)" con "09:00-16:00".
+Resultado: SUSANA=CSA, AMINA=CSA y EMI=TKT; tres objetos separados con el mismo horario.
+
+ASIGNACIÓN DE HORARIOS
+- Oficina: si hay varios horarios individuales y varios nombres, empareja por posición. Primer horario con primera persona, segundo horario con segunda persona.
+- Pasaje: si varios nombres comparten una fila con un solo horario, repite ese horario para cada persona.
+- Pasaje: si el horario tiene dos tramos separados por "/" o "//", es un turno partido completo. Repite los dos tramos completos para cada persona de esa fila.
+- Normaliza el separador del turno partido como " / ", sin perder ningún tramo.
+- No intercambies horas de filas contiguas y no inventes horarios predeterminados.
+
+ROLES
+- En oficina, extrae el rol indicado entre paréntesis.
+- En pasaje, usa CSA cuando no haya un rol o restricción explícitos junto a esa persona.
+- Si una persona de pasaje lleva PSM, OPS, TKT o LL entre paréntesis, conserva ese rol para esa persona, pero mantiene seccion="pasaje".
+- Convierte silenciosamente TKD a TKT. En el JSON final solo debe aparecer TKT.
+- Para una restricción horaria mixta, usa el formato "CSA (HH:MM-HH:MM TKT)" y deja limpio el nombre.
+
+FECHA
+- Prioriza la fecha manuscrita visible, aunque esté fuera de la tabla.
+- Si no existe, usa la fecha impresa.
+- Si no puede leerse ninguna fecha, devuelve "Fecha no detectada".
+- No inventes fechas.
+
+PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
+- Recorre mañana-oficina, mañana-pasaje, tarde-oficina y tarde-pasaje.
+- Cuenta todas las personas visibles, no solo las filas.
+- Comprueba que cada persona tenga un único objeto y su horario correcto.
+- Comprueba especialmente caracteres parecidos como I/L, F/P, N/M y nombres con inicial final.
+- No omitas las filas de oficina.
+- No añadas personas que no sean visibles.
+- Si un texto es realmente ilegible, usa "ILEGIBLE" en ese campo y añade una descripción a incertidumbres; nunca sustituyas el dato por un valor inventado.
+- No incluyas vuelos, tipo_elemento, títulos, observaciones ni campos distintos de los definidos en el esquema.
+""".strip()
+
         # Se intenta primero el modelo elegido en la web. Si falla, se sigue
         # la cascada acordada, sin repetir modelos.
         selected_model = (model or "gpt-5.6-luna").strip()
@@ -1008,6 +1098,42 @@ async def extract_data(
         models_to_try = [selected_model] + [
             candidate for candidate in fallback_order if candidate != selected_model
         ]
+
+        def validate_turns_json(data: Any) -> None:
+            if not isinstance(data, dict):
+                raise ValueError("La respuesta de turnos no es un objeto JSON.")
+            if not isinstance(data.get("fecha"), str):
+                raise ValueError("Falta el campo fecha en la respuesta de turnos.")
+            agents = data.get("agentes")
+            if not isinstance(agents, list) or not agents:
+                raise ValueError("La respuesta de turnos no contiene una lista de agentes.")
+
+            allowed_sections = {"oficina", "pasaje"}
+            allowed_shifts = {"mañana", "tarde"}
+            required_fields = {"nombre", "horario", "rol", "seccion", "turno"}
+            for index, agent in enumerate(agents, 1):
+                if not isinstance(agent, dict):
+                    raise ValueError(f"El agente {index} no es un objeto JSON.")
+                missing = required_fields - set(agent)
+                if missing:
+                    raise ValueError(
+                        f"Al agente {index} le faltan campos: {sorted(missing)}."
+                    )
+                name = str(agent.get("nombre") or "").strip()
+                if not name:
+                    raise ValueError(f"El agente {index} no tiene nombre.")
+                if "," in name or "/" in name:
+                    raise ValueError(
+                        f"El agente {index} contiene varios nombres: {name}."
+                    )
+                if not str(agent.get("horario") or "").strip():
+                    raise ValueError(f"El agente {index} no tiene horario.")
+                if not str(agent.get("rol") or "").strip():
+                    raise ValueError(f"El agente {index} no tiene rol.")
+                if str(agent.get("seccion") or "").lower().strip() not in allowed_sections:
+                    raise ValueError(f"Sección inválida en el agente {index}.")
+                if str(agent.get("turno") or "").lower().strip() not in allowed_shifts:
+                    raise ValueError(f"Turno inválido en el agente {index}.")
 
         parsed_result = None
         extracted_model_name = ""
@@ -1102,11 +1228,16 @@ async def extract_data(
                     else:
                         raise json_err
 
-                # Si logramos decodificar con éxito, detenemos la cascada
+                # Un JSON sintácticamente válido también debe cumplir el esquema
+                # del tipo de documento solicitado antes de detener la cascada.
+                if document_type == "agents":
+                    validate_turns_json(parsed_result)
+
                 extracted_model_name = model_name
                 break
 
             except Exception as model_err:
+                parsed_result = None
                 print(f"Fallo de llamada o decodificación con {model_name}: {model_err}")
                 errors.append(f"{model_name}: {str(model_err)}")
                 continue
@@ -1118,8 +1249,28 @@ async def extract_data(
         if not extracted_date or extracted_date.strip() == "":
             extracted_date = "Fecha no detectada"
             
-        raw_manana = parsed_result.get("manana") or []
-        raw_tarde = parsed_result.get("tarde") or []
+        if document_type == "agents":
+            # El nuevo esquema ya contiene exactamente una persona por objeto.
+            # Se adapta aquí al formato interno existente sin volver a dividir nombres.
+            raw_manana = []
+            raw_tarde = []
+            for agent in parsed_result.get("agentes", []):
+                internal_item = {
+                    "tipo_elemento": "agente",
+                    "nombre": agent["nombre"],
+                    "horario": agent["horario"],
+                    "rol": agent["rol"],
+                    "seccion": agent["seccion"],
+                }
+                turno = str(agent["turno"]).lower().strip()
+                if turno == "mañana":
+                    raw_manana.append(internal_item)
+                else:
+                    raw_tarde.append(internal_item)
+        else:
+            # Compatibilidad temporal para vuelos y cargas antiguas.
+            raw_manana = parsed_result.get("manana") or []
+            raw_tarde = parsed_result.get("tarde") or []
 
         formatted_agents = []
         formatted_flights = []

@@ -1004,7 +1004,7 @@ async function uploadFileToBackend(files, type) {
   const backendInput = document.getElementById('backendUrl');
   const backendUrl = backendInput ? backendInput.value.trim() : 'http://localhost:8000';
   const backendModelInput = document.getElementById('backendModel');
-  const selectedModel = backendModelInput ? backendModelInput.value : 'gpt-5.1';
+  const selectedModel = backendModelInput ? backendModelInput.value : 'gpt-5.6-luna';
 
   if (!modal) return;
 
