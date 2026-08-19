@@ -1266,8 +1266,11 @@ ESTRUCTURA DEL DOCUMENTO
 
 UNA PERSONA POR OBJETO
 - Si una fila contiene varios nombres, crea un objeto separado para cada nombre.
+- En estas parrillas no existen nombres compuestos formados por dos nombres completos. Dos palabras con longitud de nombre, como "TRINI KAREN", representan dos personas distintas aunque la coma o barra sea tenue y parezca un espacio.
+- Un identificador individual sí puede contener abreviaturas cortas del apellido, siempre separadas por espacios: "MARÍA GAR", "NOELIA CH", "PAULA DLR", "SARA M". Nunca unas físicamente las letras: escribe "MARÍA GAR", no "MARÍAGAR".
 - Cuenta las personas de la fila antes de separarlas y guarda ese total en personas_en_fila para cada objeto resultante.
 - El campo nombre nunca puede contener comas, "//" ni barras usadas como separadores de personas.
+- Ejemplo de pasaje: "TRINI, KAREN" con "12:50-16:25 / 19:00-22:30" produce dos objetos, TRINI y KAREN, ambos con el turno partido completo y personas_en_fila=2.
 - Un rol escrito junto a una persona afecta solo a esa persona, no a las demás de la fila.
 Ejemplo fuente: "SUSANA, AMINA, EMI (TKD)" con "09:00-16:00".
 Resultado: SUSANA=CSA, AMINA=CSA y EMI=TKT; tres objetos separados con el mismo horario.
@@ -1331,6 +1334,62 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         selected_model = (model or "gpt-5.6-luna").strip()
         models_to_try = [selected_model]
 
+        def split_name_groups(name: str) -> list[str]:
+            """
+            Separa nombres completos unidos, conservando abreviaturas cortas
+            del apellido dentro del mismo identificador y con sus espacios.
+            """
+            text = re.sub(r"\s+", " ", str(name or "").strip())
+            if not text:
+                return []
+
+            explicit_parts = [
+                part.strip()
+                for part in re.split(r"\s*(?:/{1,2}|,|;)\s*", text)
+                if part.strip()
+            ]
+            if len(explicit_parts) > 1:
+                return explicit_parts
+
+            tokens = text.split(" ")
+            if len(tokens) <= 1:
+                return [text]
+
+            groups = [[tokens[0]]]
+            for token in tokens[1:]:
+                letters = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", token.upper())
+                # Las abreviaturas de hasta tres letras pertenecen al nombre anterior.
+                if len(letters) >= 4:
+                    groups.append([token])
+                else:
+                    groups[-1].append(token)
+            return [" ".join(group).strip() for group in groups if group]
+
+        def expand_merged_passage_names(data: Any) -> None:
+            """Separa automáticamente nombres unidos en pasaje y comparte su horario."""
+            if not isinstance(data, dict) or not isinstance(data.get("agentes"), list):
+                return
+            expanded_agents = []
+            for agent in data["agentes"]:
+                if not isinstance(agent, dict):
+                    expanded_agents.append(agent)
+                    continue
+                groups = split_name_groups(agent.get("nombre"))
+                section = str(agent.get("seccion") or "").lower().strip()
+                if section == "pasaje" and len(groups) > 1:
+                    row_people = max(
+                        len(groups),
+                        int(agent.get("personas_en_fila") or 1),
+                    )
+                    for group_name in groups:
+                        separated_agent = dict(agent)
+                        separated_agent["nombre"] = group_name
+                        separated_agent["personas_en_fila"] = row_people
+                        expanded_agents.append(separated_agent)
+                else:
+                    expanded_agents.append(agent)
+            data["agentes"] = expanded_agents
+
         def validate_turns_json(data: Any) -> list[dict]:
             """
             Valida la estructura y anota problemas recuperables por agente.
@@ -1363,10 +1422,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 name = str(agent.get("nombre") or "").strip()
                 if not name:
                     raise ValueError(f"El agente {index + 1} no tiene nombre.")
-                if "," in name or "/" in name:
-                    raise ValueError(
-                        f"El agente {index + 1} contiene varios nombres: {name}."
-                    )
+                name_groups = split_name_groups(name)
                 try:
                     people_in_source_row = int(agent.get("personas_en_fila"))
                 except (TypeError, ValueError):
@@ -1432,7 +1488,14 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 section = str(agent.get("seccion") or "").lower().strip()
                 if section not in allowed_sections:
                     raise ValueError(f"Sección inválida en el agente {index + 1}.")
-                if section == "oficina" and role.startswith("CSA"):
+                if len(name_groups) > 1:
+                    add_issue(
+                        "nombre",
+                        "Posible unión de varias personas en un solo nombre: "
+                        + " / ".join(name_groups)
+                        + ".",
+                    )
+                if section == "oficina" and role.startswith("CSA"): 
                     add_issue("rol", "Un agente de oficina no puede tener rol CSA.")
                 if (
                     section == "oficina"
@@ -1583,6 +1646,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 # Un JSON sintácticamente válido también debe cumplir el esquema
                 # del tipo de documento solicitado antes de detener la cascada.
                 if document_type == "agents":
+                    expand_merged_passage_names(parsed_result)
                     first_validation_issues = validate_turns_json(parsed_result)
 
                 first_extraction_seconds = round(

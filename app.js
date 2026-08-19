@@ -1319,6 +1319,17 @@ function validateAgentForImport(agent) {
   const schedule = String(agent.hours || '').trim().replace(/–|—/g, '-').replace(/\/\//g, '/');
   const role = String(agent.role || agent.rol || '').trim().toUpperCase();
   const type = String(agent.type || '').trim().toLowerCase();
+  const agentName = String(agent.name || '').trim();
+
+  const explicitNameParts = agentName.split(/\s*(?:\/{1,2}|,|;)\s*/).filter(Boolean);
+  const nameTokens = agentName.split(/\s+/).filter(Boolean);
+  const hasLongFollowingToken = nameTokens.slice(1).some(token => {
+    const letters = token.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
+    return letters.length >= 4;
+  });
+  if (explicitNameParts.length > 1 || hasLongFollowingToken) {
+    errors.push('Posible unión de varias personas en un solo nombre.');
+  }
 
   if (!schedule || schedule.toUpperCase() === 'ILEGIBLE') {
     errors.push('Horario vacío o ilegible.');
