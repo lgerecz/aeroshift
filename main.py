@@ -128,6 +128,106 @@ def normalize_and_measure_schedule(schedule: str) -> tuple[str, Optional[int]]:
     return " / ".join(normalized_segments), total_minutes
 
 
+def _normalize_clock_token(token: str) -> str:
+    """Normaliza 17, 7:30 o 17:00 al formato HH:MM."""
+    value = str(token or "").strip()
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?", value)
+    if not match:
+        raise ValueError(f"Hora de restricción inválida: {token}")
+    hour = int(match.group(1))
+    minute = int(match.group(2) or "0")
+    if hour > 23 or minute > 59:
+        raise ValueError(f"Hora de restricción fuera de rango: {token}")
+    return f"{hour:02d}:{minute:02d}"
+
+
+def normalize_mixed_role(role: str) -> tuple[str, Optional[tuple[str, str, str]]]:
+    """
+    Normaliza restricciones mixtas al formato que consumen OR-Tools y el
+    optimizador local: CSA (HH:MM-HH:MM ROL).
+
+    Admite, entre otras, estas variantes generadas a partir del documento:
+    - CSA (12:30-17:00 OPS)
+    - CSA (OPS 12:30-17)
+    - OPS (12:30-17)
+    - OPS 12:30-17
+    """
+    text = str(role or "").upper().strip().replace("TKD", "TKT")
+    time_token = r"\d{1,2}(?::\d{2})?"
+    role_token = r"[A-ZÁÉÍÓÚÑ]+"
+
+    patterns = [
+        # Hora-hora seguida del rol restringido.
+        rf"^(?:CSA\s*)?\(\s*({time_token})\s*-\s*({time_token})\s+({role_token})\s*\)$",
+        # Rol restringido seguido de hora-hora, dentro de paréntesis.
+        rf"^(?:CSA\s*)?\(\s*({role_token})\s+({time_token})\s*-\s*({time_token})\s*\)$",
+        # Rol seguido del intervalo, con paréntesis solo alrededor de las horas.
+        rf"^({role_token})\s*\(\s*({time_token})\s*-\s*({time_token})\s*\)$",
+        # Rol e intervalo sin paréntesis.
+        rf"^({role_token})\s+({time_token})\s*-\s*({time_token})$",
+    ]
+
+    for pattern_index, pattern in enumerate(patterns):
+        match = re.fullmatch(pattern, text)
+        if not match:
+            continue
+        groups = match.groups()
+        if pattern_index == 0:
+            start_raw, end_raw, restricted_role = groups
+        else:
+            restricted_role, start_raw, end_raw = groups
+        start = _normalize_clock_token(start_raw)
+        end = _normalize_clock_token(end_raw)
+        restricted_role = restricted_role.upper().replace("TKD", "TKT")
+        canonical = f"CSA ({start}-{end} {restricted_role})"
+        return canonical, (start, end, restricted_role)
+
+    return text, None
+
+
+def mixed_interval_is_within_schedule(
+    schedule: str, start: str, end: str
+) -> bool:
+    """Comprueba que la restricción mixta cae dentro de algún tramo trabajado."""
+    if schedule == "ILEGIBLE":
+        return True
+
+    def to_minutes(clock: str) -> int:
+        hour, minute = map(int, clock.split(":"))
+        return hour * 60 + minute
+
+    work_segments = []
+    previous_end = None
+    for raw_segment in schedule.split(" / "):
+        segment_start, segment_end = raw_segment.split("-")
+        start_minutes = to_minutes(segment_start)
+        end_minutes = to_minutes(segment_end)
+        if end_minutes < start_minutes:
+            end_minutes += 1440
+        if previous_end is not None and start_minutes < previous_end:
+            start_minutes += 1440
+            if end_minutes < start_minutes:
+                end_minutes += 1440
+        work_segments.append((start_minutes, end_minutes))
+        previous_end = end_minutes
+
+    restriction_start = to_minutes(start)
+    restriction_end = to_minutes(end)
+    if restriction_end < restriction_start:
+        restriction_end += 1440
+
+    # Se prueban tanto el día base como el día siguiente para turnos nocturnos.
+    for offset in (0, 1440):
+        candidate_start = restriction_start + offset
+        candidate_end = restriction_end + offset
+        if any(
+            candidate_start >= work_start and candidate_end <= work_end
+            for work_start, work_end in work_segments
+        ):
+            return True
+    return False
+
+
 def t2m_fin(ini_s: str, fin_s: str) -> int:
     i = hms(ini_s)
     f = hms(fin_s)
@@ -1122,7 +1222,15 @@ ROLES
 - En pasaje, un rol escrito junto a una persona afecta solamente a esa persona, no a toda la fila.
 - Si una persona de pasaje lleva PSM, OPS, TKT o LL entre paréntesis, conserva ese rol para esa persona, pero mantiene seccion="pasaje".
 - Convierte silenciosamente TKD a TKT. En el JSON final solo debe aparecer TKT.
-- Para una restricción horaria mixta, usa el formato "CSA (HH:MM-HH:MM TKT)" y deja limpio el nombre.
+- Distingue un rol completo de un rol mixto por la presencia de horas dentro del paréntesis.
+- Rol completo sin horas, ejemplo "LAURA G (OPS)": rol="OPS" durante toda la jornada.
+- Rol mixto con horas, ejemplo "MÍRIAM (OPS 12:30-17)" y jornada general 10:00-17:00: rol="CSA (12:30-17:00 OPS)".
+- Fuera del intervalo mixto la persona conserva su rol base CSA; dentro del intervalo realiza el rol indicado y no está disponible para embarques.
+- Reconoce tanto "(OPS 12:30-17)" como "(12:30-17 OPS)".
+- Normaliza horas incompletas: "17" se convierte en "17:00".
+- Usa siempre el formato canónico "CSA (HH:MM-HH:MM ROL)" para cualquier restricción mixta, incluyendo OPS, TKT, PSM, LL, SICK, CURSO u otros roles visibles.
+- Nunca elimines el intervalo de una anotación mixta y nunca conviertas una anotación con horas en un rol completo.
+- Deja el nombre limpio, sin el rol ni las horas entre paréntesis.
 
 FECHA
 - Prioriza la fecha manuscrita visible, aunque esté fuera de la tabla.
@@ -1193,10 +1301,13 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                     )
                 agent["horario"] = normalized_schedule
 
-                role = str(agent.get("rol") or "").upper().strip().replace("TKD", "TKT")
+                role, mixed_interval = normalize_mixed_role(agent.get("rol") or "")
                 if not role:
                     raise ValueError(f"El agente {index} no tiene rol.")
-                agent["rol"] = role
+                if mixed_interval is None and ("(" in role or ")" in role):
+                    raise ValueError(
+                        f"Restricción mixta incompleta o no reconocida para {name}: {role}."
+                    )
 
                 section = str(agent.get("seccion") or "").lower().strip()
                 if section not in allowed_sections:
@@ -1205,6 +1316,25 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                     raise ValueError(
                         f"El agente de oficina {name} no puede tener rol CSA."
                     )
+                if mixed_interval is not None:
+                    if section != "pasaje":
+                        raise ValueError(
+                            f"La restricción mixta de {name} debe pertenecer a pasaje."
+                        )
+                    restriction_start, restriction_end, restricted_role = mixed_interval
+                    if restricted_role not in ROLES_NO_EMBARCAN:
+                        raise ValueError(
+                            f"Rol restringido no reconocido para {name}: {restricted_role}."
+                        )
+                    if not mixed_interval_is_within_schedule(
+                        normalized_schedule, restriction_start, restriction_end
+                    ):
+                        raise ValueError(
+                            f"La restricción {restriction_start}-{restriction_end} de {name} "
+                            f"queda fuera de su jornada {normalized_schedule}."
+                        )
+
+                agent["rol"] = role
                 agent["seccion"] = section
 
                 shift = str(agent.get("turno") or "").lower().strip()
