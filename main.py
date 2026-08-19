@@ -968,9 +968,9 @@ async def extract_data(
         import pypdf
         from openai import OpenAI
         
-        # Un único intento debe finalizar antes del límite de tres minutos del navegador.
+        # La extracción completa debe finalizar antes del límite de tres minutos y medio del navegador.
         # Desactivamos los reintentos internos del SDK para evitar esperas ocultas.
-        client = OpenAI(api_key=api_key, timeout=110.0, max_retries=0)
+        client = OpenAI(api_key=api_key, timeout=120.0, max_retries=0)
 
         user_content_blocks = []
         text_payloads = []
@@ -1491,7 +1491,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         if document_type == "agents":
             verification_completed = False
             elapsed = time.monotonic() - request_started
-            remaining_budget = 165.0 - elapsed
+            remaining_budget = 195.0 - elapsed
 
             if remaining_budget < 25.0:
                 verification_warning = (
@@ -1561,7 +1561,7 @@ REGLAS
                         ),
                     })
 
-                    verification_timeout = min(50.0, max(15.0, remaining_budget - 5.0))
+                    verification_timeout = min(60.0, max(15.0, remaining_budget - 5.0))
                     verification_client = client.with_options(
                         timeout=verification_timeout,
                         max_retries=0,

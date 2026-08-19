@@ -1059,11 +1059,11 @@ async function uploadFileToBackend(files, type) {
     formData.append('files', files[i]);
   }
 
-  // Límite máximo visible para una extracción: tres minutos.
+  // Límite máximo visible para una extracción con doble revisión: tres minutos y medio.
   const extractionController = new AbortController();
   const extractionTimeoutId = setTimeout(() => {
     extractionController.abort();
-  }, 180000);
+  }, 210000);
 
   try {
     const response = await fetch(`${backendUrl}/extract?model=${selectedModel}&type=${type}`, {
@@ -1184,7 +1184,7 @@ async function uploadFileToBackend(files, type) {
   } catch (error) {
     clearTimeout(extractionTimeoutId);
     const displayedError = error && error.name === 'AbortError'
-      ? new Error('La extracción superó el tiempo máximo de 3 minutos.')
+      ? new Error('La extracción superó el tiempo máximo de 3 minutos y 30 segundos.')
       : error;
     console.error('La extracción no se completó:', displayedError);
 
