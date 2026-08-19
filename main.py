@@ -1243,7 +1243,8 @@ ESQUEMA EXACTO
       "horario": "04:15-14:15",
       "rol": "DSM",
       "seccion": "oficina",
-      "turno": "mañana"
+      "turno": "mañana",
+      "personas_en_fila": 1
     }
   ],
   "incertidumbres": []
@@ -1255,6 +1256,7 @@ CAMPOS OBLIGATORIOS DE CADA AGENTE
 - rol: rol final de esa persona.
 - seccion: exclusivamente "oficina" o "pasaje".
 - turno: exclusivamente "mañana" o "tarde".
+- personas_en_fila: número total de personas visibles en la fila fuente original. Repite el mismo número en todos los objetos procedentes de esa fila.
 
 ESTRUCTURA DEL DOCUMENTO
 1. La columna izquierda corresponde a "mañana" y la derecha a "tarde".
@@ -1264,15 +1266,18 @@ ESTRUCTURA DEL DOCUMENTO
 
 UNA PERSONA POR OBJETO
 - Si una fila contiene varios nombres, crea un objeto separado para cada nombre.
+- Cuenta las personas de la fila antes de separarlas y guarda ese total en personas_en_fila para cada objeto resultante.
 - El campo nombre nunca puede contener comas, "//" ni barras usadas como separadores de personas.
 - Un rol escrito junto a una persona afecta solo a esa persona, no a las demás de la fila.
 Ejemplo fuente: "SUSANA, AMINA, EMI (TKD)" con "09:00-16:00".
 Resultado: SUSANA=CSA, AMINA=CSA y EMI=TKT; tres objetos separados con el mismo horario.
 
 ASIGNACIÓN DE HORARIOS
-- Oficina: cada persona tiene siempre un único tramo individual; en oficina nunca existen turnos partidos.
-- Oficina: si hay varios horarios y varios nombres en una misma fila, empareja estrictamente por posición. Primer horario con primera persona, segundo horario con segunda persona.
-- Oficina: nunca copies los dos horarios de una fila a una misma persona. Ejemplo: "15:00-18:30 / 18:15-02:15" con "PAULA N / MELODIA (LL)" significa PAULA N=15:00-18:30 y MELODIA=18:15-02:15, ambas LL.
+- Oficina con UNA sola persona en la fila: puede tener un horario continuo o un turno partido de dos tramos. En ambos casos usa personas_en_fila=1.
+- Ejemplo válido de oficina: "07:15-09:00 / 13:00-15:15" con "SANDRA M (LL)" produce un único objeto para SANDRA M, conserva los dos tramos completos y usa personas_en_fila=1.
+- Oficina con VARIAS personas en la fila y varios horarios: empareja estrictamente por posición. Primer horario con primera persona, segundo horario con segunda persona. Cada objeto debe indicar el total real en personas_en_fila.
+- Ejemplo de oficina con dos personas: "15:00-18:30 / 18:15-02:15" con "PAULA N / MELODIA (LL)" significa PAULA N=15:00-18:30 y MELODIA=18:15-02:15, ambas LL y personas_en_fila=2. Nunca copies los dos horarios a una misma persona.
+- Oficina con varias personas y un único horario: repite el horario para cada persona e indica el total en personas_en_fila.
 - Pasaje: si varios nombres comparten una fila con un solo horario, repite ese horario para cada persona.
 - Pasaje: si el horario tiene dos tramos separados por "/" o "//", es un turno partido completo. Repite los dos tramos completos para cada persona de esa fila.
 - Normaliza el separador del turno partido como " / ", sin perder ningún tramo.
@@ -1341,7 +1346,9 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 
             allowed_sections = {"oficina", "pasaje"}
             allowed_shifts = {"mañana", "tarde"}
-            required_fields = {"nombre", "horario", "rol", "seccion", "turno"}
+            required_fields = {
+                "nombre", "horario", "rol", "seccion", "turno", "personas_en_fila"
+            }
             issues = []
 
             for index, agent in enumerate(agents):
@@ -1360,6 +1367,17 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                     raise ValueError(
                         f"El agente {index + 1} contiene varios nombres: {name}."
                     )
+                try:
+                    people_in_source_row = int(agent.get("personas_en_fila"))
+                except (TypeError, ValueError):
+                    raise ValueError(
+                        f"personas_en_fila inválido en el agente {index + 1}."
+                    )
+                if people_in_source_row < 1 or people_in_source_row > 50:
+                    raise ValueError(
+                        f"personas_en_fila fuera de rango en el agente {index + 1}."
+                    )
+                agent["personas_en_fila"] = people_in_source_row
 
                 agent_errors = []
                 agent["_validation_errors"] = agent_errors
@@ -1416,10 +1434,14 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                     raise ValueError(f"Sección inválida en el agente {index + 1}.")
                 if section == "oficina" and role.startswith("CSA"):
                     add_issue("rol", "Un agente de oficina no puede tener rol CSA.")
-                if section == "oficina" and " / " in normalized_schedule:
+                if (
+                    section == "oficina"
+                    and people_in_source_row > 1
+                    and " / " in normalized_schedule
+                ):
                     add_issue(
                         "horario",
-                        "Oficina debe tener un único tramo individual; revisa el emparejamiento por posición.",
+                        "La fila de oficina contiene varias personas; sus horarios deben asignarse individualmente por posición.",
                     )
 
                 if mixed_interval is not None:
@@ -1626,6 +1648,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                             "horario_actual": agent["horario"],
                             "seccion": agent["seccion"],
                             "turno": agent["turno"],
+                            "personas_en_fila": agent["personas_en_fila"],
                             "alertas": agent.get("_validation_errors", []),
                         }
                         for index, agent in enumerate(extracted_agents)
@@ -1645,7 +1668,8 @@ TAREA
 - No cambies nombres, roles, secciones ni turnos.
 - Conserva el horario actual salvo que la diferencia sea claramente visible.
 - Si varias personas comparten una misma celda, revisa y corrige a cada una de ellas.
-- Oficina siempre tiene un único tramo por persona.
+- Oficina con personas_en_fila=1 puede tener uno o dos tramos; conserva el turno partido si es visible.
+- Oficina con personas_en_fila>1 debe tener los horarios individuales emparejados por posición, no un turno partido copiado a cada persona.
 - En pasaje, conserva completos los turnos partidos cuando realmente existan.
 - Normaliza como HH:MM-HH:MM o HH:MM-HH:MM / HH:MM-HH:MM.
 
@@ -1751,7 +1775,11 @@ REGLAS
                                 continue
                             if corrected_minutes is None or corrected_minutes > 600:
                                 continue
-                            if agent.get("seccion") == "oficina" and " / " in corrected_schedule:
+                            if (
+                                agent.get("seccion") == "oficina"
+                                and int(agent.get("personas_en_fila") or 1) > 1
+                                and " / " in corrected_schedule
+                            ):
                                 continue
                             if corrected_schedule == current_schedule:
                                 continue
@@ -1813,6 +1841,7 @@ REGLAS
                     "horario": agent["horario"],
                     "rol": agent["rol"],
                     "seccion": agent["seccion"],
+                    "source_row_people": agent["personas_en_fila"],
                     "validation_errors": agent.get("_validation_errors", []),
                 }
                 turno = str(agent["turno"]).lower().strip()
@@ -1878,6 +1907,7 @@ REGLAS
                             "role": role_upper,
                             "type": agent_type,
                             "shift": shift_name,
+                            "source_row_people": int(item.get("source_row_people") or 1),
                             "validation_errors": item.get("validation_errors", []),
                         })
                     else:

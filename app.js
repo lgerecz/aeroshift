@@ -97,7 +97,9 @@ function normalizeAgents(agentsList) {
       airline: a.airline || '',
       inicio: inicio,
       fin: fin,
-      bloque2: bloque2
+      bloque2: bloque2,
+      source_row_people: Math.max(1, Number(a.source_row_people || 1)),
+      validation_errors: Array.isArray(a.validation_errors) ? a.validation_errors : []
     };
   });
 }
@@ -1099,6 +1101,7 @@ async function uploadFileToBackend(files, type) {
             shift: a.shift || 'mañana',
             espec: a.espec || [],
             excluir: a.excluir || false,
+            source_row_people: Math.max(1, Number(a.source_row_people || 1)),
             validation_errors: Array.isArray(a.validation_errors) ? a.validation_errors : []
           };
         });
@@ -1327,8 +1330,9 @@ function validateAgentForImport(agent) {
     errors.push('Formato de horario inválido.');
     return errors;
   }
-  if (type === 'admin' && segments.length > 1) {
-    errors.push('Oficina debe tener un único tramo individual.');
+  const sourceRowPeople = Math.max(1, Number(agent.source_row_people || 1));
+  if (type === 'admin' && sourceRowPeople > 1 && segments.length > 1) {
+    errors.push('La fila de oficina contiene varias personas; asigna un horario individual a cada una.');
   }
 
   let totalMinutes = 0;
