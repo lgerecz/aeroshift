@@ -1098,7 +1098,8 @@ async function uploadFileToBackend(files, type) {
             type: a.type || 'pasaje',
             shift: a.shift || 'mañana',
             espec: a.espec || [],
-            excluir: a.excluir || false
+            excluir: a.excluir || false,
+            validation_errors: Array.isArray(a.validation_errors) ? a.validation_errors : []
           };
         });
         extractedData.agents = newAgents;
@@ -1166,6 +1167,15 @@ async function uploadFileToBackend(files, type) {
           
           if (!data.is_real_ai) {
             alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
+          } else if (type === 'agents' && Number(data.validation_issue_count || 0) > 0) {
+            const verificationNote = data.verification_completed === false
+              ? `\n\n${data.verification_warning || 'La segunda verificación no pudo completarse.'}`
+              : '';
+            alert(
+              'Aviso: hay turnos pendientes de revisión.\n\n' +
+              (data.validation_warning || 'Corrige las filas marcadas antes de importar.') +
+              verificationNote
+            );
           } else if (type === 'agents' && data.verification_completed === false) {
             alert(
               'Aviso de verificación:\n\n' +
@@ -1235,6 +1245,28 @@ function validateUploadedData() {
     return;
   }
 
+  if (extractedData && Array.isArray(extractedData.agents)) {
+    const pendingAgents = [];
+    extractedData.agents.forEach(agent => {
+      agent.validation_errors = validateAgentForImport(agent);
+      if (agent.validation_errors.length > 0) pendingAgents.push(agent);
+    });
+    if (pendingAgents.length > 0) {
+      renderDetectedAgents();
+      const details = pendingAgents.slice(0, 12).map(agent =>
+        `- ${agent.name}: ${agent.validation_errors.join(' ')}`
+      ).join('\n');
+      const extra = pendingAgents.length > 12
+        ? `\n- Y ${pendingAgents.length - 12} fila(s) más.`
+        : '';
+      alert(
+        'No se pueden importar los turnos todavía.\n\n' +
+        'Corrige las filas marcadas en rojo:\n' + details + extra
+      );
+      return;
+    }
+  }
+
   // Overwrite the daily flights list for simulation
   if (extractedData) {
     state.agents = normalizeAgents(extractedData.agents);
@@ -1277,6 +1309,60 @@ function validateUploadedData() {
   setTimeout(() => {
     alert('¡Excelente!\nLos datos detectados por la IA se han cargado de forma impecable.\n\nTodos los vuelos importados aparecen en "Sin Asignar" en tu cuadrante de hoy. Puedes arrastrarlos manualmente a los agentes correspondientes, o pulsar "Asistente IA" en la cabecera para resolver toda la distribución usando OR-Tools en un clic.');
   }, 100);
+}
+
+function validateAgentForImport(agent) {
+  const errors = [];
+  const schedule = String(agent.hours || '').trim().replace(/–|—/g, '-').replace(/\/\//g, '/');
+  const role = String(agent.role || agent.rol || '').trim().toUpperCase();
+  const type = String(agent.type || '').trim().toLowerCase();
+
+  if (!schedule || schedule.toUpperCase() === 'ILEGIBLE') {
+    errors.push('Horario vacío o ilegible.');
+    return errors;
+  }
+
+  const segments = schedule.split('/').map(s => s.trim()).filter(Boolean);
+  if (segments.length < 1 || segments.length > 2) {
+    errors.push('Formato de horario inválido.');
+    return errors;
+  }
+  if (type === 'admin' && segments.length > 1) {
+    errors.push('Oficina debe tener un único tramo individual.');
+  }
+
+  let totalMinutes = 0;
+  const pattern = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/;
+  for (const segment of segments) {
+    const match = segment.match(pattern);
+    if (!match) {
+      errors.push(`Formato de horario inválido: ${segment}.`);
+      continue;
+    }
+    const sh = Number(match[1]);
+    const sm = Number(match[2]);
+    const eh = Number(match[3]);
+    const em = Number(match[4]);
+    if (sh > 23 || eh > 23 || sm > 59 || em > 59) {
+      errors.push(`Hora fuera de rango: ${segment}.`);
+      continue;
+    }
+    const start = sh * 60 + sm;
+    let end = eh * 60 + em;
+    if (end < start) end += 1440;
+    const duration = end - start;
+    if (duration <= 0) errors.push(`Tramo de duración nula: ${segment}.`);
+    totalMinutes += Math.max(0, duration);
+  }
+
+  if (totalMinutes > 600) {
+    errors.push(`Jornada superior a 10 horas (${totalMinutes} minutos).`);
+  }
+  if (!role) errors.push('Rol vacío o ilegible.');
+  if (type === 'admin' && role.startsWith('CSA')) {
+    errors.push('Un agente de oficina no puede tener rol CSA.');
+  }
+  return [...new Set(errors)];
 }
 
 // Render Agents Table
@@ -1331,6 +1417,18 @@ function renderDetectedAgents() {
           </td>
         </tr>`;
     } else {
+      const validationErrors = Array.isArray(a.validation_errors) ? a.validation_errors : [];
+      const hasValidationError = validationErrors.length > 0;
+      const validationTitle = escapeHtml(validationErrors.join(' | ')).replace(/"/g, '&quot;');
+      const rowStyle = hasValidationError
+        ? 'border-bottom:1px solid #7f1d1d; background:rgba(239,68,68,0.13);'
+        : 'border-bottom:1px solid #1f1f1f; transition:background 0.15s;';
+      const hoverAttrs = hasValidationError
+        ? ''
+        : `onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'"`;
+      const warningBadge = hasValidationError
+        ? `<span title="${validationTitle}" style="color:#ef4444; margin-left:7px; font-weight:bold; cursor:help;">⚠ REVISAR</span>`
+        : '';
       const especValue = (a.espec && a.espec.length > 0) ? a.espec[0] : '';
       // Only show the dropdown for non-admin agents (CSA pasajes)
       const selectHtml = a.type === 'admin' ? '<span style="color:#555;">—</span>' : `
@@ -1348,9 +1446,9 @@ function renderDetectedAgents() {
       `;
 
       return `
-        <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
+        <tr style="${rowStyle}" ${hoverAttrs}>
           <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
-          <td style="padding: 10px 8px; color: #a0a0a0;">${escapeHtml(a.hours)}</td>
+          <td style="padding: 10px 8px; color: ${hasValidationError ? '#fca5a5' : '#a0a0a0'};">${escapeHtml(a.hours)}${warningBadge}</td>
           <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
           <td style="padding: 10px 8px; text-align: center;">${selectHtml}</td>
           <td style="padding: 10px 8px; text-align: center;">${checkboxHtml}</td>
@@ -1456,9 +1554,18 @@ function saveEditAgent(id) {
 
   const agentIndex = extractedData.agents.findIndex(a => a.id === id);
   if (agentIndex !== -1) {
-    extractedData.agents[agentIndex].name = name;
-    extractedData.agents[agentIndex].hours = hours;
-    extractedData.agents[agentIndex].role = role;
+    const agent = extractedData.agents[agentIndex];
+    agent.name = name;
+    agent.hours = hours;
+    agent.role = role;
+    agent.rol = role;
+    agent.validation_errors = validateAgentForImport(agent);
+    if (agent.validation_errors.length > 0) {
+      alert(
+        'La fila se ha guardado, pero todavía necesita revisión:\n\n' +
+        agent.validation_errors.join('\n')
+      );
+    }
   }
 
   editingAgentId = null;

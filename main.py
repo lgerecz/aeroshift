@@ -1326,7 +1326,11 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         selected_model = (model or "gpt-5.6-luna").strip()
         models_to_try = [selected_model]
 
-        def validate_turns_json(data: Any) -> None:
+        def validate_turns_json(data: Any) -> list[dict]:
+            """
+            Valida la estructura y anota problemas recuperables por agente.
+            Solo los errores estructurales impiden continuar la extracción.
+            """
             if not isinstance(data, dict):
                 raise ValueError("La respuesta de turnos no es un objeto JSON.")
             if not isinstance(data.get("fecha"), str):
@@ -1338,82 +1342,125 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
             allowed_sections = {"oficina", "pasaje"}
             allowed_shifts = {"mañana", "tarde"}
             required_fields = {"nombre", "horario", "rol", "seccion", "turno"}
-            for index, agent in enumerate(agents, 1):
+            issues = []
+
+            for index, agent in enumerate(agents):
                 if not isinstance(agent, dict):
-                    raise ValueError(f"El agente {index} no es un objeto JSON.")
+                    raise ValueError(f"El agente {index + 1} no es un objeto JSON.")
                 missing = required_fields - set(agent)
                 if missing:
                     raise ValueError(
-                        f"Al agente {index} le faltan campos: {sorted(missing)}."
+                        f"Al agente {index + 1} le faltan campos: {sorted(missing)}."
                     )
+
                 name = str(agent.get("nombre") or "").strip()
                 if not name:
-                    raise ValueError(f"El agente {index} no tiene nombre.")
+                    raise ValueError(f"El agente {index + 1} no tiene nombre.")
                 if "," in name or "/" in name:
                     raise ValueError(
-                        f"El agente {index} contiene varios nombres: {name}."
+                        f"El agente {index + 1} contiene varios nombres: {name}."
                     )
+
+                agent_errors = []
+                agent["_validation_errors"] = agent_errors
+
+                def add_issue(field: str, message: str) -> None:
+                    agent_errors.append(message)
+                    issues.append({
+                        "indice": index,
+                        "nombre": name,
+                        "campo": field,
+                        "mensaje": message,
+                    })
+
                 schedule = str(agent.get("horario") or "").strip()
                 if not schedule:
-                    raise ValueError(f"El agente {index} no tiene horario.")
-                normalized_schedule, work_minutes = normalize_and_measure_schedule(schedule)
+                    normalized_schedule = "ILEGIBLE"
+                    work_minutes = None
+                    add_issue("horario", "Horario vacío o ilegible.")
+                else:
+                    try:
+                        normalized_schedule, work_minutes = normalize_and_measure_schedule(schedule)
+                    except Exception:
+                        normalized_schedule = schedule.upper()
+                        work_minutes = None
+                        add_issue(
+                            "horario",
+                            f"Formato de horario pendiente de revisión: {schedule}.",
+                        )
                 if work_minutes is not None and work_minutes > 600:
-                    raise ValueError(
-                        f"Jornada imposible superior a 10 horas para {name}: "
-                        f"{normalized_schedule} ({work_minutes} minutos)."
+                    add_issue(
+                        "horario",
+                        f"Jornada superior a 10 horas: {normalized_schedule} "
+                        f"({work_minutes} minutos).",
                     )
                 agent["horario"] = normalized_schedule
 
-                role, mixed_interval = normalize_mixed_role(agent.get("rol") or "")
+                try:
+                    role, mixed_interval = normalize_mixed_role(agent.get("rol") or "")
+                except Exception:
+                    role = str(agent.get("rol") or "ILEGIBLE").upper().strip()
+                    mixed_interval = None
+                    add_issue("rol", f"Rol pendiente de revisión: {role}.")
                 if not role:
-                    raise ValueError(f"El agente {index} no tiene rol.")
+                    role = "ILEGIBLE"
+                    add_issue("rol", "Rol vacío o ilegible.")
                 if mixed_interval is None and ("(" in role or ")" in role):
-                    raise ValueError(
-                        f"Restricción mixta incompleta o no reconocida para {name}: {role}."
+                    add_issue(
+                        "rol",
+                        f"Restricción mixta incompleta o no reconocida: {role}.",
                     )
 
                 section = str(agent.get("seccion") or "").lower().strip()
                 if section not in allowed_sections:
-                    raise ValueError(f"Sección inválida en el agente {index}.")
+                    raise ValueError(f"Sección inválida en el agente {index + 1}.")
                 if section == "oficina" and role.startswith("CSA"):
-                    raise ValueError(
-                        f"El agente de oficina {name} no puede tener rol CSA."
-                    )
+                    add_issue("rol", "Un agente de oficina no puede tener rol CSA.")
                 if section == "oficina" and " / " in normalized_schedule:
-                    raise ValueError(
-                        f"El agente de oficina {name} tiene dos tramos, pero los "
-                        "horarios de oficina deben asignarse individualmente por posición."
+                    add_issue(
+                        "horario",
+                        "Oficina debe tener un único tramo individual; revisa el emparejamiento por posición.",
                     )
-                if mixed_interval is not None:
-                    if section != "pasaje":
-                        raise ValueError(
-                            f"La restricción mixta de {name} debe pertenecer a pasaje."
-                        )
-                    restriction_start, restriction_end, restricted_role = mixed_interval
-                    if restricted_role not in ROLES_NO_EMBARCAN:
-                        raise ValueError(
-                            f"Rol restringido no reconocido para {name}: {restricted_role}."
-                        )
-                    if not mixed_interval_is_within_schedule(
-                        normalized_schedule, restriction_start, restriction_end
-                    ):
-                        raise ValueError(
-                            f"La restricción {restriction_start}-{restriction_end} de {name} "
-                            f"queda fuera de su jornada {normalized_schedule}."
-                        )
 
-                agent["rol"] = role
-                agent["seccion"] = section
+                if mixed_interval is not None:
+                    restriction_start, restriction_end, restricted_role = mixed_interval
+                    if section != "pasaje":
+                        add_issue(
+                            "rol",
+                            "Una restricción mixta debe pertenecer a un agente de pasaje.",
+                        )
+                    if restricted_role not in ROLES_NO_EMBARCAN:
+                        add_issue(
+                            "rol",
+                            f"Rol restringido no reconocido: {restricted_role}.",
+                        )
+                    try:
+                        interval_is_valid = mixed_interval_is_within_schedule(
+                            normalized_schedule, restriction_start, restriction_end
+                        )
+                    except Exception:
+                        interval_is_valid = False
+                    if not interval_is_valid:
+                        add_issue(
+                            "rol",
+                            f"La restricción {restriction_start}-{restriction_end} queda fuera de la jornada {normalized_schedule}.",
+                        )
 
                 shift = str(agent.get("turno") or "").lower().strip()
                 if shift not in allowed_shifts:
-                    raise ValueError(f"Turno inválido en el agente {index}.")
+                    raise ValueError(f"Turno inválido en el agente {index + 1}.")
+
+                agent["rol"] = role
+                agent["seccion"] = section
                 agent["turno"] = shift
+
+            return issues
 
         parsed_result = None
         extracted_model_name = ""
         errors = []
         first_extraction_seconds = None
+        first_validation_issues = []
 
         for model_name in models_to_try:
             try:
@@ -1514,7 +1561,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 # Un JSON sintácticamente válido también debe cumplir el esquema
                 # del tipo de documento solicitado antes de detener la cascada.
                 if document_type == "agents":
-                    validate_turns_json(parsed_result)
+                    first_validation_issues = validate_turns_json(parsed_result)
 
                 first_extraction_seconds = round(
                     time.monotonic() - first_call_started, 2
@@ -1579,6 +1626,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                             "horario_actual": agent["horario"],
                             "seccion": agent["seccion"],
                             "turno": agent["turno"],
+                            "alertas": agent.get("_validation_errors", []),
                         }
                         for index, agent in enumerate(extracted_agents)
                     ]
@@ -1590,6 +1638,8 @@ Las imágenes son vistas complementarias del mismo documento: tabla completa, ma
 
 TAREA
 - Revisa visualmente, una por una, TODAS las personas de la lista.
+- Revisa primero y con máxima atención las personas cuyo campo alertas no esté vacío.
+- Una alerta matemática no confirma el valor correcto: vuelve a leer los dígitos en la imagen.
 - Compara exclusivamente horario_actual con la celda correspondiente de la imagen.
 - Presta especial atención a los dígitos de la hora de salida.
 - No cambies nombres, roles, secciones ni turnos.
@@ -1736,6 +1786,17 @@ REGLAS
                         "la segunda verificación de horarios. Revisa los horarios antes de importar."
                     )
 
+        final_validation_issues = []
+        validation_warning = ""
+        if document_type == "agents":
+            # Se vuelve a validar después de aplicar las correcciones de la segunda lectura.
+            final_validation_issues = validate_turns_json(parsed_result)
+            if final_validation_issues:
+                validation_warning = (
+                    f"Quedan {len(final_validation_issues)} incidencias pendientes. "
+                    "Corrige las filas marcadas antes de validar e importar."
+                )
+
         extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
         if not extracted_date or extracted_date.strip() == "":
             extracted_date = "Fecha no detectada"
@@ -1752,6 +1813,7 @@ REGLAS
                     "horario": agent["horario"],
                     "rol": agent["rol"],
                     "seccion": agent["seccion"],
+                    "validation_errors": agent.get("_validation_errors", []),
                 }
                 turno = str(agent["turno"]).lower().strip()
                 if turno == "mañana":
@@ -1815,7 +1877,8 @@ REGLAS
                             "hours": hours_raw,
                             "role": role_upper,
                             "type": agent_type,
-                            "shift": shift_name
+                            "shift": shift_name,
+                            "validation_errors": item.get("validation_errors", []),
                         })
                     else:
                         # Múltiples agentes en la misma fila (como AgenteA, AgenteB o AgenteC / AgenteD)
@@ -1880,6 +1943,9 @@ REGLAS
             "verification_completed": verification_completed,
             "verification_corrections": verification_corrections,
             "verification_warning": verification_warning,
+            "validation_issues": final_validation_issues,
+            "validation_issue_count": len(final_validation_issues),
+            "validation_warning": validation_warning,
             "first_extraction_seconds": first_extraction_seconds,
             "verification_seconds": verification_seconds,
             "total_backend_seconds": total_backend_seconds,
