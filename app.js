@@ -1059,13 +1059,20 @@ async function uploadFileToBackend(files, type) {
     formData.append('files', files[i]);
   }
 
+  // Límite máximo visible para una extracción: tres minutos.
+  const extractionController = new AbortController();
+  const extractionTimeoutId = setTimeout(() => {
+    extractionController.abort();
+  }, 180000);
+
   try {
     const response = await fetch(`${backendUrl}/extract?model=${selectedModel}&type=${type}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiKey}`
       },
-      body: formData
+      body: formData,
+      signal: extractionController.signal
     });
 
     if (!response.ok) {
@@ -1073,6 +1080,7 @@ async function uploadFileToBackend(files, type) {
     }
 
     const data = await response.json();
+    clearTimeout(extractionTimeoutId);
     if (data.success) {
       // Ensure extractedData is initialized
       if (!extractedData) {
@@ -1163,12 +1171,16 @@ async function uploadFileToBackend(files, type) {
       throw new Error(data.message || 'El servicio de Visión no devolvió un set de datos de éxito.');
     }
   } catch (error) {
-    console.error('La extracción no se completó:', error);
+    clearTimeout(extractionTimeoutId);
+    const displayedError = error && error.name === 'AbortError'
+      ? new Error('La extracción superó el tiempo máximo de 3 minutos.')
+      : error;
+    console.error('La extracción no se completó:', displayedError);
 
     clearInterval(interval);
     progress.style.width = '100%';
     status.textContent = 'ERROR DE EXTRACCIÓN';
-    sub.textContent = error.message || 'No se pudieron extraer los datos.';
+    sub.textContent = displayedError.message || 'No se pudieron extraer los datos.';
 
     // No se cargan agentes ni vuelos ficticios. Conservamos intactos los
     // datos que el usuario ya tuviera antes de esta operación fallida.
@@ -1176,7 +1188,7 @@ async function uploadFileToBackend(files, type) {
       modal.classList.remove('active');
       alert(
         'La extracción por IA no se completó.\n\n' +
-        (error.message || 'Error desconocido del servidor.')
+        (displayedError.message || 'Error desconocido del servidor.')
       );
     }, 500);
   }

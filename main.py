@@ -966,7 +966,9 @@ async def extract_data(
         import pypdf
         from openai import OpenAI
         
-        client = OpenAI(api_key=api_key)
+        # Un único intento debe finalizar antes del límite de tres minutos del navegador.
+        # Desactivamos los reintentos internos del SDK para evitar esperas ocultas.
+        client = OpenAI(api_key=api_key, timeout=150.0, max_retries=0)
 
         user_content_blocks = []
         text_payloads = []
@@ -1201,7 +1203,9 @@ Ejemplo fuente: "SUSANA, AMINA, EMI (TKD)" con "09:00-16:00".
 Resultado: SUSANA=CSA, AMINA=CSA y EMI=TKT; tres objetos separados con el mismo horario.
 
 ASIGNACIÓN DE HORARIOS
-- Oficina: si hay varios horarios individuales y varios nombres, empareja por posición. Primer horario con primera persona, segundo horario con segunda persona.
+- Oficina: cada persona tiene siempre un único tramo individual; en oficina nunca existen turnos partidos.
+- Oficina: si hay varios horarios y varios nombres en una misma fila, empareja estrictamente por posición. Primer horario con primera persona, segundo horario con segunda persona.
+- Oficina: nunca copies los dos horarios de una fila a una misma persona. Ejemplo: "15:00-18:30 / 18:15-02:15" con "PAULA N / MELODIA (LL)" significa PAULA N=15:00-18:30 y MELODIA=18:15-02:15, ambas LL.
 - Pasaje: si varios nombres comparten una fila con un solo horario, repite ese horario para cada persona.
 - Pasaje: si el horario tiene dos tramos separados por "/" o "//", es un turno partido completo. Repite los dos tramos completos para cada persona de esa fila.
 - Normaliza el separador del turno partido como " / ", sin perder ningún tramo.
@@ -1249,19 +1253,11 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 - No incluyas vuelos, tipo_elemento, títulos, observaciones ni campos distintos de los definidos en el esquema.
 """.strip()
 
-        # Se intenta primero el modelo elegido en la web. Si falla, se sigue
-        # la cascada acordada, sin repetir modelos.
+        # Se utiliza exclusivamente el modelo elegido en la web. Si falla, el
+        # usuario puede reintentarlo manualmente o seleccionar otro modelo.
+        # Evitamos una cascada automática que podía superar los siete minutos.
         selected_model = (model or "gpt-5.6-luna").strip()
-        fallback_order = [
-            "gpt-5.6-luna",
-            "gpt-5.6-nano",
-            "gpt-5.4-mini",
-            "gpt-5.1",
-            "gpt-5.2",
-        ]
-        models_to_try = [selected_model] + [
-            candidate for candidate in fallback_order if candidate != selected_model
-        ]
+        models_to_try = [selected_model]
 
         def validate_turns_json(data: Any) -> None:
             if not isinstance(data, dict):
@@ -1315,6 +1311,11 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 if section == "oficina" and role.startswith("CSA"):
                     raise ValueError(
                         f"El agente de oficina {name} no puede tener rol CSA."
+                    )
+                if section == "oficina" and " / " in normalized_schedule:
+                    raise ValueError(
+                        f"El agente de oficina {name} tiene dos tramos, pero los "
+                        "horarios de oficina deben asignarse individualmente por posición."
                     )
                 if mixed_interval is not None:
                     if section != "pasaje":
@@ -1370,19 +1371,22 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 except Exception as call_err:
                     err_msg = str(call_err).lower()
                     print(f"Ajuste defensivo para {model_name} por error: {call_err}")
-                    
-                    # 1. Si no soporta JSON mode, lo borramos
-                    if "response_format" in err_msg or "json" in err_msg:
+                    adjusted = False
+
+                    # Solo se reintenta si el servidor rechaza inmediatamente
+                    # un parámetro concreto. Un timeout o error de red no genera
+                    # una segunda llamada oculta.
+                    if "response_format" in err_msg or "json mode" in err_msg:
                         if "response_format" in params:
                             del params["response_format"]
-                            
-                    # 2. Si el modelo no soporta el razonamiento (reasoning_effort), lo borramos
-                    if "reasoning_effort" in err_msg or "unsupported_parameter" in err_msg or "parameter" in err_msg:
+                            adjusted = True
+
+                    if "reasoning_effort" in err_msg or "unsupported_parameter" in err_msg:
                         if "reasoning_effort" in params:
                             del params["reasoning_effort"]
-                            
-                    # 3. Si no soporta rol system, unimos prompts
-                    if "system" in err_msg or "role" in err_msg:
+                            adjusted = True
+
+                    if "system role" in err_msg or "unsupported role" in err_msg:
                         merged_content = [
                             {"type": "text", "text": f"INSTRUCCIONES DEL SISTEMA:\n{system_prompt}\n\n"}
                         ]
@@ -1390,12 +1394,13 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                             merged_content.extend(user_content_blocks)
                         else:
                             merged_content.append({"type": "text", "text": str(user_content_blocks)})
-                            
                         params["messages"] = [
                             {"role": "user", "content": merged_content}
                         ]
-                    
-                    # Reintento con parámetros limpios
+                        adjusted = True
+
+                    if not adjusted:
+                        raise
                     response = client.chat.completions.create(**params)
 
                 # Procesamiento y diagnóstico del resultado de este modelo.
@@ -1405,10 +1410,12 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 raw_result = choice.message.content
 
                 if not raw_result:
-                    usage_text = str(usage) if usage is not None else "no disponible"
+                    print(
+                        f"Respuesta vacía de {model_name}; finish_reason={finish_reason}; "
+                        f"usage={usage}"
+                    )
                     raise Exception(
-                        "El servidor OpenAI devolvió contenido vacío "
-                        f"(finish_reason={finish_reason}, usage={usage_text})."
+                        "El modelo no generó un resultado utilizable dentro del límite permitido."
                     )
 
                 raw_result = raw_result.strip()
@@ -1450,7 +1457,28 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 continue
 
         if parsed_result is None:
-            raise Exception(f"Ningún modelo del catálogo logró generar un JSON de rellenado decodificable. Historial de errores: {'; '.join(errors)}")
+            last_error = errors[-1].split(": ", 1)[-1] if errors else ""
+            lower_error = last_error.lower()
+            visible_validation_errors = (
+                "jornada imposible",
+                "tiene dos tramos",
+                "restricción mixta",
+                "queda fuera de su jornada",
+                "no puede tener rol csa",
+            )
+            if any(marker in lower_error for marker in visible_validation_errors):
+                public_error = last_error[:500]
+            elif "timeout" in lower_error or "timed out" in lower_error:
+                public_error = (
+                    "La extracción superó el tiempo máximo permitido. "
+                    "Puedes volver a intentarlo o elegir manualmente otro modelo."
+                )
+            else:
+                public_error = (
+                    "El modelo seleccionado no pudo generar una extracción válida. "
+                    "Puedes revisar la imagen y volver a intentarlo."
+                )
+            raise Exception(public_error)
 
         extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
         if not extracted_date or extracted_date.strip() == "":
