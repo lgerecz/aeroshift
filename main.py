@@ -6,6 +6,7 @@ import base64
 import sys
 import io
 import contextlib
+import time
 from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -943,6 +944,7 @@ async def extract_data(
     authorization: Optional[str] = Header(None),
 ):
     """Extrae turnos o vuelos mediante visión IA."""
+    request_started = time.monotonic()
     document_type = (document_type or "all").lower().strip()
     if document_type not in {"agents", "flights", "all"}:
         raise HTTPException(
@@ -968,7 +970,7 @@ async def extract_data(
         
         # Un único intento debe finalizar antes del límite de tres minutos del navegador.
         # Desactivamos los reintentos internos del SDK para evitar esperas ocultas.
-        client = OpenAI(api_key=api_key, timeout=150.0, max_retries=0)
+        client = OpenAI(api_key=api_key, timeout=110.0, max_retries=0)
 
         user_content_blocks = []
         text_payloads = []
@@ -1480,6 +1482,175 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 )
             raise Exception(public_error)
 
+        # Segunda lectura automática y especializada exclusivamente en horarios.
+        # Si falla, se conserva íntegramente la primera extracción.
+        verification_completed = None
+        verification_corrections = 0
+        verification_warning = ""
+
+        if document_type == "agents":
+            verification_completed = False
+            elapsed = time.monotonic() - request_started
+            remaining_budget = 165.0 - elapsed
+
+            if remaining_budget < 25.0:
+                verification_warning = (
+                    "La extracción principal se completó, pero no quedó tiempo "
+                    "suficiente para la segunda verificación de horarios."
+                )
+            else:
+                try:
+                    extracted_agents = parsed_result.get("agentes", [])
+                    verification_rows = [
+                        {
+                            "indice": index,
+                            "nombre": agent["nombre"],
+                            "horario_actual": agent["horario"],
+                            "seccion": agent["seccion"],
+                            "turno": agent["turno"],
+                        }
+                        for index, agent in enumerate(extracted_agents)
+                    ]
+
+                    verification_system_prompt = """
+Eres un verificador visual especializado exclusivamente en horarios laborales.
+Recibirás la imagen original y una lista numerada procedente de una primera extracción.
+
+TAREA
+- Revisa visualmente, una por una, TODAS las personas de la lista.
+- Compara exclusivamente horario_actual con la celda correspondiente de la imagen.
+- Presta especial atención a los dígitos de la hora de salida.
+- No cambies nombres, roles, secciones ni turnos.
+- Conserva el horario actual salvo que la diferencia sea claramente visible.
+- Si varias personas comparten una misma celda, revisa y corrige a cada una de ellas.
+- Oficina siempre tiene un único tramo por persona.
+- En pasaje, conserva completos los turnos partidos cuando realmente existan.
+- Normaliza como HH:MM-HH:MM o HH:MM-HH:MM / HH:MM-HH:MM.
+
+Devuelve exclusivamente este JSON:
+{
+  "total_revisados": 0,
+  "correcciones": [
+    {
+      "indice": 0,
+      "nombre": "BEGO",
+      "horario_actual": "05:00-15:00",
+      "horario_corregido": "05:00-13:00",
+      "confianza": "alta"
+    }
+  ]
+}
+
+REGLAS
+- total_revisados debe coincidir con el número total de personas recibidas.
+- Devuelve únicamente discrepancias claras.
+- Usa confianza="alta" solo cuando los dígitos sean claramente legibles.
+- Si no hay discrepancias, devuelve correcciones=[] con el total revisado.
+""".strip()
+
+                    verification_content = [
+                        block
+                        for block in user_content_blocks
+                        if isinstance(block, dict) and block.get("type") == "image_url"
+                    ]
+                    verification_content.append({
+                        "type": "text",
+                        "text": (
+                            "Lista de la primera extracción:\n"
+                            + json.dumps(verification_rows, ensure_ascii=False)
+                        ),
+                    })
+
+                    verification_timeout = min(50.0, max(15.0, remaining_budget - 5.0))
+                    verification_client = client.with_options(
+                        timeout=verification_timeout,
+                        max_retries=0,
+                    )
+                    verification_response = verification_client.chat.completions.create(
+                        model=selected_model,
+                        messages=[
+                            {"role": "system", "content": verification_system_prompt},
+                            {"role": "user", "content": verification_content},
+                        ],
+                        max_completion_tokens=6000,
+                        response_format={"type": "json_object"},
+                        reasoning_effort="high",
+                    )
+                    verification_raw = verification_response.choices[0].message.content
+                    if not verification_raw:
+                        raise ValueError("La segunda verificación devolvió contenido vacío.")
+                    verification_raw = verification_raw.strip()
+                    if verification_raw.startswith("```"):
+                        verification_raw = re.sub(
+                            r"^```(?:json)?\n", "", verification_raw, flags=re.IGNORECASE
+                        )
+                        verification_raw = re.sub(r"\n```$", "", verification_raw).strip()
+                    verification_result = json.loads(verification_raw)
+
+                    total_reviewed = verification_result.get("total_revisados")
+                    corrections = verification_result.get("correcciones")
+                    if total_reviewed != len(extracted_agents):
+                        raise ValueError(
+                            "La segunda verificación no confirmó todas las personas."
+                        )
+                    if not isinstance(corrections, list):
+                        raise ValueError("La segunda verificación no devolvió correcciones válidas.")
+
+                    used_indexes = set()
+                    for correction in corrections:
+                        try:
+                            if not isinstance(correction, dict):
+                                continue
+                            index = int(correction.get("indice"))
+                            if index in used_indexes or not 0 <= index < len(extracted_agents):
+                                continue
+                            if str(correction.get("confianza") or "").lower().strip() != "alta":
+                                continue
+
+                            agent = extracted_agents[index]
+                            expected_name = str(agent.get("nombre") or "").upper().strip()
+                            correction_name = str(correction.get("nombre") or "").upper().strip()
+                            if correction_name != expected_name:
+                                continue
+                            current_schedule = str(agent.get("horario") or "").strip()
+                            if str(correction.get("horario_actual") or "").strip() != current_schedule:
+                                continue
+
+                            corrected_schedule, corrected_minutes = normalize_and_measure_schedule(
+                                correction.get("horario_corregido")
+                            )
+                            if corrected_schedule == "ILEGIBLE":
+                                continue
+                            if corrected_minutes is None or corrected_minutes > 600:
+                                continue
+                            if agent.get("seccion") == "oficina" and " / " in corrected_schedule:
+                                continue
+                            if corrected_schedule == current_schedule:
+                                continue
+
+                            agent["horario"] = corrected_schedule
+                            used_indexes.add(index)
+                            verification_corrections += 1
+                        except Exception as correction_error:
+                            print(f"Corrección de horario descartada: {correction_error}")
+                            continue
+
+                    verification_completed = True
+                    print(
+                        "Segunda verificación completada: "
+                        f"{verification_corrections} correcciones aplicadas."
+                    )
+
+                except Exception as verification_error:
+                    print(
+                        "La segunda verificación de horarios no se completó: "
+                        f"{verification_error}"
+                    )
+                    verification_warning = (
+                        "La extracción principal se completó, pero no pudo finalizarse "
+                        "la segunda verificación de horarios. Revisa los horarios antes de importar."
+                    )
+
         extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
         if not extracted_date or extracted_date.strip() == "":
             extracted_date = "Fecha no detectada"
@@ -1620,6 +1791,9 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
             "requested_model": selected_model,
             "used_model": extracted_model_name,
             "used_fallback": extracted_model_name != selected_model,
+            "verification_completed": verification_completed,
+            "verification_corrections": verification_corrections,
+            "verification_warning": verification_warning,
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights,

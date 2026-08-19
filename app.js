@@ -1134,7 +1134,12 @@ async function uploadFileToBackend(files, type) {
       clearInterval(interval);
       progress.style.width = '100%';
       status.textContent = 'PROCESANDO 100%';
-      sub.textContent = '¡Análisis de Visión IA completado con éxito!';
+      if (type === 'agents' && data.verification_completed === true) {
+        const corrected = Number(data.verification_corrections || 0);
+        sub.textContent = `Extracción y segunda verificación completadas. Correcciones aplicadas: ${corrected}.`;
+      } else {
+        sub.textContent = '¡Análisis de Visión IA completado con éxito!';
+      }
 
       setTimeout(() => {
         try {
@@ -1158,6 +1163,12 @@ async function uploadFileToBackend(files, type) {
           
           if (!data.is_real_ai) {
             alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
+          } else if (type === 'agents' && data.verification_completed === false) {
+            alert(
+              'Aviso de verificación:\n\n' +
+              (data.verification_warning ||
+                'La extracción principal se completó, pero no pudo finalizarse la segunda verificación de horarios. Revisa los horarios antes de importar.')
+            );
           }
         } catch (err) {
           console.error("Defensive catch in upload success timer:", err);
