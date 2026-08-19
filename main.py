@@ -966,6 +966,7 @@ async def extract_data(
     try:
         import openpyxl
         import pypdf
+        from PIL import Image, ImageEnhance, ImageFilter, ImageOps
         from openai import OpenAI
         
         # La extracción completa debe finalizar antes del límite de tres minutos y medio del navegador.
@@ -974,6 +975,38 @@ async def extract_data(
 
         user_content_blocks = []
         text_payloads = []
+        verification_image_blocks = []
+
+        def build_verification_image_block(crop, target_width: int):
+            """Amplía y mejora un recorte para la segunda lectura de horarios."""
+            gray = ImageOps.grayscale(crop)
+            enhanced = ImageOps.autocontrast(gray, cutoff=1)
+            enhanced = ImageEnhance.Contrast(enhanced).enhance(1.25)
+            enhanced = ImageEnhance.Sharpness(enhanced).enhance(2.0)
+
+            width, height = enhanced.size
+            scale = min(
+                4.0,
+                target_width / max(width, 1),
+                3000 / max(height, 1),
+            )
+            if scale > 1.0:
+                enhanced = enhanced.resize(
+                    (int(width * scale), int(height * scale)),
+                    Image.Resampling.LANCZOS,
+                )
+            enhanced = enhanced.filter(ImageFilter.SHARPEN).convert("RGB")
+
+            buffer = io.BytesIO()
+            enhanced.save(buffer, format="JPEG", quality=92, optimize=True)
+            encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            return {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{encoded}",
+                    "detail": "high",
+                },
+            }
 
         for file in files:
             filename_lower = file.filename.lower()
@@ -1037,6 +1070,38 @@ async def extract_data(
                             "detail": "high" if document_type == "agents" else "auto",
                         },
                     })
+
+                    # Para la segunda lectura de turnos generamos tres vistas:
+                    # tabla completa, mitad de mañana y mitad de tarde.
+                    if document_type == "agents":
+                        try:
+                            source_image = ImageOps.exif_transpose(
+                                Image.open(io.BytesIO(content))
+                            ).convert("RGB")
+                            image_width, image_height = source_image.size
+                            table_top = max(0, int(image_height * 0.04))
+                            table_bottom = min(image_height, int(image_height * 0.66))
+                            table_crop = source_image.crop(
+                                (0, table_top, image_width, table_bottom)
+                            )
+                            overlap = int(image_width * 0.01)
+                            middle = image_width // 2
+                            morning_crop = source_image.crop(
+                                (0, table_top, min(image_width, middle + overlap), table_bottom)
+                            )
+                            afternoon_crop = source_image.crop(
+                                (max(0, middle - overlap), table_top, image_width, table_bottom)
+                            )
+                            verification_image_blocks.extend([
+                                build_verification_image_block(table_crop, 1800),
+                                build_verification_image_block(morning_crop, 1500),
+                                build_verification_image_block(afternoon_crop, 1500),
+                            ])
+                        except Exception as crop_error:
+                            print(
+                                f"No se pudieron generar ampliaciones de {file.filename}: "
+                                f"{crop_error}"
+                            )
                 except Exception as img_err:
                     print(f"Error cargando imagen {file.filename}: {img_err}")
 
@@ -1348,9 +1413,11 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         parsed_result = None
         extracted_model_name = ""
         errors = []
+        first_extraction_seconds = None
 
         for model_name in models_to_try:
             try:
+                first_call_started = time.monotonic()
                 print(f"Intentando llamada a {model_name}...")
                 params = {
                     "model": model_name,
@@ -1449,6 +1516,9 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 if document_type == "agents":
                     validate_turns_json(parsed_result)
 
+                first_extraction_seconds = round(
+                    time.monotonic() - first_call_started, 2
+                )
                 extracted_model_name = model_name
                 break
 
@@ -1487,6 +1557,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         verification_completed = None
         verification_corrections = 0
         verification_warning = ""
+        verification_seconds = None
 
         if document_type == "agents":
             verification_completed = False
@@ -1514,7 +1585,8 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 
                     verification_system_prompt = """
 Eres un verificador visual especializado exclusivamente en horarios laborales.
-Recibirás la imagen original y una lista numerada procedente de una primera extracción.
+Recibirás ampliaciones de la misma parrilla y una lista numerada procedente de una primera extracción.
+Las imágenes son vistas complementarias del mismo documento: tabla completa, mañana ampliada y tarde ampliada. No representan personas adicionales.
 
 TAREA
 - Revisa visualmente, una por una, TODAS las personas de la lista.
@@ -1548,11 +1620,16 @@ REGLAS
 - Si no hay discrepancias, devuelve correcciones=[] con el total revisado.
 """.strip()
 
-                    verification_content = [
-                        block
-                        for block in user_content_blocks
-                        if isinstance(block, dict) and block.get("type") == "image_url"
-                    ]
+                    if verification_image_blocks:
+                        # Orden por documento: tabla completa, mañana ampliada y tarde ampliada.
+                        verification_content = list(verification_image_blocks)
+                    else:
+                        # Si Pillow no pudo crear recortes, reutilizamos la imagen original.
+                        verification_content = [
+                            block
+                            for block in user_content_blocks
+                            if isinstance(block, dict) and block.get("type") == "image_url"
+                        ]
                     verification_content.append({
                         "type": "text",
                         "text": (
@@ -1566,6 +1643,7 @@ REGLAS
                         timeout=verification_timeout,
                         max_retries=0,
                     )
+                    verification_call_started = time.monotonic()
                     verification_response = verification_client.chat.completions.create(
                         model=selected_model,
                         messages=[
@@ -1635,6 +1713,9 @@ REGLAS
                             print(f"Corrección de horario descartada: {correction_error}")
                             continue
 
+                    verification_seconds = round(
+                        time.monotonic() - verification_call_started, 2
+                    )
                     verification_completed = True
                     print(
                         "Segunda verificación completada: "
@@ -1642,6 +1723,10 @@ REGLAS
                     )
 
                 except Exception as verification_error:
+                    if "verification_call_started" in locals():
+                        verification_seconds = round(
+                            time.monotonic() - verification_call_started, 2
+                        )
                     print(
                         "La segunda verificación de horarios no se completó: "
                         f"{verification_error}"
@@ -1782,6 +1867,7 @@ REGLAS
 
         process_items(raw_manana, "mañana")
         process_items(raw_tarde, "tarde")
+        total_backend_seconds = round(time.monotonic() - request_started, 2)
 
         return {
             "success": True,
@@ -1794,6 +1880,9 @@ REGLAS
             "verification_completed": verification_completed,
             "verification_corrections": verification_corrections,
             "verification_warning": verification_warning,
+            "first_extraction_seconds": first_extraction_seconds,
+            "verification_seconds": verification_seconds,
+            "total_backend_seconds": total_backend_seconds,
             "date": str(extracted_date).strip(),
             "agents": formatted_agents,
             "flights": formatted_flights,

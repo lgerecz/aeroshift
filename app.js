@@ -1136,7 +1136,10 @@ async function uploadFileToBackend(files, type) {
       status.textContent = 'PROCESANDO 100%';
       if (type === 'agents' && data.verification_completed === true) {
         const corrected = Number(data.verification_corrections || 0);
-        sub.textContent = `Extracción y segunda verificación completadas. Correcciones aplicadas: ${corrected}.`;
+        const firstTime = Number(data.first_extraction_seconds || 0).toFixed(1);
+        const verificationTime = Number(data.verification_seconds || 0).toFixed(1);
+        const totalTime = Number(data.total_backend_seconds || 0).toFixed(1);
+        sub.textContent = `Completado. Extracción: ${firstTime}s · Verificación: ${verificationTime}s · Total: ${totalTime}s · Correcciones: ${corrected}.`;
       } else {
         sub.textContent = '¡Análisis de Visión IA completado con éxito!';
       }
