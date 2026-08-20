@@ -1321,13 +1321,39 @@ function validateAgentForImport(agent) {
   const type = String(agent.type || '').trim().toLowerCase();
   const agentName = String(agent.name || '').trim();
 
-  const explicitNameParts = agentName.split(/\s*(?:\/{1,2}|,|;)\s*/).filter(Boolean);
-  const nameTokens = agentName.split(/\s+/).filter(Boolean);
-  const hasLongFollowingToken = nameTokens.slice(1).some(token => {
-    const letters = token.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
-    return letters.length >= 4;
-  });
-  if (explicitNameParts.length > 1 || hasLongFollowingToken) {
+  const isAbbreviatedGivenName = token =>
+    /^(?:[A-ZÁÉÍÓÚÜÑ](?:\.|\.?[ªº])|MA\.)$/i.test(String(token || '').trim());
+  const countNameGroups = part => {
+    const tokens = String(part || '').trim().split(/\s+/).filter(Boolean);
+    if (tokens.length <= 1) return tokens.length;
+    let groups = 0;
+    let index = 0;
+    while (index < tokens.length) {
+      const token = tokens[index];
+      if (isAbbreviatedGivenName(token) && index + 1 < tokens.length) {
+        groups += 1;
+        index += 2;
+        while (index < tokens.length) {
+          const nextToken = tokens[index];
+          const letters = nextToken.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
+          if (isAbbreviatedGivenName(nextToken) || letters.length >= 4) break;
+          index += 1;
+        }
+        continue;
+      }
+      const letters = token.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
+      if (groups === 0 || letters.length >= 4) groups += 1;
+      index += 1;
+    }
+    return groups;
+  };
+  const explicitNameParts = agentName
+    .split(/\s*(?:\/{1,2}|,|;|\+|-)\s*/)
+    .filter(Boolean);
+  const detectedNameGroups = explicitNameParts.reduce(
+    (total, part) => total + countNameGroups(part), 0
+  );
+  if (detectedNameGroups > 1) {
     errors.push('Posible unión de varias personas en un solo nombre.');
   }
 
