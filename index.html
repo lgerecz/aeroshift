@@ -288,8 +288,11 @@
                 Subir Turnos
                 <input type="file" id="agentsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleAgentsFileUpload(event)" style="display: none;">
               </label>
-              <button onclick="clearDetectedAgents()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 10px 24px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; -webkit-font-smoothing: antialiased; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 38px;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
-                🧹 Limpiar
+              <button onclick="clearDetectedAgents()" title="Limpiar turnos" aria-label="Limpiar turnos" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+                🗑️
+              </button>
+              <button onclick="downloadExtractionXlsx('agents')" title="Descargar turnos en Excel" aria-label="Descargar turnos en Excel" style="background: transparent; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#aaa'">
+                ⇩
               </button>
             </div>
           </div>
@@ -329,12 +332,12 @@
         </div>
       </div>
 
-      <!-- RECTÁNGULO 2 (DERECHO): PARRILLA DE EMBARQUES CON SCROLL -->
+      <!-- RECTÁNGULO 2 (DERECHO): PARRILLA DE VUELOS CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
         <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 10px 20px 0px 20px; display: flex; flex-direction: column; gap: 12px; height: 600px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
             <h3 id="detectedFlightsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
-              ✈️ Parrilla de Embarques — Sábado 20 Junio
+              ✈️ Parrilla de Vuelos — Sábado 20 Junio
             </h3>
             <div style="display: flex; gap: 8px; align-items: center;">
               <label class="table-header-upload-btn">
@@ -346,8 +349,11 @@
                 Subir Vuelos
                 <input type="file" id="flightsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleFlightsFileUpload(event)" style="display: none;">
               </label>
-              <button onclick="clearDetectedFlights()" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 10px 24px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; -webkit-font-smoothing: antialiased; display: flex; align-items: center; gap: 4px; transition: all 0.15s; margin: 0; height: 38px;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
-                🧹 Limpiar
+              <button onclick="clearDetectedFlights()" title="Limpiar vuelos" aria-label="Limpiar vuelos" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+                🗑️
+              </button>
+              <button onclick="downloadExtractionXlsx('flights')" title="Descargar vuelos en Excel" aria-label="Descargar vuelos en Excel" style="background: transparent; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#aaa'">
+                ⇩
               </button>
             </div>
           </div>

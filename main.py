@@ -9,6 +9,7 @@ import contextlib
 import time
 from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from ortools.sat.python import cp_model
@@ -935,6 +936,151 @@ DEMO_FLIGHTS = [
     { "id": 25, "destination": "VIE", "airline": "FR", "number": "FR703",  "time": "09:55", "agents": "", "pax": 179 },
     { "id": 26, "destination": "ZAG", "airline": "FR", "number": "FR600",  "time": "10:00", "agents": "", "pax": 175 }
 ]
+
+@app.post("/export-extraction-xlsx")
+def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
+    """Exporta por separado el cuadrante visible de turnos o de vuelos."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
+
+        export_type = str(payload.get("type") or "").lower().strip()
+        document_date = str(payload.get("date") or "Fecha no detectada").strip()
+        if export_type not in {"agents", "flights"}:
+            raise HTTPException(status_code=422, detail="Tipo de exportación no válido.")
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        dark_fill = PatternFill("solid", fgColor="1F2937")
+        blue_fill = PatternFill("solid", fgColor="2563EB")
+        warning_fill = PatternFill("solid", fgColor="FEE2E2")
+        white_font = Font(color="FFFFFF", bold=True)
+        title_font = Font(color="FFFFFF", bold=True, size=14)
+        thin_gray = Side(style="thin", color="D1D5DB")
+        border = Border(bottom=thin_gray)
+
+        if export_type == "agents":
+            agents = payload.get("agents") or []
+            if not isinstance(agents, list) or not agents:
+                raise HTTPException(status_code=400, detail="No hay turnos para descargar.")
+            ws.title = "Turnos del personal"
+            headers = [
+                "Turno",
+                "Sección",
+                "Agente",
+                "Horario",
+                "Rol",
+                "Observaciones automáticas",
+            ]
+            title = f"AeroShift — Turnos del Personal — {document_date}"
+            rows = []
+            for agent in agents:
+                errors = agent.get("validation_errors") or []
+                if not isinstance(errors, list):
+                    errors = [str(errors)]
+                rows.append([
+                    str(agent.get("shift") or "").capitalize(),
+                    "Oficina" if str(agent.get("type") or "").lower() == "admin" else "Pasaje",
+                    str(agent.get("name") or ""),
+                    str(agent.get("hours") or ""),
+                    str(agent.get("role") or agent.get("rol") or ""),
+                    " | ".join(str(error) for error in errors if error),
+                ])
+            filename_prefix = "aeroshift_turnos"
+            widths = [14, 14, 24, 31, 25, 65]
+        else:
+            flights = payload.get("flights") or []
+            if not isinstance(flights, list) or not flights:
+                raise HTTPException(status_code=400, detail="No hay vuelos para descargar.")
+            ws.title = "Parrilla de vuelos"
+            headers = [
+                "N.º",
+                "Destino",
+                "Aerolínea",
+                "Vuelo",
+                "Apertura",
+                "Agentes",
+                "Embarque",
+                "STD",
+                "PAX",
+            ]
+            title = f"AeroShift — Parrilla de Vuelos — {document_date}"
+
+            def move_minutes(clock: str, delta: int) -> str:
+                try:
+                    hour, minute = map(int, str(clock).split(":"))
+                    total = (hour * 60 + minute + delta) % 1440
+                    return f"{total // 60:02d}:{total % 60:02d}"
+                except Exception:
+                    return ""
+
+            rows = []
+            for index, flight in enumerate(flights, 1):
+                std = str(flight.get("time") or "")
+                rows.append([
+                    index,
+                    str(flight.get("destination") or ""),
+                    str(flight.get("airline") or ""),
+                    str(flight.get("number") or ""),
+                    move_minutes(std, -180),
+                    str(flight.get("agents") or ""),
+                    move_minutes(std, -40),
+                    std,
+                    flight.get("pax") if flight.get("pax") not in (None, "") else "",
+                ])
+            filename_prefix = "aeroshift_vuelos"
+            widths = [8, 12, 12, 16, 13, 24, 13, 13, 10]
+
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+        title_cell = ws.cell(row=1, column=1, value=title)
+        title_cell.fill = blue_fill
+        title_cell.font = title_font
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[1].height = 25
+
+        for column, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=column, value=header)
+            cell.fill = dark_fill
+            cell.font = white_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = border
+
+        for row_index, row in enumerate(rows, 4):
+            for column, value in enumerate(row, 1):
+                cell = ws.cell(row=row_index, column=column, value=value)
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                cell.border = border
+            if export_type == "agents" and row[-1]:
+                for column in range(1, len(headers) + 1):
+                    ws.cell(row=row_index, column=column).fill = warning_fill
+
+        for index, width in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(index)].width = width
+        ws.freeze_panes = "A4"
+        ws.auto_filter.ref = f"A3:{get_column_letter(len(headers))}{3 + len(rows)}"
+        ws.sheet_view.showGridLines = False
+
+        safe_date = re.sub(r"[^0-9A-Za-z_-]+", "-", document_date).strip("-") or "sin-fecha"
+        filename = f"{filename_prefix}_{safe_date}.xlsx"
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        headers_response = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers_response,
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error exportando Excel: {error}")
+        raise HTTPException(status_code=500, detail="No se pudo generar el archivo Excel.")
+
 
 @app.post("/extract")
 async def extract_data(

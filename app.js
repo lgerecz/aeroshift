@@ -1606,7 +1606,7 @@ function renderDetectedFlights() {
 
   const titleElem = document.getElementById('detectedFlightsTitle');
   if (titleElem && extractedData && extractedData.date) {
-    titleElem.innerHTML = `✈️ Parrilla de Embarques — ${extractedData.date}`;
+    titleElem.innerHTML = `✈️ Parrilla de Vuelos — ${extractedData.date}`;
   }
 
   const calculateTimes = (stdStr) => {
@@ -2491,6 +2491,61 @@ function parseInlineMarkdown(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.*?)`/g, '<code>$1</code>');
+}
+
+async function downloadExtractionXlsx(type) {
+  const isAgents = type === 'agents';
+  const rows = isAgents ? extractedData?.agents : extractedData?.flights;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    alert(isAgents ? 'No hay turnos para descargar.' : 'No hay vuelos para descargar.');
+    return;
+  }
+
+  const backendInput = document.getElementById('backendUrl');
+  const backendUrl = backendInput ? backendInput.value.trim() : 'https://aeroshift-backend.onrender.com';
+  const payload = {
+    type: type,
+    date: extractedData?.date || 'Fecha no detectada',
+    agents: isAgents ? extractedData.agents : [],
+    flights: isAgents ? [] : extractedData.flights
+  };
+
+  try {
+    const response = await fetch(`${backendUrl}/export-extraction-xlsx`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      let message = 'No se pudo generar el archivo Excel.';
+      try {
+        const errorData = await response.json();
+        message = errorData.detail || message;
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const fallbackDate = String(extractedData?.date || 'sin-fecha')
+      .replace(/[^0-9A-Za-z_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'sin-fecha';
+    const filename = filenameMatch
+      ? filenameMatch[1]
+      : `aeroshift_${isAgents ? 'turnos' : 'vuelos'}_${fallbackDate}.xlsx`;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    alert(`Error al descargar el Excel:\n\n${error.message}`);
+  }
 }
 
 function clearDetectedAgents() {
