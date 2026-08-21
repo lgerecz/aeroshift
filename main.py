@@ -1098,12 +1098,22 @@ async def extract_data(
             detail="El parámetro type debe ser 'agents', 'flights' o 'all'.",
         )
 
-    api_key = os.environ.get("OPENAI_API_KEY")
+    selected_model = (model or "gpt-5.6-luna").strip()
+    is_deepseek = selected_model == "deepseek-v4-flash-vision-exp"
+    provider = "deepseek" if is_deepseek else "openai"
+    api_key_name = "DEEPSEEK_API_KEY" if is_deepseek else "OPENAI_API_KEY"
+    api_key = os.environ.get(api_key_name)
     if not api_key:
+        provider_label = "DeepSeek" if is_deepseek else "OpenAI"
         return {
             "success": False,
             "is_real_ai": False,
-            "message": "El servidor no tiene configurada la clave de OpenAI.",
+            "message": (
+                f"{provider_label} no está configurado en el servidor. "
+                f"Añade {api_key_name} en las variables de entorno de Render."
+            ),
+            "provider": provider,
+            "requested_model": selected_model,
             "date": "Fecha no detectada",
             "agents": [],
             "flights": [],
@@ -1117,7 +1127,14 @@ async def extract_data(
         
         # La extracción completa debe finalizar antes del límite de tres minutos y medio del navegador.
         # Desactivamos los reintentos internos del SDK para evitar esperas ocultas.
-        client = OpenAI(api_key=api_key, timeout=120.0, max_retries=0)
+        client_options = {
+            "api_key": api_key,
+            "timeout": 120.0,
+            "max_retries": 0,
+        }
+        if is_deepseek:
+            client_options["base_url"] = "https://api.deepseek.com"
+        client = OpenAI(**client_options)
 
         user_content_blocks = []
         text_payloads = []
@@ -1146,12 +1163,12 @@ async def extract_data(
             buffer = io.BytesIO()
             enhanced.save(buffer, format="JPEG", quality=92, optimize=True)
             encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            image_payload = {"url": f"data:image/jpeg;base64,{encoded}"}
+            if not is_deepseek:
+                image_payload["detail"] = "high"
             return {
                 "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{encoded}",
-                    "detail": "high",
-                },
+                "image_url": image_payload,
             }
 
         for file in files:
@@ -1208,13 +1225,18 @@ async def extract_data(
                     elif filename_lower.endswith('.webp'):
                         mime_type = "image/webp"
                     
+                    image_payload = {
+                        "url": f"data:{mime_type};base64,{base64_image}"
+                    }
+                    # OpenAI admite control explícito de detalle en Chat Completions.
+                    # DeepSeek Vision recibe la imagen sin ese campo adicional.
+                    if not is_deepseek:
+                        image_payload["detail"] = (
+                            "high" if document_type == "agents" else "auto"
+                        )
                     user_content_blocks.append({
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{base64_image}",
-                            # Las parrillas contienen texto pequeño y horarios muy próximos.
-                            "detail": "high" if document_type == "agents" else "auto",
-                        },
+                        "image_url": image_payload,
                     })
 
                     # Para la segunda lectura de turnos generamos tres vistas:
@@ -1482,7 +1504,6 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         # Se utiliza exclusivamente el modelo elegido en la web. Si falla, el
         # usuario puede reintentarlo manualmente o seleccionar otro modelo.
         # Evitamos una cascada automática que podía superar los siete minutos.
-        selected_model = (model or "gpt-5.6-luna").strip()
         models_to_try = [selected_model]
 
         def is_abbreviated_given_name(token: str) -> bool:
@@ -1786,14 +1807,14 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content_blocks}
                     ],
-                    # Incluye tanto los tokens de razonamiento como el JSON final.
-                    # La parrilla patrón contiene 87 agentes, por lo que 4.000
-                    # tokens resultaban insuficientes con razonamiento alto.
-                    "max_completion_tokens": 16000,
+                    "response_format": {"type": "json_object"},
                 }
-
-                params["response_format"] = {"type": "json_object"}
-                params["reasoning_effort"] = "high"
+                if is_deepseek:
+                    params["max_tokens"] = 16000
+                else:
+                    # En OpenAI incluye razonamiento y JSON final.
+                    params["max_completion_tokens"] = 16000
+                    params["reasoning_effort"] = "high"
                     
                 # Realizamos llamada OpenAI
                 try:
@@ -1901,7 +1922,19 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 "queda fuera de su jornada",
                 "no puede tener rol csa",
             )
-            if any(marker in lower_error for marker in visible_validation_errors):
+            if is_deepseek and any(
+                marker in lower_error
+                for marker in ("insufficient balance", "insufficient_balance", "402")
+            ):
+                public_error = (
+                    "DeepSeek no dispone de saldo suficiente. "
+                    "Recarga la cuenta en platform.deepseek.com."
+                )
+            elif any(marker in lower_error for marker in ("authentication", "invalid api key", "401")):
+                public_error = (
+                    f"La clave de {provider.capitalize()} no es válida o no está autorizada."
+                )
+            elif any(marker in lower_error for marker in visible_validation_errors):
                 public_error = last_error[:500]
             elif "timeout" in lower_error or "timed out" in lower_error:
                 public_error = (
@@ -2012,15 +2045,21 @@ REGLAS
                         max_retries=0,
                     )
                     verification_call_started = time.monotonic()
-                    verification_response = verification_client.chat.completions.create(
-                        model=selected_model,
-                        messages=[
+                    verification_params = {
+                        "model": selected_model,
+                        "messages": [
                             {"role": "system", "content": verification_system_prompt},
                             {"role": "user", "content": verification_content},
                         ],
-                        max_completion_tokens=6000,
-                        response_format={"type": "json_object"},
-                        reasoning_effort="high",
+                        "response_format": {"type": "json_object"},
+                    }
+                    if is_deepseek:
+                        verification_params["max_tokens"] = 6000
+                    else:
+                        verification_params["max_completion_tokens"] = 6000
+                        verification_params["reasoning_effort"] = "high"
+                    verification_response = verification_client.chat.completions.create(
+                        **verification_params
                     )
                     verification_raw = verification_response.choices[0].message.content
                     if not verification_raw:
@@ -2261,6 +2300,7 @@ REGLAS
             "is_real_ai": True,
             "message": f"Extracción completada por {extracted_model_name}.",
             "document_type": document_type,
+            "provider": provider,
             "requested_model": selected_model,
             "used_model": extracted_model_name,
             "used_fallback": extracted_model_name != selected_model,
@@ -2281,13 +2321,14 @@ REGLAS
     except Exception as e:
         # El detalle completo queda en los logs de Render, no se expone al navegador.
         tb = traceback.format_exc()
-        print(f"Error calling OpenAI Vision API: {e}\nTraceback: {tb}")
+        print(f"Error calling {provider} Vision API: {e}\nTraceback: {tb}")
         return {
             "success": False,
             "is_real_ai": False,
             "message": f"No se pudo completar la extracción: {str(e)}",
             "document_type": document_type,
-            "requested_model": model or "gpt-5.6-luna",
+            "provider": provider,
+            "requested_model": selected_model,
             "used_model": None,
             "used_fallback": False,
             "date": "Fecha no detectada",
