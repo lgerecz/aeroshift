@@ -1032,28 +1032,57 @@ async function uploadFileToBackend(files, type) {
 
   modal.classList.add('active');
 
-  // Let's animate a smooth progress bar from 0% to 90%
+  // Progreso estimado: la API no comunica un porcentaje real mientras trabaja.
+  // Avanza hasta el 90% en 65 segundos y después lentamente hasta el 95%.
   let currentPercent = 0;
+  const progressStartedAt = performance.now();
   const stages = [
     { p: 15, msg: 'Conectando con el motor de Visión de AeroShift...' },
-    { p: 35, msg: 'Escaneando imágenes y detectando texto...' },
-    { p: 55, msg: 'Procesando tablas de horarios y vuelos...' },
-    { p: 75, msg: 'Estructurando datos en la base de datos de planificación...' },
-    { p: 90, msg: 'Esperando respuesta final del modelo de inteligencia artificial...' }
+    { p: 45, msg: 'Escaneando imágenes y detectando texto...' },
+    { p: 70, msg: 'Procesando tablas de horarios y vuelos...' },
+    { p: 90, msg: 'Estructurando y verificando los datos extraídos...' },
+    { p: 95, msg: 'Esperando la respuesta final del modelo de inteligencia artificial...' }
   ];
 
+  const renderEstimatedProgress = () => {
+    progress.style.width = currentPercent.toFixed(2) + '%';
+    status.textContent = 'PROCESANDO ' + Math.floor(currentPercent) + '%';
+    const stage = stages.find(stageItem => currentPercent <= stageItem.p);
+    if (stage) sub.textContent = stage.msg;
+  };
+
   const interval = setInterval(() => {
-    if (currentPercent < 90) {
-      currentPercent += 2;
-      progress.style.width = currentPercent + '%';
-      status.textContent = 'PROCESANDO ' + currentPercent + '%';
-      
-      const stage = stages.find(s => currentPercent <= s.p);
-      if (stage) {
-        sub.textContent = stage.msg;
-      }
+    const elapsed = performance.now() - progressStartedAt;
+    if (elapsed <= 65000) {
+      currentPercent = Math.min(90, (elapsed / 65000) * 90);
+    } else {
+      const slowPhase = Math.min(1, (elapsed - 65000) / 145000);
+      currentPercent = 90 + slowPhase * 5;
     }
-  }, 100);
+    renderEstimatedProgress();
+  }, 250);
+
+  const completeProgressQuickly = () => {
+    clearInterval(interval);
+    const initialPercent = currentPercent;
+    const animationStartedAt = performance.now();
+    const animationDuration = 450;
+    const animate = (now) => {
+      const ratio = Math.min(1, (now - animationStartedAt) / animationDuration);
+      const eased = 1 - Math.pow(1 - ratio, 3);
+      currentPercent = initialPercent + (100 - initialPercent) * eased;
+      progress.style.width = currentPercent.toFixed(2) + '%';
+      status.textContent = 'PROCESANDO ' + Math.floor(currentPercent) + '%';
+      if (ratio < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        currentPercent = 100;
+        progress.style.width = '100%';
+        status.textContent = 'PROCESANDO 100%';
+      }
+    };
+    requestAnimationFrame(animate);
+  };
 
   // Prepare FormData payload for the backend API
   const formData = new FormData();
@@ -1135,9 +1164,7 @@ async function uploadFileToBackend(files, type) {
       const finalDate = isDateValid(data.date) ? data.date : fallbackDate;
       extractedData.date = finalDate;
 
-      clearInterval(interval);
-      progress.style.width = '100%';
-      status.textContent = 'PROCESANDO 100%';
+      completeProgressQuickly();
       if (type === 'agents' && data.verification_completed === true) {
         const corrected = Number(data.verification_corrections || 0);
         const firstTime = Number(data.first_extraction_seconds || 0).toFixed(1);
