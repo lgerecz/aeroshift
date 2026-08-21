@@ -1039,7 +1039,7 @@ async function uploadFileToBackend(files, type) {
   const stages = [
     { p: 15, msg: 'Conectando con el motor de Visión de AeroShift...' },
     { p: 45, msg: 'Escaneando imágenes y detectando texto...' },
-    { p: 70, msg: 'Procesando tablas de horarios y vuelos...' },
+    { p: 70, msg: 'Procesando tablas...' },
     { p: 90, msg: 'Estructurando y verificando los datos extraídos...' },
     { p: 95, msg: 'Esperando la respuesta final del modelo de inteligencia artificial...' }
   ];
