@@ -1348,31 +1348,74 @@ function validateAgentForImport(agent) {
   const type = String(agent.type || '').trim().toLowerCase();
   const agentName = String(agent.name || '').trim();
 
+  const normalizeNameKey = value => String(value || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const protectedCompoundNames = new Set(['MARIA JOSE', 'JOSE MARIA', 'JUAN CARLOS']);
+  const isProtectedCompound = value => protectedCompoundNames.has(normalizeNameKey(value));
   const isAbbreviatedGivenName = token =>
     /^(?:[A-ZÁÉÍÓÚÜÑ](?:\.|\.?[ªº])|MA\.)$/i.test(String(token || '').trim());
   const countNameGroups = part => {
-    const tokens = String(part || '').trim().split(/\s+/).filter(Boolean);
-    if (tokens.length <= 1) return tokens.length;
-    let groups = 0;
+    const rawPart = String(part || '').trim();
+    const tokens = rawPart.split(/\s+/).filter(Boolean);
+    if (tokens.length <= 1 || isProtectedCompound(rawPart)) return tokens.length ? 1 : 0;
+
+    const groups = [];
     let index = 0;
     while (index < tokens.length) {
       const token = tokens[index];
-      if (isAbbreviatedGivenName(token) && index + 1 < tokens.length) {
-        groups += 1;
-        index += 2;
-        while (index < tokens.length) {
-          const nextToken = tokens[index];
-          const letters = nextToken.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
-          if (isAbbreviatedGivenName(nextToken) || letters.length >= 4) break;
-          index += 1;
-        }
+
+      if (groups.length > 0 && isAbbreviatedGivenName(token)) {
+        groups[groups.length - 1].push(token);
+        index += 1;
         continue;
       }
+
+      if (index + 1 < tokens.length && isProtectedCompound(`${token} ${tokens[index + 1]}`)) {
+        const group = [token, tokens[index + 1]];
+        index += 2;
+        while (index < tokens.length) {
+          if (group.length > 2 && group[group.length - 1].endsWith('.')) break;
+          const nextToken = tokens[index];
+          const letters = nextToken.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
+          if (isAbbreviatedGivenName(nextToken) || letters.length >= 5) break;
+          group.push(nextToken);
+          index += 1;
+        }
+        groups.push(group);
+        continue;
+      }
+
+      if (isAbbreviatedGivenName(token) && index + 1 < tokens.length) {
+        const group = [token, tokens[index + 1]];
+        index += 2;
+        while (index < tokens.length) {
+          if (group.length > 2 && group[group.length - 1].endsWith('.')) break;
+          const nextToken = tokens[index];
+          const letters = nextToken.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
+          if (isAbbreviatedGivenName(nextToken) || letters.length >= 5) break;
+          group.push(nextToken);
+          index += 1;
+        }
+        groups.push(group);
+        continue;
+      }
+
+      if (groups.length > 0 && groups[groups.length - 1].length > 1 && groups[groups.length - 1].at(-1).endsWith('.')) {
+        groups.push([token]);
+        index += 1;
+        continue;
+      }
+
       const letters = token.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ]/g, '');
-      if (groups === 0 || letters.length >= 4) groups += 1;
+      if (groups.length === 0 || letters.length >= 5) groups.push([token]);
+      else groups[groups.length - 1].push(token);
       index += 1;
     }
-    return groups;
+    return groups.length;
   };
   const explicitNameParts = agentName
     .split(/\s*(?:\/{1,2}|,|;|\+|-)\s*/)

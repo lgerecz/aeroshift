@@ -7,6 +7,7 @@ import sys
 import io
 import contextlib
 import time
+import unicodedata
 from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -1434,16 +1435,20 @@ ESTRUCTURA DEL DOCUMENTO
 
 UNA PERSONA POR OBJETO
 - Si una fila contiene varios nombres, crea un objeto separado para cada nombre.
-- En estas parrillas no existen nombres compuestos formados por dos nombres completos, salvo una inicial o abreviatura explícita seguida del nombre. Dos palabras completas como "TRINI KAREN" representan dos personas distintas aunque el separador sea tenue y parezca un espacio.
+- Normalmente dos palabras completas representan personas distintas, pero existen nombres compuestos protegidos que pertenecen a UNA sola persona: "MARÍA JOSÉ", "JOSÉ MARÍA" y "JUAN CARLOS", con o sin acentos.
+- Dos palabras completas no protegidas, como "TRINI KAREN", representan dos personas distintas aunque el separador sea tenue o se haya perdido.
 - Dentro de la columna PERSONAL, cualquiera de estos símbolos separa personas: coma ",", más "+", guion "-", barra "/", doble barra "//" y punto y coma ";".
 - Una inicial o abreviatura con punto, ª u º seguida de un nombre completo pertenece a UNA sola persona: "M. JOSÉ", "J. CARLOS", "Mª CARMEN", "M.ª CARMEN", "Mº CARMEN", "M.º CARMEN" y "MA. CARMEN".
 - Conserva exactamente el símbolo visible ª u º y conserva el espacio: escribe "M. JOSÉ", nunca "M.JOSÉ"; escribe "Mª CARMEN", nunca "MªCARMEN".
-- Un identificador individual también puede contener abreviaturas cortas del apellido, siempre separadas por espacios: "MARÍA GAR", "NOELIA CH", "PAULA DLR", "SARA M". Nunca unas físicamente las letras: escribe "MARÍA GAR", no "MARÍAGAR".
+- Un identificador individual puede contener una abreviatura posterior de hasta CUATRO letras, siempre separada por un espacio: "SARA P.", "MARÍA GAR", "PAULA DLR" y "SANDRA CAST.". Nunca unas físicamente las letras.
+- Un punto al final de una abreviatura posterior puede cerrar ese identificador: "SANDRA CAST. ANASTASIYA" representa SANDRA CAST. y ANASTASIYA. El punto de una inicial anterior, como "M. JOSÉ", no separa.
 - Cuenta las personas de la fila antes de separarlas y guarda ese total en personas_en_fila para cada objeto resultante.
 - El campo nombre final nunca puede contener separadores de personas.
 - Ejemplo de pasaje: "TRINI, KAREN" con "12:50-16:25 / 19:00-22:30" produce dos objetos, TRINI y KAREN, ambos con el turno partido completo y personas_en_fila=2.
 - Ejemplo de inicial abreviada: "CANDELARIA, M. JOSÉ" produce solo dos objetos, CANDELARIA y M. JOSÉ; nunca tres objetos.
 - Ejemplo de inicial abreviada: "J. CARLOS, VITO" produce solo dos objetos, J. CARLOS y VITO.
+- Ejemplo de nombre compuesto: "SOPHIE, MIRIAM, JOSE MARIA" produce tres objetos: SOPHIE, MIRIAM y JOSE MARIA.
+- Ejemplo de nombre compuesto: "JUAN CARLOS / CRISTI" produce dos objetos: JUAN CARLOS y CRISTI.
 - Un rol escrito junto a una persona afecta solo a esa persona, no a las demás de la fila.
 Ejemplo fuente: "SUSANA, AMINA, EMI (TKD)" con "09:00-16:00".
 Resultado: SUSANA=CSA, AMINA=CSA y EMI=TKT; tres objetos separados con el mismo horario.
@@ -1506,6 +1511,22 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
         # Evitamos una cascada automática que podía superar los siete minutos.
         models_to_try = [selected_model]
 
+        protected_compound_names = {
+            "MARIA JOSE",
+            "JOSE MARIA",
+            "JUAN CARLOS",
+        }
+
+        def normalize_name_key(value: str) -> str:
+            normalized = unicodedata.normalize("NFD", str(value or "").upper())
+            without_accents = "".join(
+                char for char in normalized if unicodedata.category(char) != "Mn"
+            )
+            return re.sub(r"\s+", " ", without_accents).strip()
+
+        def is_protected_compound(value: str) -> bool:
+            return normalize_name_key(value) in protected_compound_names
+
         def is_abbreviated_given_name(token: str) -> bool:
             """Reconoce M., J., Mª, M.ª, Mº, M.º, MA. y variantes equivalentes."""
             value = str(token or "").upper().strip()
@@ -1531,35 +1552,69 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 
             def group_part(part: str) -> list[str]:
                 tokens = part.split(" ")
-                if len(tokens) <= 1:
+                if len(tokens) <= 1 or is_protected_compound(part):
                     return [part]
 
                 groups = []
                 index = 0
                 while index < len(tokens):
                     token = tokens[index]
-                    # Una inicial/abreviatura explícita se une al nombre completo siguiente.
-                    if is_abbreviated_given_name(token) and index + 1 < len(tokens):
+
+                    # Tras un nombre ya iniciado, una inicial con punto se trata
+                    # como abreviatura posterior (SARA P.), no como nuevo nombre.
+                    if groups and is_abbreviated_given_name(token):
+                        groups[-1].append(token)
+                        index += 1
+                        continue
+
+                    # Nombres compuestos protegidos, con o sin acentos.
+                    if (
+                        index + 1 < len(tokens)
+                        and is_protected_compound(f"{token} {tokens[index + 1]}")
+                    ):
                         group = [token, tokens[index + 1]]
                         index += 2
-                        # Las abreviaturas cortas posteriores pertenecen a la misma persona.
                         while index < len(tokens):
+                            if len(group) > 2 and group[-1].endswith("."):
+                                break
                             next_token = tokens[index]
                             next_letters = re.sub(
                                 r"[^A-ZÁÉÍÓÚÜÑ]", "", next_token.upper()
                             )
-                            if is_abbreviated_given_name(next_token):
+                            if is_abbreviated_given_name(next_token) or len(next_letters) >= 5:
                                 break
-                            if len(next_letters) <= 3:
-                                group.append(next_token)
-                                index += 1
-                            else:
-                                break
+                            group.append(next_token)
+                            index += 1
                         groups.append(group)
                         continue
 
+                    # Una inicial/abreviatura explícita se une al nombre completo siguiente.
+                    if is_abbreviated_given_name(token) and index + 1 < len(tokens):
+                        group = [token, tokens[index + 1]]
+                        index += 2
+                        while index < len(tokens):
+                            if len(group) > 2 and group[-1].endswith("."):
+                                break
+                            next_token = tokens[index]
+                            next_letters = re.sub(
+                                r"[^A-ZÁÉÍÓÚÜÑ]", "", next_token.upper()
+                            )
+                            if is_abbreviated_given_name(next_token) or len(next_letters) >= 5:
+                                break
+                            group.append(next_token)
+                            index += 1
+                        groups.append(group)
+                        continue
+
+                    # Un punto tras una abreviatura posterior cierra la persona anterior.
+                    if groups and len(groups[-1]) > 1 and groups[-1][-1].endswith("."):
+                        groups.append([token])
+                        index += 1
+                        continue
+
                     letters = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", token.upper())
-                    if not groups or len(letters) >= 4:
+                    # Hasta cuatro letras se consideran abreviatura posterior.
+                    if not groups or len(letters) >= 5:
                         groups.append([token])
                     else:
                         groups[-1].append(token)
@@ -1573,7 +1628,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
             return result
 
         def merge_split_initial_agents(data: Any) -> None:
-            """Fusiona M. + JOSÉ o J. + CARLOS si la IA los separó en objetos."""
+            """Fusiona iniciales y nombres compuestos separados en objetos consecutivos."""
             if not isinstance(data, dict) or not isinstance(data.get("agentes"), list):
                 return
             agents = data["agentes"]
@@ -1581,27 +1636,58 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
             index = 0
             comparable_fields = ("horario", "rol", "seccion", "turno")
 
+            def same_context(first: dict, second: dict) -> bool:
+                return all(
+                    str(first.get(field) or "").strip().upper()
+                    == str(second.get(field) or "").strip().upper()
+                    for field in comparable_fields
+                )
+
+            def context_run_info(position: int) -> tuple[int, int]:
+                start = position
+                end = position + 1
+                while (
+                    start > 0
+                    and isinstance(agents[start - 1], dict)
+                    and isinstance(agents[position], dict)
+                    and same_context(agents[start - 1], agents[position])
+                ):
+                    start -= 1
+                while (
+                    end < len(agents)
+                    and isinstance(agents[end], dict)
+                    and isinstance(agents[position], dict)
+                    and same_context(agents[position], agents[end])
+                ):
+                    end += 1
+                expected = max(
+                    int(item.get("personas_en_fila") or 1)
+                    for item in agents[start:end]
+                    if isinstance(item, dict)
+                )
+                return end - start, expected
+
             while index < len(agents):
                 current = agents[index]
                 if (
                     isinstance(current, dict)
-                    and is_abbreviated_given_name(current.get("nombre"))
                     and index + 1 < len(agents)
                     and isinstance(agents[index + 1], dict)
                 ):
                     following = agents[index + 1]
+                    current_name = str(current.get("nombre") or "").strip()
                     following_name = str(following.get("nombre") or "").strip()
-                    following_tokens = following_name.split()
-                    same_context = all(
-                        str(current.get(field) or "").strip().upper()
-                        == str(following.get(field) or "").strip().upper()
-                        for field in comparable_fields
+                    same = same_context(current, following)
+                    initial_pair = is_abbreviated_given_name(current_name)
+                    compound_pair = is_protected_compound(
+                        f"{current_name} {following_name}"
                     )
-                    if same_context and following_name and len(following_tokens) >= 1:
+                    run_length, expected_people = context_run_info(index)
+                    should_merge_compound = compound_pair and run_length > expected_people
+
+                    if same and following_name and (initial_pair or should_merge_compound):
                         combined = dict(current)
-                        combined["nombre"] = (
-                            f"{str(current.get('nombre')).strip()} {following_name}"
-                        )
+                        combined["nombre"] = f"{current_name} {following_name}"
                         combined["personas_en_fila"] = max(
                             int(current.get("personas_en_fila") or 1),
                             int(following.get("personas_en_fila") or 1),
