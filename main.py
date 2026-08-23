@@ -956,6 +956,7 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
         dark_fill = PatternFill("solid", fgColor="1F2937")
         blue_fill = PatternFill("solid", fgColor="2563EB")
         warning_fill = PatternFill("solid", fgColor="FEE2E2")
+        body_fill = PatternFill("solid", fgColor="F3F4F6")
         white_font = Font(color="FFFFFF", bold=True)
         title_font = Font(color="FFFFFF", bold=True, size=14)
         thin_gray = Side(style="thin", color="D1D5DB")
@@ -1052,6 +1053,7 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
                 cell = ws.cell(row=row_index, column=column, value=value)
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
                 cell.border = border
+                cell.fill = body_fill
             if export_type == "agents" and row[-1]:
                 for column in range(1, len(headers) + 1):
                     ws.cell(row=row_index, column=column).fill = warning_fill
