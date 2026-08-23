@@ -1113,10 +1113,8 @@ async function uploadFileToBackend(files, type) {
     const data = await response.json();
     clearTimeout(extractionTimeoutId);
     if (data.success) {
-      // Ensure extractedData is initialized
-      if (!extractedData) {
-        extractedData = { date: 'Fecha no detectada', agents: [], flights: [] };
-      }
+      // Inicializa y migra la estructura con fechas independientes.
+      ensureExtractedDataShape();
 
       // 1. Process agents if type is "agents" (or both if type is not specified)
       if (type === 'agents' || type === 'all') {
@@ -1158,11 +1156,23 @@ async function uploadFileToBackend(files, type) {
         }
       }
 
-      // Update extractedData Date safely with dynamic fallback
+      // Cada cuadrante conserva exclusivamente la fecha de su propio archivo.
       const isDateValid = (d) => d && d !== 'Fecha no detectada' && d !== 'Sábado 20 Junio';
-      const fallbackDate = isDateValid(extractedData.date) ? extractedData.date : 'Fecha no detectada';
-      const finalDate = isDateValid(data.date) ? data.date : fallbackDate;
-      extractedData.date = finalDate;
+      const detectedDate = isDateValid(data.date)
+        ? String(data.date).trim()
+        : getTodayDisplayDate();
+      if (type === 'agents') {
+        // Los turnos sustituyen el cuadrante anterior: nunca heredan su fecha.
+        extractedData.agentsDate = detectedDate;
+      } else if (type === 'flights') {
+        // Los vuelos pueden cargarse en páginas sucesivas sin fecha repetida.
+        extractedData.flightsDate = isDateValid(data.date)
+          ? String(data.date).trim()
+          : (extractedData.flightsDate || getTodayDisplayDate());
+      } else {
+        extractedData.agentsDate = detectedDate;
+        extractedData.flightsDate = detectedDate;
+      }
 
       completeProgressQuickly();
       if (type === 'agents' && data.verification_completed === true) {
@@ -1481,13 +1491,14 @@ function renderDetectedAgents() {
   const container = document.getElementById('detectedAgentsBody');
   if (!container) return;
 
-  if (!extractedData) {
-    initializeMockExtractedData();
-  }
+  ensureExtractedDataShape();
 
   const titleElem = document.getElementById('detectedAgentsTitle');
-  if (titleElem && extractedData && extractedData.date) {
-    titleElem.innerHTML = `👥 Turnos del Personal — ${extractedData.date}`;
+  if (titleElem) {
+    const agentsDate = extractedData?.agentsDate || '';
+    titleElem.innerHTML = agentsDate
+      ? `👥 Turnos del Personal — ${escapeHtml(agentsDate)}`
+      : '👥 Turnos del Personal';
   }
 
   // Helper to determine shift
@@ -1695,14 +1706,15 @@ function renderDetectedFlights() {
   const container = document.getElementById('detectedFlightsBody');
   if (!container) return;
 
-  // Initialize extractedData if empty
-  if (!extractedData) {
-    initializeMockExtractedData();
-  }
+  // Inicializa y migra las fechas independientes si fuera necesario.
+  ensureExtractedDataShape();
 
   const titleElem = document.getElementById('detectedFlightsTitle');
-  if (titleElem && extractedData && extractedData.date) {
-    titleElem.innerHTML = `✈️ Parrilla de Vuelos — ${extractedData.date}`;
+  if (titleElem) {
+    const flightsDate = extractedData?.flightsDate || '';
+    titleElem.innerHTML = flightsDate
+      ? `✈️ Parrilla de Vuelos — ${escapeHtml(flightsDate)}`
+      : '✈️ Parrilla de Vuelos';
   }
 
   const calculateTimes = (stdStr) => {
@@ -1851,17 +1863,39 @@ function deleteFlightFromPreview(id) {
   }
 }
 
-// Seeding empty structure so we don't invent or pre-load any fake data!
-function initializeMockExtractedData() {
+function getTodayDisplayDate() {
   const today = new Date();
   const options = { weekday: 'long', day: 'numeric', month: 'long' };
   const dateStr = today.toLocaleDateString('es-ES', options);
-  
+  return dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+}
+
+// Estructura vacía con fechas independientes para cada cuadrante.
+function initializeMockExtractedData() {
   extractedData = {
-    date: dateStr.charAt(0).toUpperCase() + dateStr.slice(1),
+    agentsDate: '',
+    flightsDate: '',
     agents: [],
     flights: []
   };
+}
+
+function ensureExtractedDataShape() {
+  if (!extractedData) {
+    initializeMockExtractedData();
+    return;
+  }
+  // Migración defensiva desde la antigua propiedad compartida "date".
+  if (typeof extractedData.agentsDate !== 'string') {
+    extractedData.agentsDate = extractedData.agents?.length
+      ? String(extractedData.date || '')
+      : '';
+  }
+  if (typeof extractedData.flightsDate !== 'string') {
+    extractedData.flightsDate = extractedData.flights?.length
+      ? String(extractedData.date || '')
+      : '';
+  }
 }
 function zoomPreviewImage(url) {
   let lightbox = document.getElementById('lightboxModal');
@@ -2590,7 +2624,11 @@ function parseInlineMarkdown(text) {
 }
 
 async function downloadExtractionXlsx(type) {
+  ensureExtractedDataShape();
   const isAgents = type === 'agents';
+  const exportDate = isAgents
+    ? extractedData.agentsDate
+    : extractedData.flightsDate;
   const rows = isAgents ? extractedData?.agents : extractedData?.flights;
   if (!Array.isArray(rows) || rows.length === 0) {
     alert(isAgents ? 'No hay turnos para descargar.' : 'No hay vuelos para descargar.');
@@ -2601,7 +2639,7 @@ async function downloadExtractionXlsx(type) {
   const backendUrl = backendInput ? backendInput.value.trim() : 'https://aeroshift-backend.onrender.com';
   const payload = {
     type: type,
-    date: extractedData?.date || 'Fecha no detectada',
+    date: exportDate || 'Fecha no detectada',
     agents: isAgents ? extractedData.agents : [],
     flights: isAgents ? [] : extractedData.flights
   };
@@ -2624,7 +2662,7 @@ async function downloadExtractionXlsx(type) {
     const blob = await response.blob();
     const disposition = response.headers.get('Content-Disposition') || '';
     const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
-    const fallbackDate = String(extractedData?.date || 'sin-fecha')
+    const fallbackDate = String(exportDate || 'sin-fecha')
       .replace(/[^0-9A-Za-z_-]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'sin-fecha';
     const filename = filenameMatch
@@ -2646,11 +2684,10 @@ async function downloadExtractionXlsx(type) {
 
 function clearDetectedAgents() {
   if (confirm('¿Deseas vaciar por completo la lista de turnos de personal?')) {
-    if (!extractedData) {
-      initializeMockExtractedData();
-    }
+    ensureExtractedDataShape();
     extractedData.agents = [];
-    
+    extractedData.agentsDate = '';
+
     // Filter out turnos files from the global file preview list!
     uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'agents');
     renderDetectedAgents();
@@ -2659,12 +2696,11 @@ function clearDetectedAgents() {
 }
 
 function clearDetectedFlights() {
-  if (confirm('¿Deseas vaciar por completo la parrilla de embarques?')) {
-    if (!extractedData) {
-      initializeMockExtractedData();
-    }
+  if (confirm('¿Deseas vaciar por completo la parrilla de vuelos?')) {
+    ensureExtractedDataShape();
     extractedData.flights = [];
-    
+    extractedData.flightsDate = '';
+
     // Filter out flights files from the global file list!
     uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'flights');
     renderDetectedFlights();
