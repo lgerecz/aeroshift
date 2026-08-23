@@ -29,6 +29,7 @@ let editingAgentId = null; // Tracks which agent row is being edited
 let uploadedFilesCopy = []; // Accumulative list of uploaded file previews
 let newlyCreatedAgentId = null;
 let newlyCreatedFlightId = null;
+let validationParametersSnapshot = null;
 
 // ===== PERSISTENCE =====
 function normalizeAgents(agentsList) {
@@ -174,6 +175,10 @@ function init() {
     }
   }
 
+  const savedOptModo = localStorage.getItem('aeroshift_opt_modo') || '';
+  const optModoElement = document.getElementById('optModo');
+  if (optModoElement) optModoElement.value = savedOptModo;
+
   // Pre-render the preview tables so they are ready on load!
   renderDetectedAgents();
   renderDetectedFlights();
@@ -183,6 +188,39 @@ function init() {
 
 function saveOptModo(val) {
   localStorage.setItem('aeroshift_opt_modo', val);
+}
+
+function openValidationParametersModal() {
+  const modal = document.getElementById('validationParametersModal');
+  const optModo = document.getElementById('optModo');
+  if (!modal || !optModo) return;
+  const savedValue = localStorage.getItem('aeroshift_opt_modo') || optModo.value || '';
+  optModo.value = savedValue;
+  validationParametersSnapshot = { optModo: savedValue };
+  modal.classList.add('active');
+}
+
+function cancelValidationParameters(event) {
+  if (event && event.target !== event.currentTarget) return;
+  const modal = document.getElementById('validationParametersModal');
+  const optModo = document.getElementById('optModo');
+  if (optModo && validationParametersSnapshot) {
+    optModo.value = validationParametersSnapshot.optModo || '';
+  }
+  if (modal) modal.classList.remove('active');
+  validationParametersSnapshot = null;
+}
+
+function saveValidationParameters() {
+  const modal = document.getElementById('validationParametersModal');
+  const optModo = document.getElementById('optModo');
+  if (!optModo || !optModo.value) {
+    alert('Selecciona una estrategia para el optimizador.');
+    return;
+  }
+  saveOptModo(optModo.value);
+  validationParametersSnapshot = null;
+  if (modal) modal.classList.remove('active');
 }
 
 function seedDemoFlights() {
@@ -1281,7 +1319,7 @@ function tryUploadAgain() {
 function validateUploadedData() {
   const optModoElem = document.getElementById('optModo');
   if (optModoElem && optModoElem.value === '') {
-    alert('Por favor, selecciona una estrategia para el optimizador (PROPORCIONAL o EQUILIBRADA) antes de importar los datos.');
+    alert('Abre “Parámetros de Validación” y selecciona una estrategia para el optimizador antes de importar los datos.');
     return;
   }
 

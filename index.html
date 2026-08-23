@@ -228,24 +228,21 @@
         <p style="color: var(--text-secondary); font-size: 13px; margin: 4px 0 0 0;">Verifica que los turnos del personal y los embarques coincidan con tus capturas originales antes de importarlos.</p>
       </div>
       <div style="display: flex; gap: 16px; align-items: center;">
-        <!-- Selector de Estrategia de Optimización (PROPORCIONAL vs EQUILIBRADO) -->
-        <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
-          <label for="optModo" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Estrategia del Optimizador</label>
-          <select id="optModo" onchange="saveOptModo(this.value)" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; width: 180px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); outline: none;">
-            <option value="" selected>— Seleccionar —</option>
-            <option value="PROPORCIONAL">PROPORCIONAL</option>
-            <option value="EQUILIBRADO">EQUILIBRADA</option>
-          </select>
-        </div>
-
         <!-- Selector de Modelo de IA en la cabecera (Cerebro IA de Extracción) -->
         <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
           <label for="backendModel" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cerebro IA de Extracción</label>
-          <select id="backendModel" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; width: 280px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); outline: none;">
+          <select id="backendModel" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; width: 180px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); outline: none;">
             <option value="gpt-5.6-luna" selected>GPT-5.6 Luna — OpenAI</option>
             <option value="deepseek-v4-flash-vision-exp">DeepSeek V4 Flash Vision</option>
           </select>
         </div>
+
+        <button class="btn btn-secondary" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap;" title="Configurar parámetros de validación y optimización">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.08A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.08A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+          </svg>
+          Parámetros de Validación
+        </button>
 
         <button class="btn btn-primary" onclick="validateUploadedData()" style="font-weight: 700; background: var(--success); border-color: var(--success); padding: 10px 24px; display: flex; align-items: center; gap: 8px; height: 38px; margin-top: 15px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="stroke:currentColor;"><polyline points="20 6 9 17 4 12"/></svg>
@@ -714,6 +711,43 @@
 
 
 
+  <!-- MODAL: PARÁMETROS DE VALIDACIÓN Y OPTIMIZACIÓN -->
+  <div class="modal-overlay" id="validationParametersModal" onclick="cancelValidationParameters(event)">
+    <div class="modal" style="width: 500px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 style="display:flex; align-items:center; gap:9px; margin:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.08A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.08A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+          </svg>
+          Parámetros de Validación
+        </h3>
+        <button class="btn-icon" onclick="cancelValidationParameters()" aria-label="Cerrar parámetros">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-muted); font-size:12.5px; line-height:1.5; margin:0 0 18px;">
+          Configura los criterios que se aplicarán al importar los datos y posteriormente al ejecutar OR-Tools.
+        </p>
+        <div style="background:var(--bg-body); border:1px solid var(--border); border-radius:8px; padding:16px;">
+          <div style="font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:.6px; margin-bottom:12px;">Optimización</div>
+          <label for="optModo" style="display:block; font-size:12px; font-weight:700; color:#fff; margin-bottom:7px;">Estrategia del optimizador</label>
+          <select id="optModo" style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:#fff; cursor:pointer; font-family:inherit; font-size:12px; font-weight:600; outline:none;">
+            <option value="">— Seleccionar —</option>
+            <option value="PROPORCIONAL">PROPORCIONAL</option>
+            <option value="EQUILIBRADO">EQUILIBRADA</option>
+          </select>
+          <p style="color:var(--text-muted); font-size:11px; line-height:1.45; margin:9px 0 0;">Selecciona la estrategia que utilizará OR-Tools para distribuir las asignaciones.</p>
+        </div>
+        <div style="margin-top:14px; padding:11px 13px; border:1px dashed #3a3a3a; border-radius:7px; color:#666; font-size:11px; text-align:center;">
+          Aquí se añadirán los próximos parámetros de validación y planificación.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="cancelValidationParameters()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveValidationParameters()">Guardar parámetros</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: UPLOAD & PROCESSING PROGRESS (IA EXTRACTOR) -->
   <div class="modal-overlay" id="processingModal">
     <div class="modal modal-sm" style="text-align: center; padding: 30px; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;">
@@ -734,6 +768,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=68"></script>
+  <script src="app.js?v=69"></script>
 </body>
 </html>
