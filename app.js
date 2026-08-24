@@ -2761,12 +2761,13 @@ function getRoleBadge(roleStr) {
   const role = roleStr.toUpperCase().trim();
   let color = '#ffffff'; // Default to white (which is also CSA)
   
-  if (role.includes('TKT')) { color = '#22c55e'; }      // Green for TKT (Ventas)
-  else if (role.includes('LL')) { color = '#eab308'; }   // Yellow for LL (Llegadas / Equipajes)
-  else if (role.includes('CSA')) { color = '#ffffff'; }  // White for CSA
-  else if (role.includes('DSM')) { color = '#c084fc'; }  // Purple for DSM
-  else if (role.includes('PSM')) { color = '#f472b6'; }  // Pink for PSM
-  else if (role.includes('OPS')) { color = '#22d3ee'; }  // Teal for OPS
+  // Los departamentos tienen prioridad sobre CSA en roles completos o mixtos.
+  if (role.includes('TKT')) { color = '#22c55e'; }       // Verde: Ventas / TKT
+  else if (role.includes('LL')) { color = '#eab308'; }   // Amarillo: Llegadas / Equipajes
+  else if (role.includes('OPS')) { color = '#22d3ee'; }  // Turquesa: Operaciones
+  else if (role.includes('DSM')) { color = '#c084fc'; }  // Morado: DSM
+  else if (role.includes('PSM')) { color = '#f472b6'; }  // Rosa: PSM
+  else if (role.includes('CSA')) { color = '#ffffff'; }  // Blanco: CSA sin departamento
   
   return `<span style="color: ${color}; font-weight: bold; text-transform: uppercase; font-family: monospace; font-size: 12px; letter-spacing: 0.5px;">${roleStr}</span>`;
 }
