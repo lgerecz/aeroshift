@@ -76,7 +76,7 @@ def gap_tolerancia(za: str, zb: str) -> int:
     return 55 if za == zb else 70
 
 PUERTAS_REMOTAS = {'B20','B22','C32','C36','C39','C40'}
-ROLES_NO_EMBARCAN = {'DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'}
+ROLES_NO_EMBARCAN = {'DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','SHADOWING','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'}
 ROLES_OPERATIVOS = {'TKT','LL','OPS'}
 
 
@@ -1562,18 +1562,18 @@ ROLES
 - Nunca elimines el intervalo de una anotación mixta y nunca conviertas una anotación con horas en un rol completo.
 - Deja el nombre limpio, sin el rol ni las horas entre paréntesis.
 
-ESTADOS Y RESTRICCIONES: SICK, NUEVO, CURSO, SOMBRA, SHADOW Y FAMI
+ESTADOS Y RESTRICCIONES: SICK, NUEVO, CURSO, SOMBRA, SHADOW, SHADOWING Y FAMI
 - Un estado nunca cambia por sí solo la sección física de la persona.
 - Si una persona del bloque de oficina está SICK, conserva su departamento base y la sección oficina. Ejemplos: rol="TKT (SICK)", rol="OPS (SICK)" o rol="LL (SICK)".
 - Si una persona del bloque de pasaje está SICK, usa seccion="pasaje" y rol="CSA (SICK)".
 - SICK significa ausencia completa: no recibe ninguna asignación durante toda la jornada.
 - Una persona marcada NUEVO o NEW conserva su sección y usa el rol base con estado, por ejemplo rol="CSA (NUEVO)". No recibe asignaciones hasta ser operativa.
 - Puede haber listas visibles fuera de la tabla principal, por ejemplo: "CURSO TKD 09:00-15:00" seguido de varios nombres.
-- Una lista externa de CURSO, SOMBRA, SHADOW o FAMI NO es un bloque de oficina y no acredita automáticamente a nadie como TKT, OPS, LL, PSM o DSM.
+- Una lista externa de CURSO, SOMBRA, SHADOW, SHADOWING o FAMI NO es un bloque de oficina y no acredita automáticamente a nadie como TKT, OPS, LL, PSM o DSM.
 - Cada nombre de esas listas externas se incluye como un objeto independiente con seccion="pasaje".
 - Conserva el horario indicado y normaliza TKD a TKT.
-- Usa rol canónico con rol base, intervalo y motivo completo: rol="CSA (09:00-15:00 CURSO TKT)" o rol="CSA (09:00-15:00 SOMBRA TKT)".
-- Durante CURSO, SOMBRA o SHADOW la persona no está disponible ni para embarques ni para coberturas.
+- Usa rol canónico con rol base, intervalo y motivo completo: rol="CSA (09:00-15:00 CURSO TKT)", rol="CSA (09:00-15:00 SOMBRA TKT)" o rol="CSA (04:45-12:45 SHADOWING OPS)".
+- Durante CURSO, SOMBRA, SHADOW o SHADOWING la persona no está disponible ni para embarques ni para coberturas.
 - FAMI y cualquier rol operativo temporal impiden embarcar durante el intervalo indicado.
 - Si un nombre aparece también dentro de la tabla principal, NO lo fusiones: crea otra línea independiente porque son personas distintas con IDs distintos.
 - OR-Tools aplicará las restricciones utilizando el ID interno, no el nombre visible.

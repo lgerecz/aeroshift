@@ -2133,7 +2133,7 @@ function getAgentExclusionIntervals(agent) {
   const match = roleStr.match(/\((\d{2}:\d{2})-(\d{2}:\d{2})\s+([A-ZÁÉÍÓÚÜÑ]+(?:\s+[A-ZÁÉÍÓÚÜÑ]+)*)\)/);
   if (match) {
     const [_, iniStr, finStr, restrictedRole] = match;
-    const ROLES_NO_EMBARCAN = ['DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'];
+    const ROLES_NO_EMBARCAN = ['DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','SHADOWING','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'];
     const primaryReason = restrictedRole.toUpperCase().trim().split(/\s+/)[0];
     if (ROLES_NO_EMBARCAN.includes(primaryReason)) {
       intervals.push({
@@ -2179,7 +2179,7 @@ function clientSideOptimize(agents, flights, minSep, preferAirlines) {
       const baseRole = baseRoleMatch ? baseRoleMatch[1] : '';
       const fullShiftStatus = !/\d{1,2}:\d{2}/.test(roleText)
         && /\((SICK|NUEVO|NEW)\)/.test(roleText);
-      const fullShiftNoBoardRoles = ['DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'];
+      const fullShiftNoBoardRoles = ['DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','SHADOWING','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'];
       if (fullShiftNoBoardRoles.includes(baseRole) || fullShiftStatus) return false;
 
       // 1. Shift check
