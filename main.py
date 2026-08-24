@@ -76,8 +76,36 @@ def gap_tolerancia(za: str, zb: str) -> int:
     return 55 if za == zb else 70
 
 PUERTAS_REMOTAS = {'B20','B22','C32','C36','C39','C40'}
-ROLES_NO_EMBARCAN = {'DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','FAMI','SICK','CURSO','AUTOCHECKIN'}
+ROLES_NO_EMBARCAN = {'DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'}
 ROLES_OPERATIVOS = {'TKT','LL','OPS'}
+
+
+def get_base_role(role: str) -> str:
+    """Devuelve el rol estructural aunque exista un estado: TKT (SICK) -> TKT."""
+    normalized = str(role or "").upper().strip()
+    match = re.match(r"^([A-ZÁÉÍÓÚÜÑ]+)", normalized)
+    return match.group(1) if match else ""
+
+
+def get_full_shift_status(role: str) -> Optional[str]:
+    """Detecta estados sin intervalo que anulan toda la jornada."""
+    normalized = str(role or "").upper().strip()
+    if re.search(r"\d{1,2}:\d{2}", normalized):
+        return None
+    match = re.search(r"\((SICK|NUEVO|NEW)\)", normalized)
+    if match:
+        return "NUEVO" if match.group(1) == "NEW" else match.group(1)
+    return None
+
+
+def is_non_boarding_role(role: str) -> bool:
+    """Reconoce roles base, estados completos y motivos compuestos."""
+    normalized = str(role or "").upper().strip()
+    if normalized in ROLES_NO_EMBARCAN:
+        return True
+    if get_base_role(normalized) in ROLES_NO_EMBARCAN:
+        return True
+    return get_full_shift_status(normalized) in {"SICK", "NUEVO"}
 
 # Helper time functions
 def hms(t: str) -> int:
@@ -157,7 +185,7 @@ def normalize_mixed_role(role: str) -> tuple[str, Optional[tuple[str, str, str]]
     """
     text = str(role or "").upper().strip().replace("TKD", "TKT")
     time_token = r"\d{1,2}(?::\d{2})?"
-    role_token = r"[A-ZÁÉÍÓÚÑ]+"
+    role_token = r"[A-ZÁÉÍÓÚÜÑ]+(?:\s+[A-ZÁÉÍÓÚÜÑ]+)*"
 
     patterns = [
         # Hora-hora seguida del rol restringido.
@@ -245,8 +273,11 @@ def parse_mixed_role_exclusion(role_str: str) -> Optional[tuple]:
     """
     if not role_str:
         return None
-    # Look for patterns like (11:15-15:00 TKT) or (11:15-15:00 TKD)
-    match = re.search(r"\((\d{2}:\d{2})-(\d{2}:\d{2})\s+([A-Z]+)\)", role_str)
+    # Admite motivos simples o compuestos: TKT, OPS, CURSO TKT, SOMBRA TKT...
+    match = re.search(
+        r"\((\d{2}:\d{2})-(\d{2}:\d{2})\s+([A-ZÁÉÍÓÚÜÑ]+(?:\s+[A-ZÁÉÍÓÚÜÑ]+)*)\)",
+        role_str.upper(),
+    )
     if match:
         ini_str, fin_str, r_role = match.groups()
         return hms(ini_str), t2m_fin(ini_str, fin_str), r_role.upper().strip()
@@ -267,7 +298,7 @@ def hor_turno_completo(ag: dict) -> str:
     return txt
 
 def ndisp(ag: dict) -> str:
-    if ag['rol'] in ROLES_OPERATIVOS:
+    if get_base_role(ag['rol']) in ROLES_OPERATIVOS:
         return f"{ag['nombre']} [{ag['rol']}]"
     if ag['espec']:
         return f"{ag['nombre']} [{'/'.join(ag['espec'])}]"
@@ -367,16 +398,16 @@ def optimize_schedule(req: OptimizeRequest):
         mixed_info = parse_mixed_role_exclusion(ag_dict['rol'])
         if mixed_info:
             ex_ini, ex_fin, restricted_role = mixed_info
-            if restricted_role in ROLES_NO_EMBARCAN:
+            if is_non_boarding_role(restricted_role):
                 ag_dict['_excl_intervals'].append((ex_ini, ex_fin))
                 
         AGENTES.append(ag_dict)
 
     # Filter pools
-    activos = [a for a in AGENTES if not a['excluir'] and not a.get('excluir_embarque') and a['rol'] not in ROLES_NO_EMBARCAN]
+    activos = [a for a in AGENTES if not a['excluir'] and not a.get('excluir_embarque') and not is_non_boarding_role(a['rol'])]
     cobertura_pool = [a for a in AGENTES if not a['excluir'] and a['espec']]
-    activos_idx = {ag['nombre']: ai for ai, ag in enumerate(activos)}
-    solo_cobertura = [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and a['rol'] not in ROLES_NO_EMBARCAN]
+    activos_idx = {ag['id']: ai for ai, ag in enumerate(activos)}
+    solo_cobertura = [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and not is_non_boarding_role(a['rol'])]
     todos_csa = activos + solo_cobertura
 
     # Process flights
@@ -497,9 +528,15 @@ def optimize_schedule(req: OptimizeRequest):
 
     # Constraint: Department Coverage (TKT, LL, OPS)
     for op_idx, op_ag in enumerate(AGENTES):
-        if op_ag['rol'] not in ROLES_OPERATIVOS or op_ag['excluir'] or op_ag['_jornada'] <= 360:
+        base_operational_role = get_base_role(op_ag['rol'])
+        if (
+            base_operational_role not in ROLES_OPERATIVOS
+            or op_ag['excluir']
+            or get_full_shift_status(op_ag['rol']) == 'SICK'
+            or op_ag['_jornada'] <= 360
+        ):
             continue
-        dept = op_ag['rol']
+        dept = base_operational_role
         op_mid = op_ag['_midpoint']
         op_fin = op_ag['_t_fin']
         if op_fin - op_mid < 70:
@@ -522,7 +559,7 @@ def optimize_schedule(req: OptimizeRequest):
             cov_iv = model.NewOptionalIntervalVar(cov_s, 70, cov_e, is_cov, f'civ_{cov_ag["nombre"]}_{op_idx}')
             
             no_ov = [cov_iv]
-            ai = activos_idx.get(cov_ag['nombre'])
+            ai = activos_idx.get(cov_ag['id'])
             if ai is not None:
                 if ai in flight_iv_dict:
                     no_ov += flight_iv_dict[ai]
@@ -564,15 +601,15 @@ def optimize_schedule(req: OptimizeRequest):
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         # 3. BUILD REVENUE & REPORT OUTPUTS (FROM COLAB OUTPUT SECTIONS)
         asign = {vkey(v): [] for v in VUELOS}
-        por_ag = {a['nombre']: [] for a in activos}
+        por_ag = {a['id']: [] for a in activos}
         for ag in AGENTES:
             if ag.get('excluir_embarque') and not ag['excluir']:
-                por_ag[ag['nombre']] = []
+                por_ag[ag['id']] = []
         for ai, ag in enumerate(activos):
             for vi, v in enumerate(VUELOS):
                 if solver.Value(x[ai][vi]) == 1:
                     asign[vkey(v)].append(ag)
-                    por_ag[ag['nombre']].append(v)
+                    por_ag[ag['id']].append(v)
 
         with contextlib.redirect_stdout(stdout_capture):
             # ─────────────────────────────────────────────────────────────
@@ -581,17 +618,17 @@ def optimize_schedule(req: OptimizeRequest):
             print("═"*72); print("TURNOS DEL PERSONAL"); print("═"*72)
             secciones = [
                 ("TURNO MAÑANA · Roles Administrativos - Operativos",
-                 [a for a in AGENTES if a['rol'] in ROLES_NO_EMBARCAN and a['_t_ini'] < SPLIT]),
+                 [a for a in AGENTES if is_non_boarding_role(a['rol']) and a['_t_ini'] < SPLIT]),
                 ("TURNO MAÑANA · Agentes de Pasaje",
-                 [a for a in AGENTES if a['rol'] not in ROLES_NO_EMBARCAN and a['_t_ini'] < SPLIT and not a['excluir'] and not a.get('excluir_embarque')]),
+                 [a for a in AGENTES if not is_non_boarding_role(a['rol']) and a['_t_ini'] < SPLIT and not a['excluir'] and not a.get('excluir_embarque')]),
                 ("TURNO MAÑANA · Solo cobertura de departamento",
                  [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and a['_t_ini'] < SPLIT]),
                 ("TURNO MAÑANA · Excluidos hoy",
                  [a for a in AGENTES if a['excluir'] and a['_t_ini'] < SPLIT]),
                 ("TURNO TARDE · Roles Administrativos - Operativos",
-                 [a for a in AGENTES if a['rol'] in ROLES_NO_EMBARCAN and a['_t_ini'] >= SPLIT]),
+                 [a for a in AGENTES if is_non_boarding_role(a['rol']) and a['_t_ini'] >= SPLIT]),
                 ("TURNO TARDE · Agentes de Pasaje",
-                 [a for a in AGENTES if a['rol'] not in ROLES_NO_EMBARCAN and a['_t_ini'] >= SPLIT and not a['excluir'] and not a.get('excluir_embarque')]),
+                 [a for a in AGENTES if not is_non_boarding_role(a['rol']) and a['_t_ini'] >= SPLIT and not a['excluir'] and not a.get('excluir_embarque')]),
                 ("TURNO TARDE · Solo cobertura de departamento",
                  [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and a['_t_ini'] >= SPLIT]),
                 ("TURNO TARDE · Excluidos hoy",
@@ -602,7 +639,7 @@ def optimize_schedule(req: OptimizeRequest):
                 print(f"\n── {titulo}")
                 for a in grupo:
                     b2 = f" / {a['bloque2']['inicio']}–{a['bloque2']['fin']}" if a['bloque2'] else ""
-                    esp = f" [{'/'.join(a['espec'])}]" if a['espec'] and a['rol'] not in ROLES_OPERATIVOS else ""
+                    esp = f" [{'/'.join(a['espec'])}]" if a['espec'] and get_base_role(a['rol']) not in ROLES_OPERATIVOS else ""
                     nota = " ← SOLO COBERTURA" if a.get('excluir_embarque') else (" ← EXCLUIDO" if a['excluir'] else "")
                     print(f"  {a['nombre']:<15} {a['inicio']}–{a['fin']}{b2:<20} {a['rol']}{esp}{nota}")
             n_excluir_emb = sum(1 for a in AGENTES if a.get('excluir_embarque') and not a['excluir'])
@@ -634,7 +671,7 @@ def optimize_schedule(req: OptimizeRequest):
             # ─────────────────────────────────────────────────────────────
             print("\n"+"═"*72); print("TOLERANCIAS"); print("═"*72); hay_tol = False
             for ag in activos:
-                vag = sorted(por_ag[ag['nombre']], key=lambda v: v['emb_inicio'])
+                vag = sorted(por_ag[ag['id']], key=lambda v: v['emb_inicio'])
                 disp = ag['_t_ini'] + 30
                 for idx, v in enumerate(vag):
                     de = disp - v['emb_inicio']
@@ -669,11 +706,11 @@ def optimize_schedule(req: OptimizeRequest):
             # SALIDA 4 — LISTADO POR CANTIDAD DE EMBARQUES
             # ─────────────────────────────────────────────────────────────
             print("\n"+"═"*72); print("LISTADO POR CANTIDAD DE EMBARQUES"); print("═"*72)
-            _emb = [a for a in todos_csa if len(por_ag.get(a['nombre'], [])) > 0]
-            _sin = [a for a in todos_csa if len(por_ag.get(a['nombre'], [])) == 0]
+            _emb = [a for a in todos_csa if len(por_ag.get(a['id'], [])) > 0]
+            _sin = [a for a in todos_csa if len(por_ag.get(a['id'], [])) == 0]
             print(f"👥 Agentes CSA en listado: {len(todos_csa)}   ✈️ Con embarques: {len(_emb)}   💤 Sin embarques: {len(_sin)}")
-            for ag in sorted(todos_csa, key=lambda a: (-len(por_ag.get(a['nombre'], [])), a['_t_ini'], -a['_jornada'], a['nombre'])):
-                vag = sorted(por_ag[ag['nombre']], key=lambda v: v['emb_inicio'])
+            for ag in sorted(todos_csa, key=lambda a: (-len(por_ag.get(a['id'], [])), a['_t_ini'], -a['_jornada'], a['nombre'])):
+                vag = sorted(por_ag[ag['id']], key=lambda v: v['emb_inicio'])
                 n = len(vag)
                 comp = {}
                 for v in vag:
@@ -696,11 +733,11 @@ def optimize_schedule(req: OptimizeRequest):
             print("\n"+"═"*72); print("DESCANSOS"); print("═"*72)
             _oblig_desc = [a for a in todos_csa if a['_jornada'] > 360]
             _recom_desc = [a for a in todos_csa if a['_jornada'] == 360]
-            _op_desc = [a for a in AGENTES if a['rol'] in ROLES_OPERATIVOS and not a['excluir'] and a['_jornada'] > 360]
+            _op_desc = [a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and get_full_shift_status(a['rol']) != 'SICK' and not a['excluir'] and a['_jornada'] > 360]
             print(f"👥 Resumen: 🔴 CSA >6h (obligatorio): {len(_oblig_desc)}  🟡 CSA =6h (recomendable): {len(_recom_desc)}  🔵 Operativo >6h: {len(_op_desc)}")
             
             def tramos_agente(ag):
-                vag = sorted(por_ag[ag['nombre']], key=lambda v: v['emb_inicio'])
+                vag = sorted(por_ag[ag['id']], key=lambda v: v['emb_inicio'])
                 t = []
                 if vag and vag[0]['emb_inicio'] > ag['_t_ini']:
                     t.append((ag['_t_ini'], vag[0]['emb_inicio'], 'inicio jornada', f"L{vag[0]['num']} {vag[0]['destino']}"))
@@ -747,7 +784,7 @@ def optimize_schedule(req: OptimizeRequest):
                     print(f"  ⚠️  Sin tramo ≥70 min desde {m2t(mid)} — disponible: {dur_str(max_a)} — PSM")
 
             def ventanas_libres(ag, desde, hasta):
-                vag = sorted(por_ag.get(ag['nombre'], []), key=lambda v: v['emb_inicio'])
+                vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
                 wins, prev = [], desde
                 for v in vag:
                     if v['std_min'] <= desde:
@@ -785,7 +822,7 @@ def optimize_schedule(req: OptimizeRequest):
             def cobertura_dept(dept, op_ag, desde, hasta):
                 result = []
                 for col in AGENTES:
-                    if col['rol'] == dept and col['nombre'] != op_ag['nombre'] and not col['excluir']:
+                    if get_base_role(col['rol']) == dept and col['id'] != op_ag['id'] and not col['excluir']:
                         ol_s = max(desde, col['_t_ini'])
                         ol_e = min(hasta, col['_t_fin'])
                         if ol_e - ol_s >= 55:
@@ -809,7 +846,7 @@ def optimize_schedule(req: OptimizeRequest):
                 return result
 
             # Sort and print breaks
-            sort_desc_key = lambda a: (a['_t_ini'], -a['_jornada'], -len(por_ag.get(a['nombre'], [])), a['nombre'])
+            sort_desc_key = lambda a: (a['_t_ini'], -a['_jornada'], -len(por_ag.get(a['id'], [])), a['nombre'])
             oblig = sorted([a for a in todos_csa if a['_jornada'] > 360], key=sort_desc_key)
             recom = sorted([a for a in todos_csa if a['_jornada'] == 360], key=sort_desc_key)
             
@@ -822,11 +859,11 @@ def optimize_schedule(req: OptimizeRequest):
                 for ag in recom:
                     imprimir_descanso_csa(ag)
             
-            op_necesitan = sorted([a for a in AGENTES if a['rol'] in ROLES_OPERATIVOS and not a['excluir'] and a['_jornada'] > 360], key=lambda a: (a['_t_ini'], -a['_jornada'], a['nombre']))
+            op_necesitan = sorted([a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and get_full_shift_status(a['rol']) != 'SICK' and not a['excluir'] and a['_jornada'] > 360], key=lambda a: (a['_t_ini'], -a['_jornada'], a['nombre']))
             if op_necesitan:
                 print("\n▶ PERSONAL OPERATIVO — DESCANSO OBLIGATORIO (jornada >6h)")
                 for ag in op_necesitan:
-                    dept = ag['rol']
+                    dept = get_base_role(ag['rol'])
                     mid = ag['_midpoint']
                     print(f"\n{ndisp(ag)} ({ag['inicio']}–{ag['fin']} / {dur_str(ag['_jornada'])})")
                     cob_norm = cobertura_dept(dept, ag, mid, ag['_t_fin'])
@@ -852,6 +889,43 @@ def optimize_schedule(req: OptimizeRequest):
                             print(f"    {tipo} {nombre}: {m2t(s)}–{m2t(e)} ({dur_str(e-s)}) {icono_break(e-s)}")
                     else:
                         print(f"  ⚠️  Sin cobertura disponible para {dept} — comunicar al PSM")
+
+            # Recomendaciones informativas de cobertura por personal operativo SICK.
+            sick_operatives = [
+                a for a in AGENTES
+                if get_base_role(a['rol']) in ROLES_OPERATIVOS
+                and get_full_shift_status(a['rol']) == 'SICK'
+            ]
+            if sick_operatives:
+                print("\n▶ COBERTURA RECOMENDADA POR PERSONAL SICK")
+                for sick_ag in sick_operatives:
+                    dept = get_base_role(sick_ag['rol'])
+                    candidates = []
+                    for candidate in cobertura_pool:
+                        if dept not in candidate['espec'] or candidate['excluir']:
+                            continue
+                        overlap_start = max(sick_ag['_t_ini'], candidate['_t_ini'])
+                        overlap_end = min(sick_ag['_t_fin'], candidate['_t_fin'])
+                        if overlap_end - overlap_start < 55:
+                            continue
+                        unavailable = any(
+                            overlap_start < ex_end and overlap_end > ex_start
+                            for ex_start, ex_end in candidate.get('_excl_intervals', [])
+                        )
+                        if unavailable or is_non_boarding_role(candidate['rol']):
+                            continue
+                        candidates.append(candidate)
+                    if candidates:
+                        names = ", ".join(ndisp(candidate) for candidate in candidates[:5])
+                        print(
+                            f"  ⚠️ {sick_ag['nombre']} [{dept}] SICK "
+                            f"{sick_ag['inicio']}–{sick_ag['fin']} — candidatos: {names}"
+                        )
+                    else:
+                        print(
+                            f"  🔴 {sick_ag['nombre']} [{dept}] SICK "
+                            "— sin candidatos de cobertura disponibles"
+                        )
                         
             print("\n"+"═"*72); print(f"FIN — AZUL HANDLING · {MODO}"); print("═"*72)
 
@@ -862,11 +936,8 @@ def optimize_schedule(req: OptimizeRequest):
             # We map flight's db ID to the assigned agent ID (or the first agent in the list for visual grid)
             # Since in your visual grid, a flight is assigned to exactly 1 agent, we take the first assigned agent
             if ags:
-                # Find the agent ID in the original agents list
-                for ag_in in agents_input:
-                    if ag_in.name == ags[0]['nombre']:
-                        results_mapped[str(v['id'])] = ag_in.id
-                        break
+                # El ID identifica a la persona aunque existan nombres repetidos.
+                results_mapped[str(v['id'])] = ags[0]['id']
             
         return {
             "success": True,
@@ -1491,6 +1562,22 @@ ROLES
 - Nunca elimines el intervalo de una anotación mixta y nunca conviertas una anotación con horas en un rol completo.
 - Deja el nombre limpio, sin el rol ni las horas entre paréntesis.
 
+ESTADOS Y RESTRICCIONES: SICK, NUEVO, CURSO, SOMBRA, SHADOW Y FAMI
+- Un estado nunca cambia por sí solo la sección física de la persona.
+- Si una persona del bloque de oficina está SICK, conserva su departamento base y la sección oficina. Ejemplos: rol="TKT (SICK)", rol="OPS (SICK)" o rol="LL (SICK)".
+- Si una persona del bloque de pasaje está SICK, usa seccion="pasaje" y rol="CSA (SICK)".
+- SICK significa ausencia completa: no recibe ninguna asignación durante toda la jornada.
+- Una persona marcada NUEVO o NEW conserva su sección y usa el rol base con estado, por ejemplo rol="CSA (NUEVO)". No recibe asignaciones hasta ser operativa.
+- Puede haber listas visibles fuera de la tabla principal, por ejemplo: "CURSO TKD 09:00-15:00" seguido de varios nombres.
+- Una lista externa de CURSO, SOMBRA, SHADOW o FAMI NO es un bloque de oficina y no acredita automáticamente a nadie como TKT, OPS, LL, PSM o DSM.
+- Cada nombre de esas listas externas se incluye como un objeto independiente con seccion="pasaje".
+- Conserva el horario indicado y normaliza TKD a TKT.
+- Usa rol canónico con rol base, intervalo y motivo completo: rol="CSA (09:00-15:00 CURSO TKT)" o rol="CSA (09:00-15:00 SOMBRA TKT)".
+- Durante CURSO, SOMBRA o SHADOW la persona no está disponible ni para embarques ni para coberturas.
+- FAMI y cualquier rol operativo temporal impiden embarcar durante el intervalo indicado.
+- Si un nombre aparece también dentro de la tabla principal, NO lo fusiones: crea otra línea independiente porque son personas distintas con IDs distintos.
+- OR-Tools aplicará las restricciones utilizando el ID interno, no el nombre visible.
+
 FECHA
 - Prioriza la fecha manuscrita visible, aunque esté fuera de la tabla.
 - Si no existe, usa la fecha impresa.
@@ -1817,7 +1904,11 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                 if not role:
                     role = "ILEGIBLE"
                     add_issue("rol", "Rol vacío o ilegible.")
-                if mixed_interval is None and ("(" in role or ")" in role):
+                if (
+                    mixed_interval is None
+                    and get_full_shift_status(role) is None
+                    and ("(" in role or ")" in role)
+                ):
                     add_issue(
                         "rol",
                         f"Restricción mixta incompleta o no reconocida: {role}.",
@@ -1852,7 +1943,7 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
                             "rol",
                             "Una restricción mixta debe pertenecer a un agente de pasaje.",
                         )
-                    if restricted_role not in ROLES_NO_EMBARCAN:
+                    if not is_non_boarding_role(restricted_role):
                         add_issue(
                             "rol",
                             f"Rol restringido no reconocido: {restricted_role}.",
