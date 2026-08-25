@@ -1179,12 +1179,13 @@ async function uploadFileToBackend(files, type) {
         const newFlights = data.flights.map((f, index) => {
           return {
             id: f.id + currentLength, // Auto-increment ID to prevent duplicate key collisions!
-            destination: f.destination || 'MAD',
-            airline: f.airline || 'FR',
-            number: f.number || 'FR000',
-            time: f.time || '12:00',
+            destination: f.destination ?? null,
+            airline: f.airline ?? null,
+            number: f.number ?? null,
+            time: f.time ?? null,
             agents: '', // Always blank initially as requested
-            pax: f.pax !== undefined && f.pax !== null ? f.pax : ''
+            pax: f.pax ?? null,
+            validation_errors: []
           };
         });
         if (type === 'flights') {
@@ -1345,18 +1346,40 @@ function validateUploadedData() {
     }
   }
 
+  if (extractedData && Array.isArray(extractedData.flights)) {
+    const pendingFlights = [];
+    extractedData.flights.forEach(flight => {
+      flight.validation_errors = validateFlightForImport(flight);
+      if (flight.validation_errors.length > 0) pendingFlights.push(flight);
+    });
+    if (pendingFlights.length > 0) {
+      renderDetectedFlights();
+      const details = pendingFlights.slice(0, 12).map((flight, index) =>
+        `- Vuelo ${flight.number || `fila ${index + 1}`}: ${flight.validation_errors.join(' ')}`
+      ).join('\n');
+      const extra = pendingFlights.length > 12
+        ? `\n- Y ${pendingFlights.length - 12} vuelo(s) más.`
+        : '';
+      alert(
+        'No se pueden importar los vuelos todavía.\n\n' +
+        'Corrige las filas marcadas en rojo:\n' + details + extra
+      );
+      return;
+    }
+  }
+
   // Overwrite the daily flights list for simulation
   if (extractedData) {
     state.agents = normalizeAgents(extractedData.agents);
     state.flights = extractedData.flights.map((f) => {
       return {
         id: f.id,
-        airline: f.airline || 'FR',
+        airline: f.airline || '',
         number: f.number,
         time: f.time, // STD
-        gate: f.gate || '---',
+        gate: f.gate || '',
         destination: f.destination,
-        pax: f.pax !== undefined && f.pax !== null && f.pax !== '' ? parseInt(f.pax, 10) || 186 : 186,
+        pax: Number(f.pax),
         type: 'departure'
       };
     });
@@ -1368,9 +1391,9 @@ function validateUploadedData() {
         airline: f.airline,
         number: f.number,
         time: f.time,
-        gate: f.gate || '---',
+        gate: f.gate || '',
         destination: f.destination,
-        pax: f.pax !== undefined && f.pax !== null && f.pax !== '' ? parseInt(f.pax, 10) || 186 : 186,
+        pax: f.pax === null || f.pax === undefined || f.pax === '' ? null : Number(f.pax),
         type: 'departure'
       };
     });
@@ -1739,6 +1762,27 @@ function deleteAgentFromPreview(id) {
   }
 }
 
+function validateFlightForImport(flight) {
+  const errors = [];
+  const destination = String(flight.destination || '').trim();
+  const number = String(flight.number || '').trim();
+  const time = String(flight.time || '').trim();
+  const pax = flight.pax;
+
+  if (!destination) errors.push('Destino no detectado.');
+  if (!number) errors.push('Número de vuelo no detectado.');
+  if (!/^\d{2}:\d{2}$/.test(time)) {
+    errors.push('STD no detectado o con formato inválido.');
+  } else {
+    const [hour, minute] = time.split(':').map(Number);
+    if (hour > 23 || minute > 59) errors.push('STD fuera de rango.');
+  }
+  if (pax === null || pax === undefined || pax === '' || !Number.isInteger(Number(pax))) {
+    errors.push('PAX/WEBS no detectado.');
+  }
+  return errors;
+}
+
 // Render flights table inside the preview page (Airport Terminal High-Fidelity Style)
 function renderDetectedFlights() {
   const container = document.getElementById('detectedFlightsBody');
@@ -1757,7 +1801,14 @@ function renderDetectedFlights() {
 
   const calculateTimes = (stdStr) => {
     try {
-      const [sh, sm] = stdStr.split(':').map(Number);
+      const normalizedStd = String(stdStr || '').trim();
+      if (!/^\d{2}:\d{2}$/.test(normalizedStd)) {
+        return { apertu: '?', emb: '?', std: '?' };
+      }
+      const [sh, sm] = normalizedStd.split(':').map(Number);
+      if (sh > 23 || sm > 59) {
+        return { apertu: '?', emb: '?', std: '?' };
+      }
       let stdMins = sh * 60 + sm;
       
       // Boarding time (EMB) is 40 minutes before STD
@@ -1777,27 +1828,31 @@ function renderDetectedFlights() {
       return {
         apertu: formatMins(apertuMins),
         emb: formatMins(embMins),
-        std: stdStr
+        std: normalizedStd
       };
     } catch(e) {
-      return { apertu: '02:45', emb: '05:05', std: stdStr };
+      return { apertu: '?', emb: '?', std: '?' };
     }
   };
 
   container.innerHTML = extractedData.flights.map((f, idx) => {
     const isEditing = editingFlightId === f.id;
     const times = calculateTimes(f.time);
+    const validationErrors = validateFlightForImport(f);
+    f.validation_errors = validationErrors;
+    const hasValidationError = validationErrors.length > 0;
+    const missingValue = '<span style="color:#ef4444; font-weight:900;" title="Dato no detectado">?</span>';
 
     if (isEditing) {
       return `
         <tr style="border-bottom: 1px solid #282828; background: #1a1a1a;">
           <td style="padding: 8px 4px; color:#888;">${idx + 1}</td>
-          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.destination)}" id="edit_flight_dest_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
-          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.number)}" id="edit_flight_number_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.destination || '')}" id="edit_flight_dest_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.number || '')}" id="edit_flight_number_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
           <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.apertu}</td>
-          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.agents)}" id="edit_flight_agents_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
+          <td style="padding: 8px 4px;"><input type="text" value="${escapeHtml(f.agents || '')}" id="edit_flight_agents_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
           <td style="padding: 8px 4px; color: var(--text-muted); font-size: 11px;">${times.emb}</td>
-          <td style="padding: 8px 4px;"><input type="time" value="${f.time}" id="edit_flight_time_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
+          <td style="padding: 8px 4px;"><input type="time" value="${f.time || ''}" id="edit_flight_time_${f.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
           <td style="padding: 8px 4px;"><input type="number" value="${f.pax !== undefined && f.pax !== null && f.pax !== '' ? f.pax : ''}" id="edit_flight_pax_${f.id}" min="10" max="300" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;" placeholder="—"></td>
           <td style="padding: 8px 4px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center;">
@@ -1812,18 +1867,27 @@ function renderDetectedFlights() {
       const isLowPax = hasPax && !isNaN(paxInt) && paxInt <= 100;
       const paxColor = isLowPax ? '#22c55e' : '#a0a0a0';
       const paxWeight = isLowPax ? 'bold' : 'normal';
-      const paxDisplay = hasPax ? f.pax : '—';
+      const paxDisplay = hasPax ? f.pax : missingValue;
+      const destinationDisplay = f.destination ? escapeHtml(f.destination) : missingValue;
+      const numberDisplay = f.number ? getFlightNumberBadge(f.number) : missingValue;
+      const timeIsMissing = times.std === '?';
+      const rowStyle = hasValidationError
+        ? 'border-bottom:1px solid #7f1d1d; background:rgba(239,68,68,0.10);'
+        : 'border-bottom:1px solid #1f1f1f; transition:background 0.15s;';
+      const hoverAttrs = hasValidationError
+        ? ''
+        : `onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'"`;
       
       return `
-        <tr style="border-bottom: 1px solid #1f1f1f; transition: background 0.15s;" onmouseover="this.style.background='#161616'" onmouseout="this.style.background='none'">
+        <tr style="${rowStyle}" ${hoverAttrs}>
           <td style="padding: 10px 4px; color: #555; font-weight: bold;">${idx + 1}</td>
-          <td style="padding: 10px 4px; color: #fff; font-weight: bold;">${escapeHtml(f.destination)}</td>
-          <td style="padding: 10px 4px;">${getFlightNumberBadge(f.number)}</td>
-          <td style="padding: 10px 4px; color: #a0a0a0;">${times.apertu}</td>
+          <td style="padding: 10px 4px; color: #fff; font-weight: bold;">${destinationDisplay}</td>
+          <td style="padding: 10px 4px;">${numberDisplay}</td>
+          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#a0a0a0'};">${times.apertu}</td>
           <td style="padding: 10px 4px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
-          <td style="padding: 10px 4px; color: #a0a0a0;">${times.emb}</td>
-          <td style="padding: 10px 4px; color: #ff9f00; font-weight: bold;">${times.std}</td>
-          <td style="padding: 10px 4px; color: ${paxColor}; font-weight: ${paxWeight};">${paxDisplay}</td>
+          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#a0a0a0'};">${times.emb}</td>
+          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#ff9f00'}; font-weight: bold;">${times.std}</td>
+          <td style="padding: 10px 4px; color: ${hasPax ? paxColor : '#ef4444'}; font-weight: ${hasPax ? paxWeight : 'bold'};">${paxDisplay}</td>
           <td style="padding: 10px 4px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
               <button onclick="startEditFlight(${f.id})" style="background: transparent; border: 1px solid #333; color: #888; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Editar">✏️</button>
@@ -1869,10 +1933,10 @@ function saveEditFlight(id) {
   const time = timeInput.value.trim();
   const agents = agentsInput ? agentsInput.value.trim().toUpperCase() : '';
   
-  let pax = '';
+  let pax = null;
   if (paxInput && paxInput.value.trim() !== '') {
     pax = parseInt(paxInput.value, 10);
-    if (isNaN(pax)) pax = '';
+    if (isNaN(pax)) pax = null;
   }
 
   if (!number || !time || !destination) {
@@ -1882,12 +1946,20 @@ function saveEditFlight(id) {
 
   const flightIndex = extractedData.flights.findIndex(f => f.id === id);
   if (flightIndex !== -1) {
-    extractedData.flights[flightIndex].number = number;
-    extractedData.flights[flightIndex].airline = number.substring(0, 2);
-    extractedData.flights[flightIndex].destination = destination;
-    extractedData.flights[flightIndex].time = time;
-    extractedData.flights[flightIndex].agents = agents;
-    extractedData.flights[flightIndex].pax = pax;
+    const flight = extractedData.flights[flightIndex];
+    flight.number = number;
+    flight.airline = number.substring(0, 2);
+    flight.destination = destination;
+    flight.time = time;
+    flight.agents = agents;
+    flight.pax = pax;
+    flight.validation_errors = validateFlightForImport(flight);
+    if (flight.validation_errors.length > 0) {
+      alert(
+        'La fila se ha guardado, pero todavía necesita revisión:\n\n' +
+        flight.validation_errors.join('\n')
+      );
+    }
   }
 
   editingFlightId = null;
@@ -2834,12 +2906,13 @@ function insertFlightAfter(id) {
   
   const newFlight = {
     id: newId,
-    destination: currentFlight ? currentFlight.destination : 'MAD',
-    airline: currentFlight ? currentFlight.airline : 'FR',
-    number: currentFlight ? currentFlight.number + 'A' : 'FR000',
-    time: currentFlight ? currentFlight.time : '12:00',
+    destination: currentFlight ? currentFlight.destination : null,
+    airline: currentFlight ? currentFlight.airline : null,
+    number: currentFlight && currentFlight.number ? currentFlight.number + 'A' : null,
+    time: currentFlight ? currentFlight.time : null,
     agents: '',
-    pax: currentFlight ? (currentFlight.pax || '') : ''
+    pax: currentFlight ? currentFlight.pax : null,
+    validation_errors: []
   };
 
   const idx = extractedData.flights.findIndex(f => f.id === id);

@@ -332,7 +332,7 @@ class FlightInput(BaseModel):
     number: str
     time: str              # departure time (STD)
     gate: Optional[str] = ""
-    pax: Optional[int] = 186
+    pax: Optional[int] = None
     charter: Optional[bool] = False
     manual: Optional[bool] = False
 
@@ -355,6 +355,21 @@ def optimize_schedule(req: OptimizeRequest):
         raise HTTPException(status_code=400, detail="No hay agentes disponibles para optimizar.")
     if not flights_input:
         raise HTTPException(status_code=400, detail="No hay vuelos para asignar.")
+    incomplete_flights = [
+        flight.id for flight in flights_input
+        if not str(flight.destination or "").strip()
+        or not str(flight.number or "").strip()
+        or not str(flight.time or "").strip()
+        or flight.pax is None
+    ]
+    if incomplete_flights:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Hay vuelos con datos pendientes de revisión: "
+                + ", ".join(map(str, incomplete_flights))
+            ),
+        )
 
     # 1. PREPROCESAMIENTO (FROM COLAB SECTION 6)
     AGENTES = []
@@ -421,7 +436,7 @@ def optimize_schedule(req: OptimizeRequest):
             'destino': v.destination,
             'std': v.time,
             'puerta': v.gate,
-            'pax': v.pax or 186,
+            'pax': v.pax,
             'charter': v.charter,
             'manual': v.manual,
             'emb_inicio': std - 40,
@@ -429,7 +444,7 @@ def optimize_schedule(req: OptimizeRequest):
             'std_min': std,
             'zona': get_zona(v.destination),
             'agentes_req': 3 if v.gate in PUERTAS_REMOTAS else 2,
-            'pax_unico_ok': (v.pax or 186) <= 100
+            'pax_unico_ok': v.pax <= 100
         }
         VUELOS.append(v_dict)
 
@@ -931,19 +946,35 @@ def optimize_schedule(req: OptimizeRequest):
 
         # Map mapped results for the frontend daily visual schedule table
         results_mapped = {}
+        flight_agent_ids = {}
+        flight_agent_names = {}
         for vi, v in enumerate(VUELOS):
             ags = asign[vkey(v)]
-            # We map flight's db ID to the assigned agent ID (or the first agent in the list for visual grid)
-            # Since in your visual grid, a flight is assigned to exactly 1 agent, we take the first assigned agent
+            flight_key = str(v['id'])
+            flight_agent_ids[flight_key] = [agent['id'] for agent in ags]
+            flight_agent_names[flight_key] = [agent['nombre'] for agent in ags]
+            # Compatibilidad temporal con la parrilla manual antigua.
             if ags:
-                # El ID identifica a la persona aunque existan nombres repetidos.
-                results_mapped[str(v['id'])] = ags[0]['id']
-            
+                results_mapped[flight_key] = ags[0]['id']
+
+        unassigned_flights = [
+            v['id'] for v in VUELOS if not flight_agent_ids.get(str(v['id']))
+        ]
+        workload_by_agent = {}
+        for assigned_ids in flight_agent_ids.values():
+            for agent_id in assigned_ids:
+                workload_by_agent[agent_id] = workload_by_agent.get(agent_id, 0) + 1
+        max_workload = max(workload_by_agent.values(), default=0)
+
         return {
             "success": True,
             "status": "OPTIMAL" if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "FEASIBLE",
             "assignments": results_mapped,
-            "report_text": stdout_capture.getvalue() # ¡TU REPORTE DE CONSOLA DE COLAB COMPLETO!
+            "flight_agent_ids": flight_agent_ids,
+            "flight_agent_names": flight_agent_names,
+            "unassigned_flights": unassigned_flights,
+            "max_workload": max_workload,
+            "report_text": stdout_capture.getvalue()
         }
     else:
         return {
@@ -1093,14 +1124,14 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
                 std = str(flight.get("time") or "")
                 rows.append([
                     index,
-                    str(flight.get("destination") or ""),
-                    str(flight.get("airline") or ""),
-                    str(flight.get("number") or ""),
-                    move_minutes(std, -180),
+                    str(flight.get("destination") or "?"),
+                    str(flight.get("airline") or "?"),
+                    str(flight.get("number") or "?"),
+                    move_minutes(std, -180) or "?",
                     str(flight.get("agents") or ""),
-                    move_minutes(std, -40),
-                    std,
-                    flight.get("pax") if flight.get("pax") not in (None, "") else "",
+                    move_minutes(std, -40) or "?",
+                    std or "?",
+                    flight.get("pax") if flight.get("pax") not in (None, "") else "?",
                 ])
             filename_prefix = "aeroshift_vuelos"
             widths = [8, 12, 12, 16, 13, 24, 13, 13, 10]
@@ -1125,6 +1156,8 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
                 cell.border = border
                 cell.fill = body_fill
+                if value == "?":
+                    cell.font = Font(color="EF4444", bold=True)
             if export_type == "agents" and row[-1]:
                 for column in range(1, len(headers) + 1):
                     ws.cell(row=row_index, column=column).fill = warning_fill
@@ -1451,7 +1484,7 @@ async def extract_data(
             "  \"std\": \"05:45\",\n"
             "  \"pax\": 189\n"
             "}\n"
-            "- ¡¡¡EXTRACCIÓN DE PASAJEROS (pax)!!!: Busca en la tabla de vuelos la columna titulada 'WEBS' (que representa la cantidad aproximada de pasajeros facturados) y extrae obligatoriamente ese número como entero en el campo 'pax' (ej: si la columna 'WEBS' dice '189', extrae el número entero 189). Si la columna está vacía, no la encuentras o es ilegible, pon 186 por defecto.\n"
+            "- ¡¡¡EXTRACCIÓN DE PASAJEROS (pax)!!!: Busca en la tabla de vuelos la columna titulada 'WEBS' (que representa la cantidad aproximada de pasajeros facturados) y extrae obligatoriamente ese número como entero en el campo 'pax' (ej: si la columna 'WEBS' dice '189', extrae el número entero 189). Si la columna está vacía, no la encuentras o es ilegible, devuelve null y no inventes ningún valor.\n"
             "- ¡¡¡MUY IMPORTANTE PARA LA HORA DEL VUELO (std)!!!: Extrae estrictamente de la columna o celda 'STD' (ej: '5:45' -> '05:45'). ¡NUNCA extraigas la hora de la columna 'APERTU' (ej: '2:45') ni 'CIERRE' (ej: '5:05') como 'std' del vuelo! Si la columna 'APERTU' dice '2:45' y 'STD' dice '5:45', el std que debes extraer es '05:45'.\n"
             "- ¡¡¡REGLA PARA PÁGINAS DE CONTINUACIÓN (SIN CABECERAS) (ej: filas 41 a 80)!!!:\n"
             "  * Si la imagen cargada empieza directamente con números de fila como 41 o superiores y carece de cabecera impresa arriba, las columnas siguen exactamente la misma estructura de la página 1:\n"
@@ -1593,6 +1626,90 @@ PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 - No añadas personas que no sean visibles.
 - Si un texto es realmente ilegible, usa "ILEGIBLE" en ese campo y añade una descripción a incertidumbres; nunca sustituyas el dato por un valor inventado.
 - No incluyas vuelos, tipo_elemento, títulos, observaciones ni campos distintos de los definidos en el esquema.
+""".strip()
+
+        elif document_type == "flights":
+            system_prompt = """
+Eres un extractor especializado exclusivamente en parrillas de vuelos aeroportuarios.
+Devuelve únicamente JSON válido, sin Markdown ni explicaciones.
+
+OBJETIVO
+Extrae todos los vuelos visibles, en el mismo orden del documento, sin omitir filas y sin incluir personal.
+
+ESQUEMA EXACTO
+{
+  "fecha": "21/06/26",
+  "titulo": "PARRILLA DE VUELOS",
+  "observaciones": "",
+  "manana": [
+    {
+      "tipo_elemento": "vuelo",
+      "destino": "SNN",
+      "linea_aerea": "FR",
+      "numero_vuelo": "FR2849",
+      "std": "05:45",
+      "pax": 189
+    }
+  ],
+  "tarde": []
+}
+
+REGLAS OBLIGATORIAS
+- Crea exactamente un objeto por cada fila de vuelo visible.
+- No inventes, resumas, traduzcas ni corrijas los datos del documento.
+- No incluyas agentes ni objetos con tipo_elemento distinto de "vuelo".
+- Conserva el orden de las filas y combina todas las páginas cargadas.
+- Usa "manana" para STD anterior a 14:00 y "tarde" para STD desde 14:00.
+
+CAMPOS
+- destino: código IATA visible, normalmente tres letras.
+- linea_aerea: código visible de la aerolínea, normalmente dos caracteres.
+- numero_vuelo: combina el código de aerolínea y los dígitos cuando aparezcan separados. Ejemplo: FR + 2849 = FR2849.
+- std: hora de salida extraída exclusivamente de la columna STD y normalizada como HH:MM.
+- pax: entero extraído de la columna WEBS.
+
+STD — REGLA CRÍTICA
+- Extrae siempre la hora de la columna STD.
+- Nunca utilices APERTU, APERTURA, EMBARQUE o CIERRE como STD.
+- Ejemplo: APERTU=02:45, CIERRE=05:05 y STD=05:45 produce std="05:45".
+- Normaliza 5:45 como 05:45 sin modificar los minutos.
+
+PAX / WEBS
+- Busca la columna WEBS y usa su valor como pax.
+- Si WEBS está vacío, ausente o realmente ilegible, devuelve pax=null.
+- Nunca inventes 186 ni ningún otro número de pasajeros.
+- No tomes cifras de otras columnas como pasajeros.
+
+DATOS AUSENTES O ILEGIBLES
+- Si destino, línea aérea, número de vuelo, STD o PAX no pueden leerse, usa null en ese campo.
+- No sustituyas datos ausentes por MAD, FR, FR000, 12:00, 186 ni otros valores plausibles.
+- Un dato desconocido debe seguir siendo desconocido para que la interfaz lo marque y permita corregirlo.
+
+PÁGINAS DE CONTINUACIÓN SIN CABECERA
+Si una página empieza directamente con filas 41 o superiores, conserva esta estructura:
+1. Número de fila.
+2. Destino.
+3. Código de aerolínea.
+4. Dígitos del vuelo.
+5. APERTURA.
+6. EMBARQUE.
+7. CIERRE.
+8. STD.
+- Para std usa siempre la columna 8, nunca la columna 5.
+- Ejemplo fila 41: APERTURA=11:45 y STD=14:45 produce std="14:45".
+
+FECHA
+- Prioriza cualquier fecha manuscrita visible, aunque esté fuera de la tabla.
+- Si no existe fecha manuscrita, usa la fecha impresa de la cabecera.
+- Si no se detecta ninguna, devuelve "Fecha no detectada".
+- No inventes una fecha.
+
+COMPROBACIÓN FINAL
+- Recorre cada página de arriba abajo.
+- Comprueba que el número de objetos coincide con el número de filas visibles.
+- Verifica de nuevo cada STD contra su columna.
+- Verifica que destino, aerolínea, número de vuelo y PAX proceden de la misma fila.
+- Devuelve únicamente las claves definidas en el esquema.
 """.strip()
 
         # Se utiliza exclusivamente el modelo elegido en la web. Si falla, el
@@ -2454,18 +2571,26 @@ REGLAS
                                     "shift": shift_name
                                 })
                 elif tipo == "vuelo":
-                    pax_val = item.get("pax") or item.get("webs")
+                    pax_val = item.get("pax")
+                    if pax_val is None:
+                        pax_val = item.get("webs")
                     try:
-                        pax_num = int(pax_val) if pax_val is not None else 186
-                    except ValueError:
-                        pax_num = 186
-                    
+                        pax_num = int(pax_val) if pax_val not in (None, "") else None
+                    except (TypeError, ValueError):
+                        pax_num = None
+
+                    def clean_flight_text(value: Any) -> Optional[str]:
+                        if value is None:
+                            return None
+                        cleaned = str(value).strip()
+                        return cleaned.upper() if cleaned else None
+
                     formatted_flights.append({
                         "id": len(formatted_flights) + 1,
-                        "destination": str(item.get("destino") or "MAD").upper().strip(),
-                        "airline": str(item.get("linea_aerea") or "FR").upper().strip(),
-                        "number": str(item.get("numero_vuelo") or f"FL{len(formatted_flights)+1}").upper().strip(),
-                        "time": str(item.get("std") or "12:00").strip(),
+                        "destination": clean_flight_text(item.get("destino")),
+                        "airline": clean_flight_text(item.get("linea_aerea")),
+                        "number": clean_flight_text(item.get("numero_vuelo")),
+                        "time": clean_flight_text(item.get("std")),
                         "agents": "",
                         "pax": pax_num
                     })
