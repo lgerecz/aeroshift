@@ -2850,8 +2850,8 @@ function getFlightNumberBadge(numberStr) {
   if (num.startsWith('FR')) {
     return `<span style="color: #378add; font-weight: bold;">${escapeHtml(numberStr)}</span>`;
   } else {
-    // Other airlines (like RR, RK, etc.) in a vibrant highlight color pill!
-    return `<span style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid rgba(244,63,94,0.3); letter-spacing: 0.5px; font-size: 11.5px; font-family: monospace;">${escapeHtml(numberStr)}</span>`;
+    // Otras nomenclaturas: texto rojo, sin fondo, borde ni recuadro.
+    return `<span style="color: #f43f5e; font-weight: bold; letter-spacing: 0.5px; font-size: 11.5px; font-family: monospace;">${escapeHtml(numberStr)}</span>`;
   }
 }
 

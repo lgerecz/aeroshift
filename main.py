@@ -1122,11 +1122,18 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
             rows = []
             for index, flight in enumerate(flights, 1):
                 std = str(flight.get("time") or "")
+                airline = str(flight.get("airline") or "").upper().strip()
+                full_flight_number = str(flight.get("number") or "").upper().strip()
+                excel_flight_number = full_flight_number
+                if airline and full_flight_number.startswith(airline):
+                    suffix = full_flight_number[len(airline):].strip()
+                    if suffix:
+                        excel_flight_number = suffix
                 rows.append([
                     index,
                     str(flight.get("destination") or "?"),
-                    str(flight.get("airline") or "?"),
-                    str(flight.get("number") or "?"),
+                    airline or "?",
+                    excel_flight_number or "?",
                     move_minutes(std, -180) or "?",
                     str(flight.get("agents") or ""),
                     move_minutes(std, -40) or "?",
