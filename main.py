@@ -1213,6 +1213,19 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
         ws.freeze_panes = "A4"
         ws.auto_filter.ref = f"A3:{get_column_letter(len(headers))}{3 + len(rows)}"
         ws.sheet_view.showGridLines = False
+        # Configuración de impresión: A4, una página de ancho y altura automática.
+        ws.page_setup.paperSize = "9"  # A4
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_title_rows = "1:3"
+        ws.print_area = f"A1:{get_column_letter(len(headers))}{3 + len(rows)}"
+        ws.page_margins.left = 0.25
+        ws.page_margins.right = 0.25
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
+        ws.print_options.horizontalCentered = True
 
         # Segunda pestaña compacta con un prompt listo para copiar en otra IA.
         guide = wb.create_sheet("Guía auditoría IA")
@@ -1256,6 +1269,7 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
             guide.column_dimensions[get_column_letter(column)].width = 16
         guide.row_dimensions[5].height = 180
         guide.sheet_view.showGridLines = False
+        guide.page_setup.paperSize = "9"  # A4
         guide.page_setup.orientation = "portrait"
         guide.page_setup.fitToWidth = 1
         guide.page_setup.fitToHeight = 1

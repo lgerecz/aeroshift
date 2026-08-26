@@ -702,9 +702,9 @@
         <p style="color:#fff; font-weight:700; margin:0 0 7px;">¿Dónde quieres cargarla?</p>
         <p style="color:var(--text-muted); font-size:12px; margin:0;">Elige el cuadrante que corresponde a la imagen copiada.</p>
       </div>
-      <div class="modal-footer" style="justify-content:center; padding-bottom:24px;">
-        <button class="btn btn-secondary" onclick="uploadClipboardTo('agents')">Turnos del Personal</button>
-        <button class="btn btn-primary" onclick="uploadClipboardTo('flights')">Parrilla de Vuelos</button>
+      <div class="modal-footer" style="justify-content:center; gap:10px; padding-bottom:24px;">
+        <button class="btn" onclick="uploadClipboardTo('agents')" style="flex:1; background:transparent; border:1px solid var(--primary); color:var(--primary); font-weight:700; transition:all .15s;" onmouseover="this.style.background='var(--primary)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='var(--primary)'">Turnos del Personal</button>
+        <button class="btn" onclick="uploadClipboardTo('flights')" style="flex:1; background:transparent; border:1px solid var(--primary); color:var(--primary); font-weight:700; transition:all .15s;" onmouseover="this.style.background='var(--primary)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='var(--primary)'">Parrilla de Vuelos</button>
       </div>
     </div>
   </div>
@@ -729,6 +729,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=70"></script>
+  <script src="app.js?v=71"></script>
 </body>
 </html>

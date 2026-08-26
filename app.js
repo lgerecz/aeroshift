@@ -217,6 +217,7 @@ function init() {
   if (optModoElement) optModoElement.value = savedOptModo;
 
   setupExtractorClipboardAndDrop();
+  setupCustomTooltips();
   updateQuadrantReviewVisuals();
 
   // Pre-render the preview tables so they are ready on load!
@@ -266,6 +267,55 @@ function saveValidationParameters() {
 function isExtractorVisible() {
   const view = document.getElementById('viewExtractorPreview');
   return !!view && getComputedStyle(view).display !== 'none';
+}
+
+function setupCustomTooltips() {
+  if (document.body.dataset.customTooltipsReady) return;
+  document.body.dataset.customTooltipsReady = '1';
+  const tooltip = document.createElement('div');
+  tooltip.id = 'aeroshiftCustomTooltip';
+  Object.assign(tooltip.style, {
+    position:'fixed', display:'none', zIndex:'5000', maxWidth:'280px', padding:'7px 9px',
+    borderRadius:'5px', background:'#0f172a', border:'1px solid #475569', color:'#f8fafc',
+    fontFamily:'Inter, sans-serif', fontSize:'11px', fontWeight:'600', lineHeight:'1.3',
+    boxShadow:'0 7px 18px rgba(0,0,0,.35)', pointerEvents:'none'
+  });
+  document.body.appendChild(tooltip);
+  let activeElement = null;
+
+  const show = element => {
+    if (!element) return;
+    const nativeTitle = element.getAttribute('title');
+    if (nativeTitle) {
+      element.dataset.tooltip = nativeTitle;
+      element.removeAttribute('title');
+    }
+    const text = element.dataset.tooltip;
+    if (!text) return;
+    activeElement = element;
+    tooltip.textContent = text;
+    tooltip.style.display = 'block';
+    const rect = element.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.top - tooltip.offsetHeight - 8;
+    if (top < 8) top = rect.bottom + 8;
+    left = Math.min(Math.max(8, left), window.innerWidth - tooltip.offsetWidth - 8);
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  };
+  const hide = element => {
+    if (element && activeElement !== element) return;
+    activeElement = null;
+    tooltip.style.display = 'none';
+  };
+
+  document.addEventListener('mouseover', event => show(event.target.closest?.('[title], [data-tooltip]')));
+  document.addEventListener('mouseout', event => {
+    const element = event.target.closest?.('[data-tooltip]');
+    if (element && !element.contains(event.relatedTarget)) hide(element);
+  });
+  document.addEventListener('focusin', event => show(event.target.closest?.('[title], [data-tooltip]')));
+  document.addEventListener('focusout', event => hide(event.target.closest?.('[data-tooltip]')));
 }
 
 function setupExtractorClipboardAndDrop() {
@@ -1752,9 +1802,7 @@ function renderDetectedAgents() {
   const titleElem = document.getElementById('detectedAgentsTitle');
   if (titleElem) {
     const agentsDate = extractedData?.agentsDate || '';
-    titleElem.innerHTML = agentsDate
-      ? `👥 Turnos del Personal — ${escapeHtml(agentsDate)}`
-      : '👥 Turnos del Personal';
+    titleElem.innerHTML = buildEditableQuadrantTitle('agents', '👥', 'Turnos del Personal', agentsDate);
   }
 
   // Helper to determine shift
@@ -1992,9 +2040,7 @@ function renderDetectedFlights() {
   const titleElem = document.getElementById('detectedFlightsTitle');
   if (titleElem) {
     const flightsDate = extractedData?.flightsDate || '';
-    titleElem.innerHTML = flightsDate
-      ? `✈️ Parrilla de Vuelos — ${escapeHtml(flightsDate)}`
-      : '✈️ Parrilla de Vuelos';
+    titleElem.innerHTML = buildEditableQuadrantTitle('flights', '✈️', 'Parrilla de Vuelos', flightsDate);
   }
 
   const calculateTimes = (stdStr) => {
@@ -2171,6 +2217,65 @@ function deleteFlightFromPreview(id) {
     invalidateQuadrantReview('flights');
     renderDetectedFlights();
   }
+}
+
+function parseQuadrantDateToISO(value) {
+  const text = String(value || '').trim();
+  let match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (match) {
+    let year = Number(match[3]);
+    if (year < 100) year += 2000;
+    return `${String(year).padStart(4, '0')}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`;
+  }
+  const months = { ENERO:1, FEBRERO:2, MARZO:3, ABRIL:4, MAYO:5, JUNIO:6, JULIO:7, AGOSTO:8, SEPTIEMBRE:9, OCTUBRE:10, NOVIEMBRE:11, DICIEMBRE:12 };
+  const upper = text.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  match = upper.match(/(\d{1,2})\s+DE\s+([A-Z]+)(?:\s+DE\s+(\d{4}))?/);
+  if (match && months[match[2]]) {
+    const fallbackYear = Number(document.getElementById('currentDate')?.value?.slice(0, 4)) || new Date().getFullYear();
+    const year = Number(match[3]) || fallbackYear;
+    return `${year}-${String(months[match[2]]).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`;
+  }
+  return document.getElementById('currentDate')?.value || new Date().toISOString().slice(0, 10);
+}
+
+function formatQuadrantDateFromISO(isoDate) {
+  const match = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(isoDate || '');
+}
+
+function buildEditableQuadrantTitle(type, icon, label, dateValue) {
+  const visibleDate = dateValue || 'Añadir fecha';
+  return `${icon} ${label} — <button type="button" onclick="openQuadrantDatePicker('${type}', event)" title="Cambiar fecha" style="background:transparent; border:0; border-bottom:1px dashed #64748b; color:#fff; padding:0 1px 2px; cursor:pointer; font:inherit; font-weight:inherit; letter-spacing:inherit; text-transform:inherit;">${escapeHtml(visibleDate)}</button>`;
+}
+
+function openQuadrantDatePicker(type, event) {
+  ensureExtractedDataShape();
+  let picker = document.getElementById('quadrantDatePicker');
+  if (!picker) {
+    picker = document.createElement('input');
+    picker.type = 'date';
+    picker.id = 'quadrantDatePicker';
+    Object.assign(picker.style, { position:'fixed', width:'2px', height:'2px', opacity:'0.01', zIndex:'3000', pointerEvents:'none' });
+    document.body.appendChild(picker);
+  }
+  const currentValue = type === 'agents' ? extractedData.agentsDate : extractedData.flightsDate;
+  picker.value = parseQuadrantDateToISO(currentValue);
+  const rect = event?.currentTarget?.getBoundingClientRect();
+  if (rect) { picker.style.left = `${rect.left}px`; picker.style.top = `${rect.bottom}px`; }
+  picker.onchange = () => {
+    const displayDate = formatQuadrantDateFromISO(picker.value);
+    if (!displayDate) return;
+    if (type === 'agents') {
+      extractedData.agentsDate = displayDate;
+      renderDetectedAgents();
+    } else {
+      extractedData.flightsDate = displayDate;
+      renderDetectedFlights();
+    }
+    invalidateQuadrantReview(type);
+  };
+  if (typeof picker.showPicker === 'function') picker.showPicker();
+  else picker.click();
 }
 
 function getTodayDisplayDate() {
