@@ -2221,9 +2221,10 @@ function deleteFlightFromPreview(id) {
 
 function parseQuadrantDateToISO(value) {
   const text = String(value || '').trim();
-  let match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  let match = text.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?$/);
   if (match) {
-    let year = Number(match[3]);
+    const fallbackYear = Number(document.getElementById('currentDate')?.value?.slice(0, 4)) || new Date().getFullYear();
+    let year = match[3] ? Number(match[3]) : fallbackYear;
     if (year < 100) year += 2000;
     return `${String(year).padStart(4, '0')}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`;
   }
@@ -2250,32 +2251,50 @@ function buildEditableQuadrantTitle(type, icon, label, dateValue) {
 
 function openQuadrantDatePicker(type, event) {
   ensureExtractedDataShape();
-  let picker = document.getElementById('quadrantDatePicker');
-  if (!picker) {
-    picker = document.createElement('input');
-    picker.type = 'date';
-    picker.id = 'quadrantDatePicker';
-    Object.assign(picker.style, { position:'fixed', width:'2px', height:'2px', opacity:'0.01', zIndex:'3000', pointerEvents:'none' });
-    document.body.appendChild(picker);
-  }
+  // Un input nuevo en cada clic evita que el navegador reutilice la posición anterior.
+  document.getElementById('quadrantDatePicker')?.remove();
+  const picker = document.createElement('input');
+  picker.type = 'date';
+  picker.id = 'quadrantDatePicker';
   const currentValue = type === 'agents' ? extractedData.agentsDate : extractedData.flightsDate;
   picker.value = parseQuadrantDateToISO(currentValue);
   const rect = event?.currentTarget?.getBoundingClientRect();
-  if (rect) { picker.style.left = `${rect.left}px`; picker.style.top = `${rect.bottom}px`; }
+  const pickerWidth = 170;
+  const left = rect ? Math.min(Math.max(8, rect.left), window.innerWidth - pickerWidth - 8) : 8;
+  const top = rect ? rect.bottom + 4 : 8;
+  Object.assign(picker.style, {
+    position:'fixed', left:`${left}px`, top:`${top}px`, width:`${pickerWidth}px`, height:'32px',
+    opacity:'0.01', zIndex:'3000', cursor:'pointer'
+  });
+  document.body.appendChild(picker);
+
+  const removePicker = () => setTimeout(() => picker.remove(), 200);
   picker.onchange = () => {
     const displayDate = formatQuadrantDateFromISO(picker.value);
-    if (!displayDate) return;
-    if (type === 'agents') {
-      extractedData.agentsDate = displayDate;
-      renderDetectedAgents();
-    } else {
-      extractedData.flightsDate = displayDate;
-      renderDetectedFlights();
+    if (displayDate) {
+      if (type === 'agents') {
+        extractedData.agentsDate = displayDate;
+        renderDetectedAgents();
+      } else {
+        extractedData.flightsDate = displayDate;
+        renderDetectedFlights();
+      }
+      invalidateQuadrantReview(type);
     }
-    invalidateQuadrantReview(type);
+    removePicker();
   };
-  if (typeof picker.showPicker === 'function') picker.showPicker();
-  else picker.click();
+  picker.onblur = removePicker;
+
+  // Espera un frame para que el navegador calcule la nueva posición antes de abrir.
+  picker.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    try {
+      if (typeof picker.showPicker === 'function') picker.showPicker();
+      else picker.click();
+    } catch (_) {
+      picker.click();
+    }
+  });
 }
 
 function getTodayDisplayDate() {
