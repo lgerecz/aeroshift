@@ -267,7 +267,7 @@
       
       <!-- RECTÁNGULO 1 (IZQUIERDO): TURNOS DEL PERSONAL CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
-        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 10px 20px 0px 20px; display: flex; flex-direction: column; gap: 12px; height: 600px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
+        <div id="agentsDropZone" style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 10px 20px 0px 20px; display: flex; flex-direction: column; gap: 12px; height: 600px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace; position: relative; transition: border-color .18s, box-shadow .18s;">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
             <h3 id="detectedAgentsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
               👥 Turnos del Personal
@@ -288,6 +288,7 @@
               <button onclick="downloadExtractionXlsx('agents')" title="Descargar turnos en Excel" aria-label="Descargar turnos en Excel" style="background: transparent; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#aaa'">
                 ⇩
               </button>
+              <button id="reviewAgentsButton" onclick="markQuadrantReviewed('agents')" title="Marcar Turnos del Personal como revisado" aria-label="Marcar Turnos del Personal como revisado" style="background:transparent; border:1px solid #10b981; color:#fff; width:38px; height:38px; padding:0; border-radius:4px; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center; transition:all .15s;">✓</button>
             </div>
           </div>
           <div style="flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; box-sizing: border-box;">
@@ -328,7 +329,7 @@
 
       <!-- RECTÁNGULO 2 (DERECHO): PARRILLA DE VUELOS CON SCROLL -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 500px; flex-shrink: 0;">
-        <div style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 10px 20px 0px 20px; display: flex; flex-direction: column; gap: 12px; height: 600px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace;">
+        <div id="flightsDropZone" style="background: #121212; border: 2px solid #282828; border-radius: 8px; padding: 10px 20px 0px 20px; display: flex; flex-direction: column; gap: 12px; height: 600px; overflow: hidden; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.15); box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace; position: relative; transition: border-color .18s, box-shadow .18s;">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin: 0;">
             <h3 id="detectedFlightsTitle" style="font-size: 13.5px; font-weight: 750; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: none;">
               ✈️ Parrilla de Vuelos
@@ -349,6 +350,7 @@
               <button onclick="downloadExtractionXlsx('flights')" title="Descargar vuelos en Excel" aria-label="Descargar vuelos en Excel" style="background: transparent; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#aaa'">
                 ⇩
               </button>
+              <button id="reviewFlightsButton" onclick="markQuadrantReviewed('flights')" title="Marcar Parrilla de Vuelos como revisada" aria-label="Marcar Parrilla de Vuelos como revisada" style="background:transparent; border:1px solid #10b981; color:#fff; width:38px; height:38px; padding:0; border-radius:4px; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center; transition:all .15s;">✓</button>
             </div>
           </div>
           <div style="flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; box-sizing: border-box;">
@@ -475,93 +477,33 @@
     </aside>
   </div>
 
-  <!-- IA WORKSPACE CONTAINER -->
-  <div class="app-layout" id="viewIA" style="display:none; padding:24px; flex-direction:column; gap:24px; overflow-y:auto; height: calc(100vh - var(--header-height)); margin-top: var(--header-height);">
-    <div class="ia-workspace">
-      <!-- COLUMNA IZQUIERDA: MOTOR DE OPTIMIZACIÓN (OR-TOOLS) -->
-      <div class="ia-card">
-        <div class="ia-card-header">
-          <div class="ia-card-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            <h3>Motor de Optimización (OR-Tools)</h3>
-          </div>
-          <span class="ia-badge">Algorítmico</span>
-        </div>
-        <p class="ia-card-desc">Asigna automáticamente todos los vuelos del día a los agentes de handling respetando estrictamente sus turnos de trabajo, evitando solapamientos y maximizando las preferencias de aerolíneas.</p>
-        
-        <div class="ia-settings">
-          <div class="form-group">
-            <label for="optMinSep">Tiempo mínimo entre embarques (minutos)</label>
-            <input type="number" id="optMinSep" value="45" min="15" max="120" step="5">
-            <small class="form-help">Tiempo de seguridad entre puertas de embarque.</small>
-          </div>
-          <div class="form-group" style="margin-top:10px;">
-            <label class="checkbox-label" style="font-weight:500;">
-              <input type="checkbox" id="optPreferAirlines" checked>
-              Priorizar afinidad por aerolínea contratada
-            </label>
-            <small class="form-help">Los agentes que tengan una aerolínea asignada serán emparejados preferentemente con sus propios vuelos.</small>
-          </div>
-          <div class="form-group" style="margin-top: 15px;">
-            <label for="backendUrl">URL del Servidor Backend</label>
-            <input type="text" id="backendUrl" value="http://localhost:8000" placeholder="Ej: http://localhost:8000" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--bg-body); color:var(--text-primary);">
-            <small class="form-help">Dirección del servicio local FastAPI que corre Google OR-Tools.</small>
-          </div>
-
-        </div>
-
-        <div class="ia-actions" style="margin-top:auto;">
-          <button class="btn btn-primary btn-lg btn-block" onclick="runOrToolsOptimization()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px; display:inline-block; vertical-align:middle; stroke:currentColor;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Generar Parrilla Óptima
-          </button>
-          <button class="btn btn-secondary btn-block" onclick="resetGridAssignments()" style="margin-top:10px;">
-            Vaciar Asignaciones de Hoy
-          </button>
-        </div>
-        
-        <div id="optStatus" class="opt-status-box" style="display:none; margin-top:15px;">
-          <!-- Mensaje de estado -->
-        </div>
+  <!-- IA WORKSPACE CONTAINER — EN CONSTRUCCIÓN -->
+  <div class="app-layout" id="viewIA" style="display:none; padding:24px; flex-direction:column; align-items:center; justify-content:center; overflow-y:auto; height:calc(100vh - var(--header-height)); margin-top:var(--header-height); background:radial-gradient(circle at 50% 20%, rgba(55,138,221,.09), transparent 42%);">
+    <div style="width:min(760px,94vw); background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:42px 38px; text-align:center; box-shadow:0 20px 55px rgba(0,0,0,.28); position:relative; overflow:hidden;">
+      <div style="position:absolute; width:220px; height:220px; border-radius:50%; background:rgba(55,138,221,.06); top:-125px; right:-80px;"></div>
+      <div style="display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border:1px solid rgba(245,158,11,.35); border-radius:999px; background:rgba(245,158,11,.09); color:#f59e0b; font-size:10px; font-weight:800; letter-spacing:.8px; text-transform:uppercase;">Próximamente</div>
+      <div style="width:78px; height:78px; margin:24px auto 18px; border-radius:22px; background:linear-gradient(145deg, rgba(55,138,221,.2), rgba(55,138,221,.06)); border:1px solid rgba(55,138,221,.3); display:flex; align-items:center; justify-content:center; color:var(--primary);">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
       </div>
-
-      <!-- COLUMNA DERECHA: AUDITORÍA POR INTELIGENCIA ARTIFICIAL -->
-      <div class="ia-card">
-        <div class="ia-card-header">
-          <div class="ia-card-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <h3>Auditor de Parrilla por IA</h3>
-          </div>
-          <span class="ia-badge ai">Inteligencia Artificial</span>
-        </div>
-        <p class="ia-card-desc">Audita tu parrilla actual (hecha a mano o modificada) en tiempo real. La IA detectará solapamientos críticos, incidencias de horarios, desigualdades de carga y propondrá soluciones.</p>
-
-        <div class="ia-settings">
-          <div class="form-group">
-            <label for="openaiKey">API Key de OpenAI (Opcional)</label>
-            <input type="password" id="openaiKey" placeholder="sk-..." onchange="saveApiKey(this.value)" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; font-family:monospace; background:var(--bg-body); color:var(--text-primary);">
-            <small class="form-help">Si la proporcionas, se usará un modelo avanzado (GPT-4o-mini) para generar un análisis ejecutivo de alto nivel adaptado a tu operativa.</small>
-          </div>
-        </div>
-
-        <div class="ia-actions">
-          <button class="btn btn-secondary btn-lg btn-block" onclick="runAiAudit()" style="background: var(--bg-card); border: 2px solid var(--primary); color: var(--primary); font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke:var(--primary);"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            Auditar Parrilla Manual con IA
-          </button>
-        </div>
-
-        <div id="auditResultContainer" class="audit-result-container" style="margin-top:15px; min-height: 250px; max-height: 380px;">
-          <div class="audit-empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="stroke:var(--text-muted); margin-bottom:12px; opacity:0.5;">
-              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <p>No se ha realizado ninguna auditoría para hoy.</p>
-            <small>Haz clic en "Auditar Parrilla Manual" para evaluar tus asignaciones actuales.</small>
-          </div>
-        </div>
+      <h2 style="font-size:27px; color:#fff; margin:0 0 12px;">Auditoría de Parrilla por IA</h2>
+      <p style="max-width:590px; margin:0 auto; color:var(--text-secondary); font-size:14px; line-height:1.65;">Estamos diseñando una auditoría clara y fiable para revisar asignaciones, detectar conflictos y explicar cada recomendación antes de aplicarla.</p>
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:28px 0; text-align:left;">
+        <div style="padding:15px; border:1px solid var(--border); border-radius:9px; background:var(--bg-body);"><strong style="color:#fff; font-size:12px;">Conflictos</strong><p style="color:var(--text-muted); font-size:11px; line-height:1.45; margin:6px 0 0;">Solapamientos y restricciones operativas.</p></div>
+        <div style="padding:15px; border:1px solid var(--border); border-radius:9px; background:var(--bg-body);"><strong style="color:#fff; font-size:12px;">Equidad</strong><p style="color:var(--text-muted); font-size:11px; line-height:1.45; margin:6px 0 0;">Distribución y carga de trabajo.</p></div>
+        <div style="padding:15px; border:1px solid var(--border); border-radius:9px; background:var(--bg-body);"><strong style="color:#fff; font-size:12px;">Explicaciones</strong><p style="color:var(--text-muted); font-size:11px; line-height:1.45; margin:6px 0 0;">Motivos comprensibles y verificables.</p></div>
+      </div>
+      <div style="display:flex; justify-content:center; gap:10px;">
+        <button class="btn btn-secondary" onclick="switchView('inicio')">Volver al inicio</button>
+        <button class="btn btn-primary" onclick="switchView('extractor-preview')">Ir al extractor</button>
       </div>
     </div>
+
+    <!-- Configuración conservada para el resto de la aplicación; no visible aquí. -->
+    <input type="hidden" id="backendUrl" value="https://aeroshift-backend.onrender.com">
+    <input type="hidden" id="openaiKey" value="">
+    <input type="hidden" id="optMinSep" value="45">
+    <input type="checkbox" id="optPreferAirlines" checked style="display:none;">
+    <div id="optStatus" style="display:none;"></div>
   </div>
 
   <!-- MODAL: ADD/EDIT AGENT -->
@@ -748,6 +690,25 @@
     </div>
   </div>
 
+  <!-- MODAL: DESTINO DE IMAGEN PEGADA -->
+  <div class="modal-overlay" id="clipboardTargetModal">
+    <div class="modal modal-sm" style="text-align:center;">
+      <div class="modal-header">
+        <h3 style="margin:0;">Imagen desde el portapapeles</h3>
+        <button class="btn-icon" onclick="cancelClipboardUpload()" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="width:52px; height:52px; margin:0 auto 14px; border-radius:50%; background:rgba(55,138,221,.12); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:25px;">📋</div>
+        <p style="color:#fff; font-weight:700; margin:0 0 7px;">¿Dónde quieres cargarla?</p>
+        <p style="color:var(--text-muted); font-size:12px; margin:0;">Elige el cuadrante que corresponde a la imagen copiada.</p>
+      </div>
+      <div class="modal-footer" style="justify-content:center; padding-bottom:24px;">
+        <button class="btn btn-secondary" onclick="uploadClipboardTo('agents')">Turnos del Personal</button>
+        <button class="btn btn-primary" onclick="uploadClipboardTo('flights')">Parrilla de Vuelos</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: UPLOAD & PROCESSING PROGRESS (IA EXTRACTOR) -->
   <div class="modal-overlay" id="processingModal">
     <div class="modal modal-sm" style="text-align: center; padding: 30px; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;">
@@ -768,6 +729,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=69"></script>
+  <script src="app.js?v=70"></script>
 </body>
 </html>

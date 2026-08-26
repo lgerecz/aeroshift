@@ -30,6 +30,8 @@ let uploadedFilesCopy = []; // Accumulative list of uploaded file previews
 let newlyCreatedAgentId = null;
 let newlyCreatedFlightId = null;
 let validationParametersSnapshot = null;
+let pendingClipboardFiles = [];
+const quadrantReviewState = { agents: false, flights: false };
 
 // ===== PERSISTENCE =====
 function canonicalizeRoleForOptimization(roleValue) {
@@ -214,6 +216,9 @@ function init() {
   const optModoElement = document.getElementById('optModo');
   if (optModoElement) optModoElement.value = savedOptModo;
 
+  setupExtractorClipboardAndDrop();
+  updateQuadrantReviewVisuals();
+
   // Pre-render the preview tables so they are ready on load!
   renderDetectedAgents();
   renderDetectedFlights();
@@ -256,6 +261,151 @@ function saveValidationParameters() {
   saveOptModo(optModo.value);
   validationParametersSnapshot = null;
   if (modal) modal.classList.remove('active');
+}
+
+function isExtractorVisible() {
+  const view = document.getElementById('viewExtractorPreview');
+  return !!view && getComputedStyle(view).display !== 'none';
+}
+
+function setupExtractorClipboardAndDrop() {
+  if (!document.body.dataset.extractorPasteReady) {
+    document.addEventListener('paste', handleExtractorPaste);
+    document.body.dataset.extractorPasteReady = '1';
+  }
+  setupQuadrantDropZone('agentsDropZone', 'agents', 'Suelta aquí los Turnos');
+  setupQuadrantDropZone('flightsDropZone', 'flights', 'Suelta aquí la Parrilla de Vuelos');
+}
+
+function handleExtractorPaste(event) {
+  if (!isExtractorVisible()) return;
+  const items = Array.from(event.clipboardData?.items || []);
+  const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'));
+  if (imageItems.length === 0) {
+    alert('El portapapeles no contiene una imagen compatible.');
+    return;
+  }
+  event.preventDefault();
+  pendingClipboardFiles = imageItems.map((item, index) => {
+    const blob = item.getAsFile();
+    const extension = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    return new File([blob], `portapapeles-${Date.now()}-${index + 1}.${extension}`, { type: blob.type });
+  });
+  document.getElementById('clipboardTargetModal')?.classList.add('active');
+}
+
+function uploadClipboardTo(type) {
+  if (!pendingClipboardFiles.length) return;
+  const files = pendingClipboardFiles;
+  pendingClipboardFiles = [];
+  document.getElementById('clipboardTargetModal')?.classList.remove('active');
+  uploadFileToBackend(files, type);
+}
+
+function cancelClipboardUpload() {
+  pendingClipboardFiles = [];
+  document.getElementById('clipboardTargetModal')?.classList.remove('active');
+}
+
+function isAcceptedExtractorFile(file) {
+  return /\.(xlsx?|csv|pdf|png|jpe?g|webp)$/i.test(file.name || '') || String(file.type || '').startsWith('image/');
+}
+
+function setupQuadrantDropZone(elementId, type, message) {
+  const zone = document.getElementById(elementId);
+  if (!zone || zone.dataset.dropReady) return;
+  zone.dataset.dropReady = '1';
+  let dragDepth = 0;
+  const showOverlay = () => {
+    let overlay = zone.querySelector('.extractor-drop-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'extractor-drop-overlay';
+      Object.assign(overlay.style, {
+        position: 'absolute', inset: '0', zIndex: '30', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(15,23,42,.88)', color: '#60a5fa', fontFamily: 'Inter, sans-serif', fontWeight: '800',
+        fontSize: '15px', letterSpacing: '.2px', borderRadius: '7px', pointerEvents: 'none'
+      });
+      overlay.textContent = message;
+      zone.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+    zone.style.borderColor = '#378add';
+    zone.style.borderStyle = 'dashed';
+    zone.style.boxShadow = '0 0 0 3px rgba(55,138,221,.16)';
+  };
+  const hideOverlay = () => {
+    const overlay = zone.querySelector('.extractor-drop-overlay');
+    if (overlay) overlay.style.display = 'none';
+    updateQuadrantReviewVisuals();
+  };
+  zone.addEventListener('dragenter', event => { event.preventDefault(); dragDepth += 1; showOverlay(); });
+  zone.addEventListener('dragover', event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; });
+  zone.addEventListener('dragleave', event => { event.preventDefault(); dragDepth -= 1; if (dragDepth <= 0) { dragDepth = 0; hideOverlay(); } });
+  zone.addEventListener('drop', event => {
+    event.preventDefault(); dragDepth = 0; hideOverlay();
+    const files = Array.from(event.dataTransfer?.files || []).filter(isAcceptedExtractorFile);
+    if (!files.length) {
+      alert('No se encontró ningún archivo compatible para el extractor.');
+      return;
+    }
+    uploadFileToBackend(files, type);
+  });
+}
+
+function invalidateQuadrantReview(type) {
+  if (type === 'all') {
+    quadrantReviewState.agents = false;
+    quadrantReviewState.flights = false;
+  } else if (type in quadrantReviewState) {
+    quadrantReviewState[type] = false;
+  }
+  updateQuadrantReviewVisuals();
+}
+
+function updateQuadrantReviewVisuals() {
+  [['agents', 'agentsDropZone', 'reviewAgentsButton'], ['flights', 'flightsDropZone', 'reviewFlightsButton']].forEach(([type, zoneId, buttonId]) => {
+    const reviewed = quadrantReviewState[type];
+    const zone = document.getElementById(zoneId);
+    const button = document.getElementById(buttonId);
+    if (zone && !zone.querySelector('.extractor-drop-overlay[style*="display: flex"]')) {
+      zone.style.borderStyle = 'solid';
+      zone.style.borderColor = reviewed ? '#10b981' : '#282828';
+      zone.style.boxShadow = reviewed ? '0 0 0 2px rgba(16,185,129,.14)' : '0 4px 10px rgba(0,0,0,.15)';
+    }
+    if (button) {
+      button.style.background = reviewed ? '#10b981' : 'transparent';
+      button.style.borderColor = '#10b981';
+      button.title = reviewed ? 'Cuadrante revisado. Pulsa para desmarcar.' : 'Marcar cuadrante como revisado';
+    }
+  });
+}
+
+function markQuadrantReviewed(type) {
+  ensureExtractedDataShape();
+  if (quadrantReviewState[type]) {
+    quadrantReviewState[type] = false;
+    updateQuadrantReviewVisuals();
+    return;
+  }
+  const isAgents = type === 'agents';
+  const rows = isAgents ? extractedData.agents : extractedData.flights;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    alert(isAgents ? 'No hay turnos para revisar.' : 'No hay vuelos para revisar.');
+    return;
+  }
+  const invalidRows = rows.filter(row => {
+    const errors = isAgents ? validateAgentForImport(row) : validateFlightForImport(row);
+    row.validation_errors = errors;
+    return errors.length > 0;
+  });
+  if (invalidRows.length > 0) {
+    isAgents ? renderDetectedAgents() : renderDetectedFlights();
+    alert(`No se puede marcar el cuadrante como revisado. Quedan ${invalidRows.length} fila(s) pendientes.`);
+    return;
+  }
+  quadrantReviewState[type] = true;
+  updateQuadrantReviewVisuals();
 }
 
 function seedDemoFlights() {
@@ -1186,6 +1336,7 @@ async function uploadFileToBackend(files, type) {
     const data = await response.json();
     clearTimeout(extractionTimeoutId);
     if (data.success) {
+      invalidateQuadrantReview(type);
       // Inicializa y migra la estructura con fechas independientes.
       ensureExtractedDataShape();
 
@@ -1357,6 +1508,13 @@ function validateUploadedData() {
   const optModoElem = document.getElementById('optModo');
   if (optModoElem && optModoElem.value === '') {
     alert('Abre “Parámetros de Validación” y selecciona una estrategia para el optimizador antes de importar los datos.');
+    return;
+  }
+  if (!quadrantReviewState.agents || !quadrantReviewState.flights) {
+    const pending = [];
+    if (!quadrantReviewState.agents) pending.push('Turnos del Personal');
+    if (!quadrantReviewState.flights) pending.push('Parrilla de Vuelos');
+    alert('Antes de continuar debes marcar como revisados ambos cuadrantes:\n\n- ' + pending.join('\n- '));
     return;
   }
 
@@ -1790,12 +1948,14 @@ function saveEditAgent(id) {
   }
 
   editingAgentId = null;
+  invalidateQuadrantReview('agents');
   renderDetectedAgents();
 }
 
 function deleteAgentFromPreview(id) {
   if (confirm('¿Deseas eliminar a este agente de la previsualización?')) {
     extractedData.agents = extractedData.agents.filter(a => a.id !== id);
+    invalidateQuadrantReview('agents');
     renderDetectedAgents();
   }
 }
@@ -2001,12 +2161,14 @@ function saveEditFlight(id) {
   }
 
   editingFlightId = null;
+  invalidateQuadrantReview('flights');
   renderDetectedFlights();
 }
 
 function deleteFlightFromPreview(id) {
   if (confirm('¿Deseas eliminar este vuelo de la previsualización?')) {
     extractedData.flights = extractedData.flights.filter(f => f.id !== id);
+    invalidateQuadrantReview('flights');
     renderDetectedFlights();
   }
 }
@@ -2845,6 +3007,7 @@ function clearDetectedAgents() {
     ensureExtractedDataShape();
     extractedData.agents = [];
     extractedData.agentsDate = '';
+    invalidateQuadrantReview('agents');
 
     // Filter out turnos files from the global file preview list!
     uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'agents');
@@ -2858,6 +3021,7 @@ function clearDetectedFlights() {
     ensureExtractedDataShape();
     extractedData.flights = [];
     extractedData.flightsDate = '';
+    invalidateQuadrantReview('flights');
 
     // Filter out flights files from the global file list!
     uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'flights');
@@ -2899,6 +3063,7 @@ function updateAgentEspec(id, val) {
   const agent = extractedData.agents.find(a => a.id === id);
   if (agent) {
     agent.espec = val ? [val] : [];
+    invalidateQuadrantReview('agents');
     saveData();
   }
 }
@@ -2907,6 +3072,7 @@ function toggleAgentExclusion(id, checked) {
   const agent = extractedData.agents.find(a => a.id === id);
   if (agent) {
     agent.excluir = checked ? true : false;
+    invalidateQuadrantReview('agents');
     saveData();
   }
 }
@@ -2932,6 +3098,7 @@ function insertAgentAfter(id) {
   if (idx !== -1) {
     extractedData.agents.splice(idx + 1, 0, newAgent);
     editingAgentId = newId; // Abre la edición en línea al instante para facilitar la escritura!
+    invalidateQuadrantReview('agents');
     renderDetectedAgents();
   }
 }
@@ -2957,6 +3124,7 @@ function insertFlightAfter(id) {
   if (idx !== -1) {
     extractedData.flights.splice(idx + 1, 0, newFlight);
     editingFlightId = newId; // Abre la edición en línea al instante para facilitar la escritura!
+    invalidateQuadrantReview('flights');
     renderDetectedFlights();
   }
 }

@@ -1214,6 +1214,54 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
         ws.auto_filter.ref = f"A3:{get_column_letter(len(headers))}{3 + len(rows)}"
         ws.sheet_view.showGridLines = False
 
+        # Segunda pestaña compacta con un prompt listo para copiar en otra IA.
+        guide = wb.create_sheet("Guía auditoría IA")
+        if export_type == "agents":
+            guide_title = "Guía de auditoría IA — Turnos del Personal"
+            audit_prompt = (
+                "Compara la imagen original de turnos con este Excel. Revisa línea por línea nombre, "
+                "horario completo, turnos partidos, rol, sección y restricciones. Busca personas omitidas, "
+                "añadidas, duplicadas, fusionadas o divididas. Comprueba el recuento de cada bloque y el total. "
+                "Enumera todas las diferencias indicando el valor original y el extraído. Solo concluye que "
+                "coinciden si no falta ni sobra ningún registro y todos los datos son iguales. Si alguna zona "
+                "no puede leerse, indícala como NO VERIFICABLE y no inventes su contenido."
+            )
+        else:
+            guide_title = "Guía de auditoría IA — Parrilla de Vuelos"
+            audit_prompt = (
+                "Compara la imagen original de vuelos con este Excel. Revisa línea por línea destino, aerolínea, "
+                "número de vuelo, apertura, embarque o cierre, STD y PAX. Busca vuelos omitidos, añadidos, "
+                "duplicados, desplazados o truncados. Comprueba la primera fila, la última y el total. STD debe "
+                "proceder de STD y PAX de WEBS, nunca de BAGS. Enumera todas las diferencias indicando el valor "
+                "original y el extraído. Solo concluye que coinciden si no falta ni sobra ningún vuelo. Si una "
+                "zona no puede leerse, indícala como NO VERIFICABLE y no inventes su contenido."
+            )
+        guide.merge_cells("A1:F1")
+        guide["A1"] = guide_title
+        guide["A1"].fill = blue_fill
+        guide["A1"].font = title_font
+        guide["A1"].alignment = Alignment(horizontal="center", vertical="center")
+        guide.row_dimensions[1].height = 26
+        guide.merge_cells("A3:F3")
+        guide["A3"] = "Adjunta a la IA la imagen original y este archivo Excel. Copia y pega el siguiente prompt:"
+        guide["A3"].font = Font(bold=True, color="1F2937")
+        guide["A3"].alignment = Alignment(wrap_text=True, vertical="center")
+        guide.merge_cells("A5:F15")
+        guide["A5"] = audit_prompt
+        guide["A5"].fill = body_fill
+        guide["A5"].font = Font(color="111827", size=11)
+        guide["A5"].alignment = Alignment(wrap_text=True, vertical="top")
+        guide["A5"].border = Border(left=thin_gray, right=thin_gray, top=thin_gray, bottom=thin_gray)
+        for column in range(1, 7):
+            guide.column_dimensions[get_column_letter(column)].width = 16
+        guide.row_dimensions[5].height = 180
+        guide.sheet_view.showGridLines = False
+        guide.page_setup.orientation = "portrait"
+        guide.page_setup.fitToWidth = 1
+        guide.page_setup.fitToHeight = 1
+        guide.sheet_properties.pageSetUpPr.fitToPage = True
+        guide.print_area = "A1:F15"
+
         safe_date = re.sub(r"[^0-9A-Za-z_-]+", "-", document_date).strip("-") or "sin-fecha"
         filename = f"{filename_prefix}_{safe_date}.xlsx"
         output = io.BytesIO()
