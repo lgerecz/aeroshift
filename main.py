@@ -79,17 +79,56 @@ PUERTAS_REMOTAS = {'B20','B22','C32','C36','C39','C40'}
 ROLES_NO_EMBARCAN = {'DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','SHADOWING','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'}
 ROLES_OPERATIVOS = {'TKT','LL','OPS'}
 
+ROLE_CANONICAL_ALIASES = {
+    'DUTY': 'DSM',
+    'SUPER': 'PSM',
+    'SUPERVISION': 'PSM',
+    'OPERACIONES': 'OPS',
+    'TICKET DESK': 'TKT',
+    'TICKET': 'TKT',
+    'VENTAS': 'TKT',
+    'LOST AND FOUND': 'LL',
+    'LLEGADAS': 'LL',
+    'LF': 'LL',
+    'FAMILIARIZACION': 'FAMI',
+    'FAM': 'FAMI',
+    'RECICLAJE': 'CURSO',
+    'FORMACION': 'CURSO',
+    'BAJA': 'SICK',
+    'ENFERMEDAD': 'SICK',
+    'ENFERMO': 'SICK',
+    'ENFERMA': 'SICK',
+    'NEW': 'NUEVO',
+}
+
+
+def normalize_role_key(value: str) -> str:
+    normalized = unicodedata.normalize('NFD', str(value or '').upper())
+    return ''.join(
+        char for char in normalized if unicodedata.category(char) != 'Mn'
+    )
+
+
+def canonicalize_role_expression(role: str) -> str:
+    """Convierte sinónimos a códigos internos sin utilizar deducciones desconocidas."""
+    result = normalize_role_key(role).strip().replace('TKD', 'TKT')
+    for alias in sorted(ROLE_CANONICAL_ALIASES, key=len, reverse=True):
+        canonical = ROLE_CANONICAL_ALIASES[alias]
+        pattern = rf'(?<![A-Z]){re.escape(alias)}(?![A-Z])'
+        result = re.sub(pattern, canonical, result)
+    return re.sub(r'\s+', ' ', result).strip()
+
 
 def get_base_role(role: str) -> str:
     """Devuelve el rol estructural aunque exista un estado: TKT (SICK) -> TKT."""
-    normalized = str(role or "").upper().strip()
-    match = re.match(r"^([A-ZÁÉÍÓÚÜÑ]+)", normalized)
+    normalized = canonicalize_role_expression(role)
+    match = re.match(r"^([A-Z]+)", normalized)
     return match.group(1) if match else ""
 
 
 def get_full_shift_status(role: str) -> Optional[str]:
     """Detecta estados sin intervalo que anulan toda la jornada."""
-    normalized = str(role or "").upper().strip()
+    normalized = canonicalize_role_expression(role)
     if re.search(r"\d{1,2}:\d{2}", normalized):
         return None
     match = re.search(r"\((SICK|NUEVO|NEW)\)", normalized)
@@ -100,7 +139,7 @@ def get_full_shift_status(role: str) -> Optional[str]:
 
 def is_non_boarding_role(role: str) -> bool:
     """Reconoce roles base, estados completos y motivos compuestos."""
-    normalized = str(role or "").upper().strip()
+    normalized = canonicalize_role_expression(role)
     if normalized in ROLES_NO_EMBARCAN:
         return True
     if get_base_role(normalized) in ROLES_NO_EMBARCAN:
@@ -183,7 +222,7 @@ def normalize_mixed_role(role: str) -> tuple[str, Optional[tuple[str, str, str]]
     - OPS (12:30-17)
     - OPS 12:30-17
     """
-    text = str(role or "").upper().strip().replace("TKD", "TKT")
+    text = canonicalize_role_expression(role)
     time_token = r"\d{1,2}(?::\d{2})?"
     role_token = r"[A-ZÁÉÍÓÚÜÑ]+(?:\s+[A-ZÁÉÍÓÚÜÑ]+)*"
 
@@ -1592,6 +1631,17 @@ ROLES
 - En pasaje, un rol escrito junto a una persona afecta solamente a esa persona, no a toda la fila.
 - Si una persona de pasaje lleva PSM, OPS, TKT o LL entre paréntesis, conserva ese rol para esa persona, pero mantiene seccion="pasaje".
 - Convierte silenciosamente TKD a TKT. En el JSON final solo debe aparecer TKT.
+- Conserva en el campo rol el texto visible original para estos sinónimos; el backend aplicará internamente su código canónico:
+  * DSM: DUTY.
+  * PSM: SUPER, SUPERVISION, SUPERVISIÓN.
+  * OPS: OPERACIONES.
+  * TKT: TICKET, TICKET DESK, VENTAS.
+  * LL: LLEGADAS, LOST AND FOUND, LF.
+  * FAMI: FAM, FAMILIARIZACION, FAMILIARIZACIÓN.
+  * CURSO: RECICLAJE, FORMACION, FORMACIÓN.
+  * SICK: BAJA, ENFERMO, ENFERMA, ENFERMEDAD.
+  * NUEVO: NEW.
+- Si aparece un término no incluido en este catálogo, no deduzcas su significado: consérvalo literalmente para revisión.
 - Distingue un rol completo de un rol mixto por la presencia de horas dentro del paréntesis.
 - Rol completo sin horas, ejemplo "LAURA G (OPS)": rol="OPS" durante toda la jornada.
 - Rol mixto con horas, ejemplo "MÍRIAM (OPS 12:30-17)" y jornada general 10:00-17:00: rol="CSA (12:30-17:00 OPS)".
@@ -1702,14 +1752,22 @@ Si una página empieza directamente con filas 41 o superiores, conserva esta est
 6. EMBARQUE.
 7. CIERRE.
 8. STD.
+9. WEBS, que es el valor de PAX.
+10. BAGS, que representa maletas y debe ignorarse.
 - Para std usa siempre la columna 8, nunca la columna 5.
-- Ejemplo fila 41: APERTURA=11:45 y STD=14:45 produce std="14:45".
+- Para pax usa siempre la columna 9 WEBS, nunca la columna 10 BAGS.
+- Si después de STD aparecen dos números, el primero es WEBS/PAX y el segundo es BAGS.
+- Ejemplo fila 41: STD=13:55, WEBS=183 y BAGS=72 produce std="13:55" y pax=183. Nunca uses 72 como pax.
 
 FECHA
 - Prioriza cualquier fecha manuscrita visible, aunque esté fuera de la tabla.
 - Si no existe fecha manuscrita, usa la fecha impresa de la cabecera.
 - Si no se detecta ninguna, devuelve "Fecha no detectada".
 - No inventes una fecha.
+
+DOCUMENTO INCORRECTO
+- Si el archivo no contiene columnas o filas propias de una parrilla de vuelos, devuelve manana=[] y tarde=[].
+- Nunca conviertas nombres de personal u horarios laborales en vuelos ficticios.
 
 COMPROBACIÓN FINAL
 - Recorre cada página de arriba abajo.
@@ -1950,7 +2008,9 @@ COMPROBACIÓN FINAL
                 raise ValueError("Falta el campo fecha en la respuesta de turnos.")
             agents = data.get("agentes")
             if not isinstance(agents, list) or not agents:
-                raise ValueError("La respuesta de turnos no contiene una lista de agentes.")
+                raise ValueError(
+                    "DOCUMENT_TYPE_MISMATCH: el archivo no contiene turnos de personal."
+                )
 
             allowed_sections = {"oficina", "pasaje"}
             allowed_shifts = {"mañana", "tarde"}
@@ -2019,23 +2079,25 @@ COMPROBACIÓN FINAL
                     )
                 agent["horario"] = normalized_schedule
 
+                display_role = str(agent.get("rol") or "").upper().strip()
                 try:
-                    role, mixed_interval = normalize_mixed_role(agent.get("rol") or "")
+                    canonical_role, mixed_interval = normalize_mixed_role(display_role)
                 except Exception:
-                    role = str(agent.get("rol") or "ILEGIBLE").upper().strip()
+                    canonical_role = canonicalize_role_expression(display_role or "ILEGIBLE")
                     mixed_interval = None
-                    add_issue("rol", f"Rol pendiente de revisión: {role}.")
-                if not role:
-                    role = "ILEGIBLE"
+                    add_issue("rol", f"Rol pendiente de revisión: {display_role or 'ILEGIBLE'}.")
+                if not display_role:
+                    display_role = "ILEGIBLE"
+                    canonical_role = "ILEGIBLE"
                     add_issue("rol", "Rol vacío o ilegible.")
                 if (
                     mixed_interval is None
-                    and get_full_shift_status(role) is None
-                    and ("(" in role or ")" in role)
+                    and get_full_shift_status(canonical_role) is None
+                    and ("(" in canonical_role or ")" in canonical_role)
                 ):
                     add_issue(
                         "rol",
-                        f"Restricción mixta incompleta o no reconocida: {role}.",
+                        f"Restricción mixta incompleta o no reconocida: {display_role}.",
                     )
 
                 section = str(agent.get("seccion") or "").lower().strip()
@@ -2048,7 +2110,7 @@ COMPROBACIÓN FINAL
                         + " / ".join(name_groups)
                         + ".",
                     )
-                if section == "oficina" and role.startswith("CSA"): 
+                if section == "oficina" and canonical_role.startswith("CSA"): 
                     add_issue("rol", "Un agente de oficina no puede tener rol CSA.")
                 if (
                     section == "oficina"
@@ -2088,11 +2150,38 @@ COMPROBACIÓN FINAL
                 if shift not in allowed_shifts:
                     raise ValueError(f"Turno inválido en el agente {index + 1}.")
 
-                agent["rol"] = role
+                agent["rol"] = display_role
+                agent["rol_canonico"] = canonical_role
                 agent["seccion"] = section
                 agent["turno"] = shift
 
             return issues
+
+        def validate_flights_json(data: Any) -> None:
+            """Impide aceptar personal u otros documentos como Parrilla de Vuelos."""
+            if not isinstance(data, dict):
+                raise ValueError(
+                    "DOCUMENT_TYPE_MISMATCH: el archivo no contiene una parrilla de vuelos."
+                )
+            morning = data.get("manana")
+            afternoon = data.get("tarde")
+            if not isinstance(morning, list) or not isinstance(afternoon, list):
+                raise ValueError(
+                    "DOCUMENT_TYPE_MISMATCH: el archivo no contiene una parrilla de vuelos."
+                )
+            flight_items = [
+                item for item in morning + afternoon
+                if isinstance(item, dict)
+                and (
+                    str(item.get("tipo_elemento") or "").lower().strip() == "vuelo"
+                    or "std" in item
+                    or "numero_vuelo" in item
+                )
+            ]
+            if not flight_items:
+                raise ValueError(
+                    "DOCUMENT_TYPE_MISMATCH: el archivo no contiene una parrilla de vuelos."
+                )
 
         parsed_result = None
         extracted_model_name = ""
@@ -2202,6 +2291,8 @@ COMPROBACIÓN FINAL
                     merge_split_initial_agents(parsed_result)
                     expand_merged_passage_names(parsed_result)
                     first_validation_issues = validate_turns_json(parsed_result)
+                elif document_type == "flights":
+                    validate_flights_json(parsed_result)
 
                 first_extraction_seconds = round(
                     time.monotonic() - first_call_started, 2
@@ -2225,7 +2316,12 @@ COMPROBACIÓN FINAL
                 "queda fuera de su jornada",
                 "no puede tener rol csa",
             )
-            if is_deepseek and any(
+            if "document_type_mismatch" in lower_error:
+                public_error = (
+                    "El archivo no corresponde al cuadrante seleccionado. "
+                    "Sube los turnos en Turnos del Personal y los vuelos en Parrilla de Vuelos."
+                )
+            elif is_deepseek and any(
                 marker in lower_error
                 for marker in ("insufficient balance", "insufficient_balance", "402")
             ):
@@ -2476,6 +2572,7 @@ REGLAS
                     "nombre": agent["nombre"],
                     "horario": agent["horario"],
                     "rol": agent["rol"],
+                    "rol_canonico": agent.get("rol_canonico", canonicalize_role_expression(agent["rol"])),
                     "seccion": agent["seccion"],
                     "source_row_people": agent["personas_en_fila"],
                     "validation_errors": agent.get("_validation_errors", []),
@@ -2513,7 +2610,10 @@ REGLAS
                     # Corrección automática de TKD a TKT para evitar errores ortográficos del papel impreso
                     if "TKD" in role_upper:
                         role_upper = role_upper.replace("TKD", "TKT")
-                    
+                    canonical_role_upper = str(
+                        item.get("rol_canonico") or canonicalize_role_expression(role_upper)
+                    ).upper().strip()
+
                     # Dividimos nombres múltiples separados por '/' o ','
                     names = [n.strip() for n in name_raw.replace(",", "/").split("/") if n.strip()]
                     
@@ -2541,6 +2641,7 @@ REGLAS
                             "name": name_raw,
                             "hours": hours_raw,
                             "role": role_upper,
+                            "canonical_role": canonical_role_upper,
                             "type": agent_type,
                             "shift": shift_name,
                             "source_row_people": int(item.get("source_row_people") or 1),

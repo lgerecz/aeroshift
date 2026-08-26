@@ -32,6 +32,40 @@ let newlyCreatedFlightId = null;
 let validationParametersSnapshot = null;
 
 // ===== PERSISTENCE =====
+function canonicalizeRoleForOptimization(roleValue) {
+  let result = String(roleValue || '').toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/TKD/g, 'TKT')
+    .trim();
+  const aliases = {
+    'LOST AND FOUND': 'LL',
+    'TICKET DESK': 'TKT',
+    'FAMILIARIZACION': 'FAMI',
+    'SUPERVISION': 'PSM',
+    'OPERACIONES': 'OPS',
+    'ENFERMEDAD': 'SICK',
+    'FORMACION': 'CURSO',
+    'RECICLAJE': 'CURSO',
+    'ENFERMO': 'SICK',
+    'ENFERMA': 'SICK',
+    'LLEGADAS': 'LL',
+    'TICKET': 'TKT',
+    'VENTAS': 'TKT',
+    'DUTY': 'DSM',
+    'SUPER': 'PSM',
+    'FAM': 'FAMI',
+    'BAJA': 'SICK',
+    'NEW': 'NUEVO',
+    'LF': 'LL'
+  };
+  Object.keys(aliases).sort((a, b) => b.length - a.length).forEach(alias => {
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(`(^|[^A-Z])${escaped}(?=$|[^A-Z])`, 'g'), (match, prefix) => prefix + aliases[alias]);
+  });
+  return result.replace(/\s+/g, ' ').trim();
+}
+
 function normalizeAgents(agentsList) {
   if (!Array.isArray(agentsList)) return [];
   return agentsList.map(a => {
@@ -88,7 +122,8 @@ function normalizeAgents(agentsList) {
       code: a.code || `AG-${String(a.id).padStart(3, '0')}`,
       hours: hoursStr,
       role: a.role || 'CSA',
-      rol: a.role || 'CSA',
+      canonical_role: a.canonical_role || canonicalizeRoleForOptimization(a.role || 'CSA'),
+      rol: a.canonical_role || canonicalizeRoleForOptimization(a.role || 'CSA'),
       type: a.type || 'pasaje',
       shift: a.shift || (startMins < 720 ? 'mañana' : 'tarde'),
       shifts: a.shifts || shifts,
@@ -1162,6 +1197,7 @@ async function uploadFileToBackend(files, type) {
             name: a.name || 'Agente',
             hours: a.hours || '08:00-16:00',
             role: a.role || 'CSA',
+            canonical_role: a.canonical_role || canonicalizeRoleForOptimization(a.role || 'CSA'),
             type: a.type || 'pasaje',
             shift: a.shift || 'mañana',
             espec: a.espec || [],
@@ -1416,6 +1452,7 @@ function validateAgentForImport(agent) {
   const errors = [];
   const schedule = String(agent.hours || '').trim().replace(/–|—/g, '-').replace(/\/\//g, '/');
   const role = String(agent.role || agent.rol || '').trim().toUpperCase();
+  const canonicalRole = agent.canonical_role || canonicalizeRoleForOptimization(role);
   const type = String(agent.type || '').trim().toLowerCase();
   const agentName = String(agent.name || '').trim();
 
@@ -1541,7 +1578,7 @@ function validateAgentForImport(agent) {
     errors.push(`Jornada superior a 10 horas (${totalMinutes} minutos).`);
   }
   if (!role) errors.push('Rol vacío o ilegible.');
-  if (type === 'admin' && role.startsWith('CSA')) {
+  if (type === 'admin' && canonicalRole.startsWith('CSA')) {
     errors.push('Un agente de oficina no puede tener rol CSA.');
   }
   return [...new Set(errors)];
@@ -1632,7 +1669,7 @@ function renderDetectedAgents() {
         <tr style="${rowStyle}" ${hoverAttrs}>
           <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
           <td style="padding: 10px 8px; color: ${hasValidationError ? '#fca5a5' : '#a0a0a0'};">${escapeHtml(a.hours)}${warningBadge}</td>
-          <td style="padding: 10px 8px;">${getRoleBadge(a.role)}</td>
+          <td style="padding: 10px 8px;">${getRoleBadge(a.role, a.canonical_role)}</td>
           <td style="padding: 10px 8px; text-align: center;">${selectHtml}</td>
           <td style="padding: 10px 8px; text-align: center;">${checkboxHtml}</td>
           <td style="padding: 10px 8px; text-align: center;">
@@ -1741,7 +1778,8 @@ function saveEditAgent(id) {
     agent.name = name;
     agent.hours = hours;
     agent.role = role;
-    agent.rol = role;
+    agent.canonical_role = canonicalizeRoleForOptimization(role);
+    agent.rol = agent.canonical_role;
     agent.validation_errors = validateAgentForImport(agent);
     if (agent.validation_errors.length > 0) {
       alert(
@@ -2828,9 +2866,9 @@ function clearDetectedFlights() {
   }
 }
 
-function getRoleBadge(roleStr) {
+function getRoleBadge(roleStr, canonicalRoleStr = '') {
   if (!roleStr) return '';
-  const role = roleStr.toUpperCase().trim();
+  const role = (canonicalRoleStr || canonicalizeRoleForOptimization(roleStr)).toUpperCase().trim();
   let color = '#ffffff'; // Default to white (which is also CSA)
   
   // Los departamentos tienen prioridad sobre CSA en roles completos o mixtos.
