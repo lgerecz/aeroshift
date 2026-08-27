@@ -1306,15 +1306,16 @@ async function uploadFileToBackend(files, type) {
   modal.classList.add('active');
 
   // Progreso estimado: la API no comunica un porcentaje real mientras trabaja.
-  // Avanza hasta el 90% en 65 segundos y después lentamente hasta el 95%.
+  // Turnos alcanza el 90% en 75s; Vuelos en 45s. Después suma 1% cada 15s.
   let currentPercent = 0;
   const progressStartedAt = performance.now();
+  const timeToNinety = type === 'flights' ? 45000 : 75000;
   const stages = [
     { p: 15, msg: 'Conectando con el motor de Visión de AeroShift...' },
     { p: 45, msg: 'Escaneando imágenes y detectando texto...' },
     { p: 70, msg: 'Procesando tablas...' },
     { p: 90, msg: 'Estructurando y verificando los datos extraídos...' },
-    { p: 95, msg: 'Esperando la respuesta final del modelo de inteligencia artificial...' }
+    { p: 99, msg: 'Esperando la respuesta final del modelo de inteligencia artificial...' }
   ];
 
   const renderEstimatedProgress = () => {
@@ -1326,11 +1327,11 @@ async function uploadFileToBackend(files, type) {
 
   const interval = setInterval(() => {
     const elapsed = performance.now() - progressStartedAt;
-    if (elapsed <= 65000) {
-      currentPercent = Math.min(90, (elapsed / 65000) * 90);
+    if (elapsed <= timeToNinety) {
+      currentPercent = Math.min(90, (elapsed / timeToNinety) * 90);
     } else {
-      const slowPhase = Math.min(1, (elapsed - 65000) / 145000);
-      currentPercent = 90 + slowPhase * 5;
+      const additionalPercent = (elapsed - timeToNinety) / 15000;
+      currentPercent = Math.min(99, 90 + additionalPercent);
     }
     renderEstimatedProgress();
   }, 250);
