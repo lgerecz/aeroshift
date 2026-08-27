@@ -1463,7 +1463,7 @@ async def extract_data(
                             ).convert("RGB")
                             image_width, image_height = source_image.size
                             table_top = max(0, int(image_height * 0.04))
-                            table_bottom = min(image_height, int(image_height * 0.66))
+                            table_bottom = min(image_height, int(image_height * 0.57))
                             table_crop = source_image.crop(
                                 (0, table_top, image_width, table_bottom)
                             )
@@ -1492,7 +1492,8 @@ async def extract_data(
         # modelo que mezcle turnos y vuelos cuando el tipo es conocido.
         if document_type == "agents":
             task_instruction = (
-                "Extrae exclusivamente la fecha y los turnos del personal. "
+                "Extrae la fecha y exclusivamente los turnos situados dentro de la tabla principal. "
+                "Ignora cualquier lista de nombres, horarios o tareas situada fuera de la tabla. "
                 "Devuelve un solo objeto por persona siguiendo el esquema JSON solicitado."
             )
         elif document_type == "flights":
@@ -1615,7 +1616,7 @@ Eres un extractor especializado exclusivamente en turnos de personal de handling
 Devuelve únicamente JSON válido, sin Markdown ni explicaciones.
 
 OBJETIVO
-Extrae la fecha y todas las personas visibles. Cada persona debe ocupar exactamente un objeto independiente. Nunca coloques dos nombres en el mismo objeto.
+Extrae la fecha y únicamente las personas situadas dentro de la tabla principal de turnos. Cada persona debe ocupar exactamente un objeto independiente. Nunca coloques dos nombres en el mismo objeto.
 
 ESQUEMA EXACTO
 {
@@ -1714,20 +1715,20 @@ ROLES
 - Nunca elimines el intervalo de una anotación mixta y nunca conviertas una anotación con horas en un rol completo.
 - Deja el nombre limpio, sin el rol ni las horas entre paréntesis.
 
-ESTADOS Y RESTRICCIONES: SICK, NUEVO, CURSO, SOMBRA, SHADOW, SHADOWING Y FAMI
-- Un estado nunca cambia por sí solo la sección física de la persona.
+ALCANCE ESPACIAL OBLIGATORIO
+- Extrae nombres, horarios, roles y restricciones EXCLUSIVAMENTE de las celdas situadas dentro de la tabla principal de turnos.
+- Fuera de la tabla principal solo puedes extraer una fecha visible, impresa o manuscrita.
+- Ignora completamente cualquier otro contenido exterior, aunque contenga nombres u horarios.
+- Ignora expresamente secciones tituladas AUTO CH-IN MAÑANA, AUTO CH-IN TARDE, AUTO CHECK-IN, CURSO, RECICLAJE, FORMACIÓN, SOMBRA, SHADOW, SHADOWING, FAMI, comentarios, instrucciones y listas auxiliares cuando estén fuera de la tabla.
+- Nunca añadas como agentes las personas que aparezcan únicamente en listas situadas debajo, encima o a los lados de la tabla.
+- No fusiones información de una lista externa con una persona de la tabla.
+
+ESTADOS Y RESTRICCIONES DENTRO DE LA TABLA
+- Si SICK, NUEVO, CURSO, SOMBRA, SHADOW, SHADOWING, FAMI o un rol temporal aparece dentro de la celda de una persona de la tabla, sí debes conservarlo.
+- Un estado dentro de la tabla nunca cambia por sí solo la sección física de la persona.
 - Si una persona del bloque de oficina está SICK, conserva su departamento base y la sección oficina. Ejemplos: rol="TKT (SICK)", rol="OPS (SICK)" o rol="LL (SICK)".
 - Si una persona del bloque de pasaje está SICK, usa seccion="pasaje" y rol="CSA (SICK)".
-- SICK significa ausencia completa: no recibe ninguna asignación durante toda la jornada.
-- Una persona marcada NUEVO o NEW conserva su sección y usa el rol base con estado, por ejemplo rol="CSA (NUEVO)". No recibe asignaciones hasta ser operativa.
-- Puede haber listas visibles fuera de la tabla principal, por ejemplo: "CURSO TKD 09:00-15:00" seguido de varios nombres.
-- Una lista externa de CURSO, SOMBRA, SHADOW, SHADOWING o FAMI NO es un bloque de oficina y no acredita automáticamente a nadie como TKT, OPS, LL, PSM o DSM.
-- Cada nombre de esas listas externas se incluye como un objeto independiente con seccion="pasaje".
-- Conserva el horario indicado y normaliza TKD a TKT.
-- Usa rol canónico con rol base, intervalo y motivo completo: rol="CSA (09:00-15:00 CURSO TKT)", rol="CSA (09:00-15:00 SOMBRA TKT)" o rol="CSA (04:45-12:45 SHADOWING OPS)".
-- Durante CURSO, SOMBRA, SHADOW o SHADOWING la persona no está disponible ni para embarques ni para coberturas.
-- FAMI y cualquier rol operativo temporal impiden embarcar durante el intervalo indicado.
-- Si un nombre aparece también dentro de la tabla principal, NO lo fusiones: crea otra línea independiente porque son personas distintas con IDs distintos.
+- Una restricción horaria dentro de la tabla conserva el formato canónico, por ejemplo rol="CSA (04:45-12:45 SHADOWING OPS)".
 - OR-Tools aplicará las restricciones utilizando el ID interno, no el nombre visible.
 
 FECHA
@@ -1738,7 +1739,7 @@ FECHA
 
 PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 - Recorre mañana-oficina, mañana-pasaje, tarde-oficina y tarde-pasaje.
-- Cuenta todas las personas visibles, no solo las filas.
+- Cuenta todas las personas visibles dentro de la tabla principal, no solo las filas.
 - Comprueba que cada persona tenga un único objeto y su horario correcto.
 - Comprueba especialmente caracteres parecidos como I/L, F/P, N/M y nombres con inicial final.
 - No omitas las filas de oficina.
@@ -2446,6 +2447,7 @@ COMPROBACIÓN FINAL
 Eres un verificador visual especializado exclusivamente en horarios laborales.
 Recibirás ampliaciones de la misma parrilla y una lista numerada procedente de una primera extracción.
 Las imágenes son vistas complementarias del mismo documento: tabla completa, mañana ampliada y tarde ampliada. No representan personas adicionales.
+Revisa exclusivamente las filas de la tabla principal. Ignora AUTO CH-IN, CURSO, SOMBRA, SHADOWING y cualquier lista de nombres u horarios situada fuera de la tabla.
 
 TAREA
 - Revisa visualmente, una por una, TODAS las personas de la lista.
