@@ -1676,6 +1676,13 @@ ASIGNACIÓN DE HORARIOS
 - Oficina con varias personas y un único horario: repite el horario para cada persona e indica el total en personas_en_fila.
 - Pasaje: si varios nombres comparten una fila con un solo horario, repite ese horario para cada persona.
 - Pasaje: si el horario tiene dos tramos separados por "/" o "//", es un turno partido completo. Repite los dos tramos completos para cada persona de esa fila.
+- REGLA ABSOLUTA DE PASAJE: nunca repartas los tramos de un turno partido entre personas distintas. Todas las personas de esa fila reciben todos los tramos.
+- Ejemplo: "11:35-16:05 / 19:45-23:15" con "FRANCESCA, ESPERANZA" produce FRANCESCA con el turno completo y ESPERANZA con el mismo turno completo.
+- La jornada principal procede siempre de la celda situada en la columna HORARIOS, a la izquierda de PERSONAL.
+- Una hora escrita entre paréntesis junto al nombre es una restricción o rol temporal y nunca sustituye la jornada principal.
+- Ejemplo: la celda izquierda "09:00-16:00" y "EMI (11:00-16:00 TKT)" produce horario="09:00-16:00" y rol="CSA (11:00-16:00 TKT)".
+- Si una celda de HORARIOS abarca visualmente varias líneas de PERSONAL, repite ese horario principal para todas las personas hasta la siguiente celda horaria visible.
+- Usa el orden cronológico de las filas de Pasaje como comprobación: una lectura que rompe la secuencia debe volver a inspeccionarse, pero nunca inventarse.
 - Normaliza el separador del turno partido como " / ", sin perder ningún tramo.
 - No intercambies horas de filas contiguas y no inventes horarios predeterminados.
 - Lee dos veces cada horario, dígito por dígito, antes de asociarlo al nombre.
@@ -2218,6 +2225,70 @@ COMPROBACIÓN FINAL
                 agent["seccion"] = section
                 agent["turno"] = shift
 
+            def add_cross_issue(agent_index: int, field: str, message: str) -> None:
+                target = agents[agent_index]
+                errors = target.setdefault("_validation_errors", [])
+                if message not in errors:
+                    errors.append(message)
+                    issues.append({
+                        "indice": agent_index,
+                        "nombre": str(target.get("nombre") or ""),
+                        "campo": field,
+                        "mensaje": message,
+                    })
+
+            # En Pasaje, todos los objetos procedentes de una misma fila deben
+            # compartir exactamente el mismo horario completo.
+            index = 0
+            while index < len(agents):
+                agent = agents[index]
+                row_people = int(agent.get("personas_en_fila") or 1)
+                if agent.get("seccion") == "pasaje" and row_people > 1:
+                    group = agents[index:index + row_people]
+                    valid_group = (
+                        len(group) == row_people
+                        and all(
+                            item.get("seccion") == "pasaje"
+                            and item.get("turno") == agent.get("turno")
+                            and int(item.get("personas_en_fila") or 1) == row_people
+                            for item in group
+                        )
+                    )
+                    if valid_group:
+                        schedules = {str(item.get("horario") or "") for item in group}
+                        if len(schedules) > 1:
+                            message = (
+                                "Las personas de esta fila de Pasaje deben compartir "
+                                "el mismo horario completo; revisa un posible turno partido dividido."
+                            )
+                            for offset in range(row_people):
+                                add_cross_issue(index + offset, "horario", message)
+                        index += row_people
+                        continue
+                index += 1
+
+            # Las filas de Pasaje están ordenadas cronológicamente. Una inversión
+            # marca tanto la fila anterior como la actual para la segunda lectura.
+            for shift_name in ("mañana", "tarde"):
+                previous_start = None
+                previous_index = None
+                for agent_index, agent in enumerate(agents):
+                    if agent.get("seccion") != "pasaje" or agent.get("turno") != shift_name:
+                        continue
+                    match = re.match(r"^(\d{2}):(\d{2})", str(agent.get("horario") or ""))
+                    if not match:
+                        continue
+                    start_minutes = int(match.group(1)) * 60 + int(match.group(2))
+                    if previous_start is not None and start_minutes < previous_start:
+                        message = (
+                            "El horario rompe el orden cronológico de las filas de Pasaje; "
+                            "comprueba la celda izquierda y cualquier restricción entre paréntesis."
+                        )
+                        add_cross_issue(previous_index, "horario", message)
+                        add_cross_issue(agent_index, "horario", message)
+                    previous_start = start_minutes
+                    previous_index = agent_index
+
             return issues
 
         def validate_flights_json(data: Any) -> None:
@@ -2416,6 +2487,7 @@ COMPROBACIÓN FINAL
         verification_corrections = 0
         verification_warning = ""
         verification_seconds = None
+        verification_changes = []
 
         if document_type == "agents":
             verification_completed = False
@@ -2454,13 +2526,18 @@ TAREA
 - Revisa primero y con máxima atención las personas cuyo campo alertas no esté vacío.
 - Una alerta matemática no confirma el valor correcto: vuelve a leer los dígitos en la imagen.
 - Compara exclusivamente horario_actual con la celda correspondiente de la imagen.
+- La jornada principal procede siempre de la columna HORARIOS; las horas entre paréntesis junto al nombre son restricciones y nunca sustituyen esa jornada.
+- Si una celda HORARIOS abarca varias líneas de PERSONAL, aplica la misma jornada a todas esas personas hasta la siguiente celda horaria.
+- Ejemplo: EMI con jornada izquierda 09:00-16:00 y anotación (11:00-16:00 TKT) mantiene horario 09:00-16:00.
 - Presta especial atención a los dígitos de la hora de salida.
 - No cambies nombres, roles, secciones ni turnos.
 - Conserva el horario actual salvo que la diferencia sea claramente visible.
 - Si varias personas comparten una misma celda, revisa y corrige a cada una de ellas.
 - Oficina con personas_en_fila=1 puede tener uno o dos tramos; conserva el turno partido si es visible.
 - Oficina con personas_en_fila>1 debe tener los horarios individuales emparejados por posición, no un turno partido copiado a cada persona.
-- En pasaje, conserva completos los turnos partidos cuando realmente existan.
+- En Pasaje todas las personas de una fila comparten exactamente el mismo horario completo.
+- Nunca distribuyas los tramos de un turno partido de Pasaje por posición.
+- Ejemplo: FRANCESCA y ESPERANZA reciben ambas 11:35-16:05 / 19:45-23:15.
 - Normaliza como HH:MM-HH:MM o HH:MM-HH:MM / HH:MM-HH:MM.
 
 Devuelve exclusivamente este JSON:
@@ -2580,6 +2657,12 @@ REGLAS
                             if corrected_schedule == current_schedule:
                                 continue
 
+                            verification_changes.append({
+                                "indice": index,
+                                "nombre": expected_name,
+                                "horario_antes": current_schedule,
+                                "horario_despues": corrected_schedule,
+                            })
                             agent["horario"] = corrected_schedule
                             used_indexes.add(index)
                             verification_corrections += 1
@@ -2782,6 +2865,7 @@ REGLAS
             "used_fallback": extracted_model_name != selected_model,
             "verification_completed": verification_completed,
             "verification_corrections": verification_corrections,
+            "verification_changes": verification_changes,
             "verification_warning": verification_warning,
             "validation_issues": final_validation_issues,
             "validation_issue_count": len(final_validation_issues),

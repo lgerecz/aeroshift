@@ -1480,6 +1480,19 @@ async function uploadFileToBackend(files, type) {
           // Render high fidelity flights and agents tables
           renderDetectedAgents();
           renderDetectedFlights();
+
+          const verificationChanges = Array.isArray(data.verification_changes)
+            ? data.verification_changes
+            : [];
+          const changesPreview = verificationChanges.slice(0, 8).map(change =>
+            `- ${change.nombre}: ${change.horario_antes} → ${change.horario_despues}`
+          ).join('\n');
+          const extraChanges = verificationChanges.length > 8
+            ? `\n- Y ${verificationChanges.length - 8} cambio(s) más.`
+            : '';
+          const verificationChangesNote = verificationChanges.length
+            ? `\n\nCambios realizados por la segunda verificación:\n${changesPreview}${extraChanges}`
+            : '';
           
           if (!data.is_real_ai) {
             alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
@@ -1490,13 +1503,19 @@ async function uploadFileToBackend(files, type) {
             alert(
               'Aviso: hay turnos pendientes de revisión.\n\n' +
               (data.validation_warning || 'Corrige las filas marcadas antes de importar.') +
-              verificationNote
+              verificationNote +
+              verificationChangesNote
             );
           } else if (type === 'agents' && data.verification_completed === false) {
             alert(
               'Aviso de verificación:\n\n' +
               (data.verification_warning ||
                 'La extracción principal se completó, pero no pudo finalizarse la segunda verificación de horarios. Revisa los horarios antes de importar.')
+            );
+          } else if (type === 'agents' && verificationChanges.length > 0) {
+            alert(
+              'Segunda verificación de horarios completada.' +
+              verificationChangesNote
             );
           }
         } catch (err) {
