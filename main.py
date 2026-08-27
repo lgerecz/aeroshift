@@ -1328,6 +1328,7 @@ async def extract_data(
                 f"Añade {api_key_name} en las variables de entorno de Render."
             ),
             "provider": provider,
+            "thinking_mode": "disabled" if is_deepseek else "high",
             "requested_model": selected_model,
             "date": "Fecha no detectada",
             "agents": [],
@@ -2326,7 +2327,11 @@ COMPROBACIÓN FINAL
         for model_name in models_to_try:
             try:
                 first_call_started = time.monotonic()
-                print(f"Intentando llamada a {model_name}...")
+                thinking_mode = "disabled" if is_deepseek else "high"
+                print(
+                    f"Intentando llamada a {model_name}; "
+                    f"provider={provider}; thinking={thinking_mode}..."
+                )
                 params = {
                     "model": model_name,
                     "messages": [
@@ -2337,6 +2342,9 @@ COMPROBACIÓN FINAL
                 }
                 if is_deepseek:
                     params["max_tokens"] = 16000
+                    params["extra_body"] = {
+                        "thinking": {"type": "disabled"}
+                    }
                 else:
                     # En OpenAI incluye razonamiento y JSON final.
                     params["max_completion_tokens"] = 16000
@@ -2595,6 +2603,9 @@ REGLAS
                     }
                     if is_deepseek:
                         verification_params["max_tokens"] = 6000
+                        verification_params["extra_body"] = {
+                            "thinking": {"type": "disabled"}
+                        }
                     else:
                         verification_params["max_completion_tokens"] = 6000
                         verification_params["reasoning_effort"] = "high"
@@ -2860,6 +2871,7 @@ REGLAS
             "message": f"Extracción completada por {extracted_model_name}.",
             "document_type": document_type,
             "provider": provider,
+            "thinking_mode": "disabled" if is_deepseek else "high",
             "requested_model": selected_model,
             "used_model": extracted_model_name,
             "used_fallback": extracted_model_name != selected_model,
@@ -2888,6 +2900,7 @@ REGLAS
             "message": f"No se pudo completar la extracción: {str(e)}",
             "document_type": document_type,
             "provider": provider,
+            "thinking_mode": "disabled" if is_deepseek else "high",
             "requested_model": selected_model,
             "used_model": None,
             "used_fallback": False,
