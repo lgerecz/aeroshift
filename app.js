@@ -212,9 +212,7 @@ function init() {
     }
   }
 
-  const savedOptModo = localStorage.getItem('aeroshift_opt_modo') || '';
-  const optModoElement = document.getElementById('optModo');
-  if (optModoElement) optModoElement.value = savedOptModo;
+  // La estrategia SIEMPRE arranca en «— Seleccionar —»: la elige el usuario en el modal.
   cargarReglasEnModal();
 
   setupExtractorClipboardAndDrop();
@@ -303,9 +301,8 @@ function openValidationParametersModal() {
   const modal = document.getElementById('validationParametersModal');
   const optModo = document.getElementById('optModo');
   if (!modal || !optModo) return;
-  const savedValue = localStorage.getItem('aeroshift_opt_modo') || optModo.value || '';
-  optModo.value = savedValue;
-  validationParametersSnapshot = { optModo: savedValue, reglas: localStorage.getItem('aeroshift_reglas') || '' };
+  optModo.value = '';  // siempre «— Seleccionar —» al abrir: el usuario elige manualmente
+  validationParametersSnapshot = { optModo: '', reglas: localStorage.getItem('aeroshift_reglas') || '' };
   cargarReglasEnModal();
   modal.classList.add('active');
 }

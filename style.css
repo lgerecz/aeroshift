@@ -1388,4 +1388,120 @@ select option {
   border-color: var(--primary-hover) !important;
 }
 
+/* ===== MODAL: PARÁMETROS DE VALIDACIÓN ===== */
+/* Tonos del tema: títulos --text-primary, notas --text-secondary, bordes gris marcado */
 
+#validationParametersModal .modal {
+  border: 1px solid #4a5164;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.reg-seccion {
+  margin-top: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid #4a5164;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.reg-seccion-primera { margin-top: 0; }
+
+.reg-intro {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0 0 18px;
+}
+
+.reg-titulo {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 12px;
+}
+
+.reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.reg-grid label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.reg-grid input {
+  width: 100%;
+  margin-top: 7px;
+  padding: 8px 11px;
+  border: 1px solid #4a5164;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+}
+
+.reg-grid input:focus { border-color: var(--primary); }
+
+.reg-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 7px;
+}
+
+.reg-select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #4a5164;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+}
+
+.reg-select:focus { border-color: var(--primary); }
+
+.reg-select option {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.reg-nota {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 9px 0 0;
+}
+
+.reg-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 11px;
+  cursor: pointer;
+}
+
+.reg-check input {
+  accent-color: var(--primary);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+details.reg-avanzado > summary { cursor: pointer; list-style: none; }
+details.reg-avanzado > summary::-webkit-details-marker { display: none; }
+details.reg-avanzado[open] .reg-titulo::after { content: " −"; }
+details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
