@@ -1493,14 +1493,14 @@ async def extract_data(
         # modelo que mezcle turnos y vuelos cuando el tipo es conocido.
         if document_type == "agents":
             task_instruction = (
-                "Extrae la fecha y exclusivamente los turnos situados dentro de la tabla principal. "
-                "Ignora cualquier lista de nombres, horarios o tareas situada fuera de la tabla. "
+                "Extrae exclusivamente los turnos situados dentro de la tabla principal. "
+                "Ignora fechas y cualquier lista de nombres, horarios o tareas situada fuera de la tabla. "
                 "Devuelve un solo objeto por persona siguiendo el esquema JSON solicitado."
             )
         elif document_type == "flights":
             task_instruction = (
-                "Extrae exclusivamente la fecha y la parrilla de vuelos o embarques "
-                "siguiendo el esquema JSON solicitado."
+                "Extrae exclusivamente la parrilla de vuelos. Ignora cualquier fecha "
+                "y sigue el esquema JSON solicitado."
             )
         else:
             task_instruction = (
@@ -1617,11 +1617,10 @@ Eres un extractor especializado exclusivamente en turnos de personal de handling
 Devuelve únicamente JSON válido, sin Markdown ni explicaciones.
 
 OBJETIVO
-Extrae la fecha y únicamente las personas situadas dentro de la tabla principal de turnos. Cada persona debe ocupar exactamente un objeto independiente. Nunca coloques dos nombres en el mismo objeto.
+Extrae únicamente las personas situadas dentro de la tabla principal de turnos. Ignora cualquier fecha visible; la introducirá manualmente el usuario. Cada persona debe ocupar exactamente un objeto independiente. Nunca coloques dos nombres en el mismo objeto.
 
 ESQUEMA EXACTO
 {
-  "fecha": "25/6/26",
   "agentes": [
     {
       "nombre": "MARINA",
@@ -1725,8 +1724,8 @@ ROLES
 
 ALCANCE ESPACIAL OBLIGATORIO
 - Extrae nombres, horarios, roles y restricciones EXCLUSIVAMENTE de las celdas situadas dentro de la tabla principal de turnos.
-- Fuera de la tabla principal solo puedes extraer una fecha visible, impresa o manuscrita.
-- Ignora completamente cualquier otro contenido exterior, aunque contenga nombres u horarios.
+- Ignora cualquier fecha, esté dentro o fuera de la tabla; la introducirá manualmente el usuario.
+- Ignora completamente todo el contenido exterior, aunque contenga nombres u horarios.
 - Ignora expresamente secciones tituladas AUTO CH-IN MAÑANA, AUTO CH-IN TARDE, AUTO CHECK-IN, CURSO, RECICLAJE, FORMACIÓN, SOMBRA, SHADOW, SHADOWING, FAMI, comentarios, instrucciones y listas auxiliares cuando estén fuera de la tabla.
 - Nunca añadas como agentes las personas que aparezcan únicamente en listas situadas debajo, encima o a los lados de la tabla.
 - No fusiones información de una lista externa con una persona de la tabla.
@@ -1738,12 +1737,6 @@ ESTADOS Y RESTRICCIONES DENTRO DE LA TABLA
 - Si una persona del bloque de pasaje está SICK, usa seccion="pasaje" y rol="CSA (SICK)".
 - Una restricción horaria dentro de la tabla conserva el formato canónico, por ejemplo rol="CSA (04:45-12:45 SHADOWING OPS)".
 - OR-Tools aplicará las restricciones utilizando el ID interno, no el nombre visible.
-
-FECHA
-- Prioriza la fecha manuscrita visible, aunque esté fuera de la tabla.
-- Si no existe, usa la fecha impresa.
-- Si no puede leerse ninguna fecha, devuelve "Fecha no detectada".
-- No inventes fechas.
 
 PRECISIÓN Y VALIDACIÓN ANTES DE RESPONDER
 - Recorre mañana-oficina, mañana-pasaje, tarde-oficina y tarde-pasaje.
@@ -1766,7 +1759,6 @@ Extrae todos los vuelos visibles, en el mismo orden del documento, sin omitir fi
 
 ESQUEMA EXACTO
 {
-  "fecha": "21/06/26",
   "titulo": "PARRILLA DE VUELOS",
   "observaciones": "",
   "manana": [
@@ -1831,10 +1823,7 @@ Si una página empieza directamente con filas 41 o superiores, conserva esta est
 - Ejemplo fila 41: STD=13:55, WEBS=183 y BAGS=72 produce std="13:55" y pax=183. Nunca uses 72 como pax.
 
 FECHA
-- Prioriza cualquier fecha manuscrita visible, aunque esté fuera de la tabla.
-- Si no existe fecha manuscrita, usa la fecha impresa de la cabecera.
-- Si no se detecta ninguna, devuelve "Fecha no detectada".
-- No inventes una fecha.
+- Ignora cualquier fecha visible. La fecha será introducida manualmente por el usuario en AeroShift.
 
 DOCUMENTO INCORRECTO
 - Si el archivo no contiene columnas o filas propias de una parrilla de vuelos, devuelve manana=[] y tarde=[].
@@ -2142,8 +2131,6 @@ COMPROBACIÓN FINAL
             """
             if not isinstance(data, dict):
                 raise ValueError("La respuesta de turnos no es un objeto JSON.")
-            if not isinstance(data.get("fecha"), str):
-                raise ValueError("Falta el campo fecha en la respuesta de turnos.")
             agents = data.get("agentes")
             if not isinstance(agents, list) or not agents:
                 raise ValueError(
@@ -2790,10 +2777,9 @@ REGLAS
                     "Corrige las filas marcadas antes de validar e importar."
                 )
 
-        extracted_date = parsed_result.get("fecha") or "Fecha no detectada"
-        if not extracted_date or extracted_date.strip() == "":
-            extracted_date = "Fecha no detectada"
-            
+        # La fecha no se extrae por IA; debe introducirla manualmente el usuario.
+        extracted_date = ""
+
         if document_type == "agents":
             # El nuevo esquema ya contiene exactamente una persona por objeto.
             # Se adapta aquí al formato interno existente sin volver a dividir nombres.

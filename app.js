@@ -260,6 +260,7 @@ function saveValidationParameters() {
     return;
   }
   saveOptModo(optModo.value);
+  invalidateQuadrantReview('all');
   validationParametersSnapshot = null;
   if (modal) modal.classList.remove('active');
 }
@@ -1433,23 +1434,9 @@ async function uploadFileToBackend(files, type) {
         }
       }
 
-      // Cada cuadrante conserva exclusivamente la fecha de su propio archivo.
-      const isDateValid = (d) => d && d !== 'Fecha no detectada' && d !== 'Sábado 20 Junio';
-      const detectedDate = isDateValid(data.date)
-        ? String(data.date).trim()
-        : getTodayDisplayDate();
-      if (type === 'agents') {
-        // Los turnos sustituyen el cuadrante anterior: nunca heredan su fecha.
-        extractedData.agentsDate = detectedDate;
-      } else if (type === 'flights') {
-        // Los vuelos pueden cargarse en páginas sucesivas sin fecha repetida.
-        extractedData.flightsDate = isDateValid(data.date)
-          ? String(data.date).trim()
-          : (extractedData.flightsDate || getTodayDisplayDate());
-      } else {
-        extractedData.agentsDate = detectedDate;
-        extractedData.flightsDate = detectedDate;
-      }
+      // Cada archivo nuevo exige que el usuario vuelva a introducir la fecha.
+      if (type === 'agents' || type === 'all') extractedData.agentsDate = '';
+      if (type === 'flights' || type === 'all') extractedData.flightsDate = '';
 
       completeProgressQuickly();
       if (type === 'agents' && data.verification_completed === true) {
@@ -1574,10 +1561,32 @@ function tryUploadAgain() {
   }
 }
 
-function validateUploadedData() {
+async function validateUploadedData() {
+  ensureExtractedDataShape();
+  if (!extractedData.agents.length || !extractedData.flights.length) {
+    alert('Debes cargar Turnos del Personal y Parrilla de Vuelos antes de generar.');
+    return;
+  }
+
+  if (!extractedData.agentsDate || !extractedData.flightsDate) {
+    alert('Añade manualmente la fecha de ambos cuadrantes antes de continuar.');
+    return;
+  }
+  const agentsDateISO = parseQuadrantDateToISO(extractedData.agentsDate);
+  const flightsDateISO = parseQuadrantDateToISO(extractedData.flightsDate);
+  if (agentsDateISO !== flightsDateISO) {
+    alert(
+      'Las fechas de los cuadrantes no coinciden.\n\n' +
+      `Turnos del Personal: ${extractedData.agentsDate}\n` +
+      `Parrilla de Vuelos: ${extractedData.flightsDate}`
+    );
+    return;
+  }
+
   const optModoElem = document.getElementById('optModo');
-  if (optModoElem && optModoElem.value === '') {
-    alert('Abre “Parámetros de Validación” y selecciona una estrategia para el optimizador antes de importar los datos.');
+  const savedOptModo = localStorage.getItem('aeroshift_opt_modo') || '';
+  if (!optModoElem || !optModoElem.value || optModoElem.value !== savedOptModo) {
+    alert('Abre “Parámetros de Validación”, selecciona una estrategia y pulsa “Guardar parámetros”.');
     return;
   }
   if (!quadrantReviewState.agents || !quadrantReviewState.flights) {
@@ -1663,17 +1672,67 @@ function validateUploadedData() {
     });
   }
 
-  const date = document.getElementById('currentDate').value;
-  state.assignments[date] = {}; 
-  saveData();
-  renderAll();
+  const dateInput = document.getElementById('currentDate');
+  if (dateInput) dateInput.value = agentsDateISO;
+  const date = agentsDateISO;
+  state.assignments[date] = {};
 
-  // Redirect to daily visual schedule board (manual view)
-  switchView('parrilla');
+  const generateButton = document.getElementById('generateBoardButton');
+  const originalButtonHtml = generateButton ? generateButton.innerHTML : '';
+  if (generateButton) {
+    generateButton.disabled = true;
+    generateButton.innerHTML = '<span class="spinner" style="width:15px;height:15px;"></span> Generando Parrilla...';
+  }
 
-  setTimeout(() => {
-    alert('¡Excelente!\nLos datos detectados por la IA se han cargado de forma impecable.\n\nTodos los vuelos importados aparecen en "Sin Asignar" en tu cuadrante de hoy. Puedes arrastrarlos manualmente a los agentes correspondientes, o pulsar "Asistente IA" en la cabecera para resolver toda la distribución usando OR-Tools en un clic.');
-  }, 100);
+  try {
+    const backendUrl = document.getElementById('backendUrl')?.value?.trim() || 'https://aeroshift-backend.onrender.com';
+    const response = await fetch(`${backendUrl}/optimize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agents: state.agents,
+        flights: state.flights,
+        modo: savedOptModo
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.detail || result.message || 'OR-Tools no pudo generar una parrilla viable.');
+    }
+
+    for (const [flightId, agentId] of Object.entries(result.assignments || {})) {
+      state.assignments[date][Number(flightId)] = agentId;
+    }
+    const namesByFlight = result.flight_agent_names || {};
+    const applyNames = flight => {
+      const names = namesByFlight[String(flight.id)] || [];
+      flight.agents = names.join(', ');
+    };
+    state.flights.forEach(applyNames);
+    extractedData.flights.forEach(applyNames);
+
+    saveData();
+    renderAll();
+    renderDetectedFlights();
+    switchView('parrilla');
+
+    const unassigned = Array.isArray(result.unassigned_flights)
+      ? result.unassigned_flights.length
+      : 0;
+    alert(
+      'Parrilla generada correctamente con OR-Tools.\n\n' +
+      `Vuelos procesados: ${state.flights.length}\n` +
+      `Vuelos sin asignar: ${unassigned}\n` +
+      `Carga máxima: ${result.max_workload ?? 0} embarques por agente.`
+    );
+  } catch (error) {
+    alert(`No se pudo generar la parrilla:\n\n${error.message}`);
+  } finally {
+    if (generateButton) {
+      generateButton.disabled = false;
+      generateButton.innerHTML = originalButtonHtml;
+    }
+  }
 }
 
 function validateAgentForImport(agent) {
