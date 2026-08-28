@@ -8,7 +8,7 @@
 :root {
   /* Colors - Dark Professional Theme */
   --bg-primary: #0f1117;
-  --bg-secondary: #1a1d27;
+  --bg-secondary: #1e2130;
   --bg-tertiary: #242736;
   --bg-hover: #2a2e3f;
   --bg-card: #1e2130;
@@ -1391,6 +1391,8 @@ select option {
 /* ===== MODAL: PARÁMETROS DE VALIDACIÓN ===== */
 /* Tonos del tema: títulos --text-primary, notas --text-secondary, bordes gris marcado */
 
+#validationParametersModal .modal-header h3 { color: #ffffff; }
+
 #validationParametersModal .modal {
   border: 1px solid #4a5164;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
@@ -1416,7 +1418,7 @@ select option {
 .reg-titulo {
   font-size: 11px;
   font-weight: 800;
-  color: var(--primary);
+  color: #ffffff;
   text-transform: uppercase;
   letter-spacing: .6px;
   margin-bottom: 12px;
@@ -1428,7 +1430,7 @@ select option {
   display: block;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #ffffff;
 }
 
 .reg-grid input {
@@ -1438,7 +1440,7 @@ select option {
   border: 1px solid #4a5164;
   border-radius: 6px;
   background: var(--bg-hover);
-  color: var(--text-primary);
+  color: #ffffff;
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -1451,7 +1453,7 @@ select option {
   display: block;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #ffffff;
   margin-bottom: 7px;
 }
 
@@ -1461,7 +1463,7 @@ select option {
   border: 1px solid #4a5164;
   border-radius: 6px;
   background: var(--bg-hover);
-  color: var(--text-primary);
+  color: #ffffff;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1473,7 +1475,7 @@ select option {
 
 .reg-select option {
   background: var(--bg-tertiary);
-  color: var(--text-primary);
+  color: #ffffff;
 }
 
 .reg-nota {
@@ -1489,7 +1491,7 @@ select option {
   gap: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #ffffff;
   margin-top: 11px;
   cursor: pointer;
 }

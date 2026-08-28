@@ -2042,12 +2042,12 @@ function renderDetectedAgents() {
   // 1. TURNO MAÑANA · Roles Administrativos - Operativos
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO MAÑANA · Roles Administrativos - Operativos
       </td>
     </tr>`;
   if (mañanaAdmins.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
   } else {
     mañanaAdmins.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2055,12 +2055,12 @@ function renderDetectedAgents() {
   // 2. TURNO MAÑANA · Agentes de Pasaje
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO MAÑANA · Agentes de Pasaje
       </td>
     </tr>`;
   if (mañanaPasajes.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
   } else {
     mañanaPasajes.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2068,12 +2068,12 @@ function renderDetectedAgents() {
   // 3. TURNO TARDE · Roles Administrativos - Operativos
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO TARDE · Roles Administrativos - Operativos
       </td>
     </tr>`;
   if (tardeAdmins.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
   } else {
     tardeAdmins.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2081,12 +2081,12 @@ function renderDetectedAgents() {
   // 4. TURNO TARDE · Agentes de Pasaje
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #888; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO TARDE · Agentes de Pasaje
       </td>
     </tr>`;
   if (tardePasajes.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #555; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
   } else {
     tardePasajes.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2274,7 +2274,7 @@ function renderDetectedFlights() {
       
       return `
         <tr style="${rowStyle}" ${hoverAttrs}>
-          <td style="padding: 10px 4px; color: #555; font-weight: bold;">${idx + 1}</td>
+          <td style="padding: 10px 4px; color: #999999; font-weight: bold;">${idx + 1}</td>
           <td style="padding: 10px 4px; color: #fff; font-weight: bold;">${destinationDisplay}</td>
           <td style="padding: 10px 4px;">${numberDisplay}</td>
           <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#a0a0a0'};">${times.apertu}</td>

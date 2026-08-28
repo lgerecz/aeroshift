@@ -231,14 +231,14 @@
       <div style="display: flex; gap: 16px; align-items: center;">
         <!-- Selector de Modelo de IA en la cabecera (Cerebro IA de Extracción) -->
         <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
-          <label for="backendModel" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cerebro IA de Extracción</label>
+          <label for="backendModel" style="font-size: 11px; font-weight: 700; color: #9CA3B4; text-transform: uppercase; letter-spacing: 0.5px;">Cerebro IA de Extracción</label>
           <select id="backendModel" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; width: 230px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); outline: none;">
             <option value="gpt-5.6-luna" selected>GPT-5.6 Luna — OpenAI</option>
             <option value="deepseek-v4-flash-vision-exp">DeepSeek V4 Flash Vision</option>
           </select>
         </div>
 
-        <button class="btn" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap; background: transparent; border: 1px solid #555; color: #d1d5db; transition: all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='#777'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.borderColor='#555'; this.style.color='#d1d5db'" title="Configurar parámetros de validación y optimización">
+        <button class="btn" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap; background: transparent; border: 1px solid #555; color: #d1d5db; transition: all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='#777'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.borderColor='#555'; this.style.color='#d1d5db'" aria-label="Configurar parámetros de validación">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.08A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.08A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
           </svg>
@@ -283,19 +283,19 @@
                 Subir Turnos
                 <input type="file" id="agentsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleAgentsFileUpload(event)" style="display: none;">
               </label>
-              <button onclick="clearDetectedAgents()" title="Limpiar turnos" aria-label="Limpiar turnos" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+              <button onclick="clearDetectedAgents()" title="Limpiar turnos" aria-label="Limpiar turnos" style="background: #121212; border: 1px solid #ff4444; color: #ff4444; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='#121212'">
                 🗑️
               </button>
-              <button onclick="downloadExtractionXlsx('agents')" title="Descargar turnos en Excel" aria-label="Descargar turnos en Excel" style="background: transparent; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#aaa'">
+              <button onclick="downloadExtractionXlsx('agents')" title="Descargar turnos en Excel" aria-label="Descargar turnos en Excel" style="background: #121212; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='#121212'; this.style.color='#aaa'">
                 ⇩
               </button>
-              <button id="reviewAgentsButton" onclick="markQuadrantReviewed('agents')" title="Marcar Turnos del Personal como revisado" aria-label="Marcar Turnos del Personal como revisado" style="background:transparent; border:1px solid #10b981; color:#fff; width:38px; height:38px; padding:0; border-radius:4px; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center; transition:all .15s;">✓</button>
+              <button id="reviewAgentsButton" onclick="markQuadrantReviewed('agents')" title="Marcar Turnos del Personal como revisado" aria-label="Marcar Turnos del Personal como revisado" style="background:#121212; border:1px solid #10b981; color:#fff; width:38px; height:38px; padding:0; border-radius:4px; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center; transition:all .15s;">✓</button>
             </div>
           </div>
           <div style="flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: separate; border-spacing: 0; color: #e0e0e0; font-size: 12.5px;">
               <thead>
-                <tr style="color: #888; font-weight: 700; text-transform: uppercase;">
+                <tr style="color: #999999; font-weight: 700; text-transform: uppercase;">
                   <th style="padding: 10px 4px; text-align: left; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444; width: 100px;">AGENTE</th>
                   <th style="padding: 10px 4px; text-align: left; width: 160px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">HORARIO</th>
                   <th style="padding: 10px 4px; text-align: left; width: 65px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">ROL</th>
@@ -345,19 +345,19 @@
                 Subir Vuelos
                 <input type="file" id="flightsFileInput" accept=".xlsx, .xls, .csv, .pdf, .png, .jpg, .jpeg" onchange="handleFlightsFileUpload(event)" style="display: none;">
               </label>
-              <button onclick="clearDetectedFlights()" title="Limpiar vuelos" aria-label="Limpiar vuelos" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+              <button onclick="clearDetectedFlights()" title="Limpiar vuelos" aria-label="Limpiar vuelos" style="background: #121212; border: 1px solid #ff4444; color: #ff4444; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,68,68,0.1)'" onmouseout="this.style.background='#121212'">
                 🗑️
               </button>
-              <button onclick="downloadExtractionXlsx('flights')" title="Descargar vuelos en Excel" aria-label="Descargar vuelos en Excel" style="background: transparent; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#aaa'">
+              <button onclick="downloadExtractionXlsx('flights')" title="Descargar vuelos en Excel" aria-label="Descargar vuelos en Excel" style="background: #121212; border: 1px solid #555; color: #aaa; width: 38px; height: 38px; padding: 0; border-radius: 4px; cursor: pointer; font-size: 22px; line-height: 1; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin: 0;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff'" onmouseout="this.style.background='#121212'; this.style.color='#aaa'">
                 ⇩
               </button>
-              <button id="reviewFlightsButton" onclick="markQuadrantReviewed('flights')" title="Marcar Parrilla de Vuelos como revisada" aria-label="Marcar Parrilla de Vuelos como revisada" style="background:transparent; border:1px solid #10b981; color:#fff; width:38px; height:38px; padding:0; border-radius:4px; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center; transition:all .15s;">✓</button>
+              <button id="reviewFlightsButton" onclick="markQuadrantReviewed('flights')" title="Marcar Parrilla de Vuelos como revisada" aria-label="Marcar Parrilla de Vuelos como revisada" style="background:#121212; border:1px solid #10b981; color:#fff; width:38px; height:38px; padding:0; border-radius:4px; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center; transition:all .15s;">✓</button>
             </div>
           </div>
           <div style="flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; box-sizing: border-box;">
             <table style="width: 100%; border-collapse: separate; border-spacing: 0; color: #e0e0e0; font-size: 12.5px;">
               <thead>
-                <tr style="color: #888; font-weight: 700; text-transform: uppercase;">
+                <tr style="color: #999999; font-weight: 700; text-transform: uppercase;">
                   <th style="padding: 10px 4px; text-align: left; width: 35px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">Nº</th>
                   <th style="padding: 10px 4px; text-align: left; width: 50px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">DEST</th>
                   <th style="padding: 10px 4px; text-align: left; width: 80px; position: sticky; top: 0; background: #121212; z-index: 5; border-top: 2px double #444; border-bottom: 2px double #444;">VUELO</th>
