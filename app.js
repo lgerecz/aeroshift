@@ -215,6 +215,7 @@ function init() {
   const savedOptModo = localStorage.getItem('aeroshift_opt_modo') || '';
   const optModoElement = document.getElementById('optModo');
   if (optModoElement) optModoElement.value = savedOptModo;
+  cargarReglasEnModal();
 
   setupExtractorClipboardAndDrop();
   setupCustomTooltips();
@@ -227,7 +228,74 @@ function init() {
   renderAll();
 }
 
-function saveOptModo(val) {
+  // ── Parámetros del motor (reglas del optimizador) ──
+  const REGLAS_IDS = {
+    regEmbIni: 'emb_inicio_antes_std',      regEmbFin: 'emb_fin_antes_std',
+    regPrepEnt: 'preparacion_entrada',      regTolEnt: 'tol_entrada',
+    regMgSal: 'margen_salida',              regTolSal: 'tol_salida',
+    regPausa: 'respetar_pausa_partido',
+    regGapSM: 'gap_misma_zona_min',         regGapSO: 'gap_misma_zona_objetivo',
+    regGapDM: 'gap_distinta_zona_min',      regGapDO: 'gap_distinta_zona_objetivo',
+    regAgVuelo: 'agentes_por_vuelo',        regPaxUmbral: 'pax_umbral_agente_unico',
+    regAgMin: 'agentes_min_pax_bajo',
+    regDescDur: 'descanso_duracion',        regDescJor: 'descanso_jornada_min',
+    regPropUmbral: 'proporcionalidad_umbral',
+    regCobDur: 'cobertura_duracion',        regCobJor: 'cobertura_jornada_min',
+    regTiempo: 'tiempo_limite_segundos',    regWorkers: 'num_workers',
+    regSemilla: 'semilla',                  regTolerante: 'modo_tolerante'
+  };
+
+  function leerReglasDelModal() {
+    const reglas = {};
+    for (const [id, clave] of Object.entries(REGLAS_IDS)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      reglas[clave] = el.type === 'checkbox' ? el.checked
+                    : el.type === 'number'   ? Number(el.value)
+                    : el.value;
+    }
+    return reglas;
+  }
+
+  function aplicarReglasEnModal(reglas) {
+    if (!reglas || typeof reglas !== 'object') return;
+    for (const [id, clave] of Object.entries(REGLAS_IDS)) {
+      const el = document.getElementById(id);
+      if (!el || reglas[clave] === undefined) continue;
+      if (el.type === 'checkbox') el.checked = !!reglas[clave];
+      else el.value = reglas[clave];
+    }
+  }
+
+  function cargarReglasEnModal() {
+    try {
+      aplicarReglasEnModal(JSON.parse(localStorage.getItem('aeroshift_reglas') || '{}'));
+    } catch (e) { /* localStorage corrupto: se usan los defectos del HTML */ }
+  }
+
+  function validarReglasDelModal() {
+    const num = id => Number(document.getElementById(id) && document.getElementById(id).value);
+    const comprobaciones = [
+      [num('regEmbIni') > num('regEmbFin'), 'La apertura del embarque debe ser mayor que el cierre (STD − X min).'],
+      [num('regGapSM') <= num('regGapSO'), 'La separación mínima (misma zona) no puede superar la deseada.'],
+      [num('regGapDM') <= num('regGapDO'), 'La separación mínima (distinta zona) no puede superar la deseada.'],
+      [num('regAgMin') <= num('regAgVuelo'), 'El mínimo de agentes (pax bajo) no puede superar los agentes por vuelo.'],
+      [num('regTiempo') > 0, 'El tiempo límite del solver debe ser mayor que 0.'],
+      [num('regTiempo') <= 120, 'El tiempo límite no puede superar 120 segundos.']
+    ];
+    for (const [ok, mensaje] of comprobaciones) {
+      if (!ok) { alert(mensaje); return false; }
+    }
+    return true;
+  }
+
+  function guardarReglasDesdeModal() {
+    if (!validarReglasDelModal()) return false;
+    localStorage.setItem('aeroshift_reglas', JSON.stringify(leerReglasDelModal()));
+    return true;
+  }
+
+  function saveOptModo(val) {
   localStorage.setItem('aeroshift_opt_modo', val);
 }
 
@@ -237,7 +305,8 @@ function openValidationParametersModal() {
   if (!modal || !optModo) return;
   const savedValue = localStorage.getItem('aeroshift_opt_modo') || optModo.value || '';
   optModo.value = savedValue;
-  validationParametersSnapshot = { optModo: savedValue };
+  validationParametersSnapshot = { optModo: savedValue, reglas: localStorage.getItem('aeroshift_reglas') || '' };
+  cargarReglasEnModal();
   modal.classList.add('active');
 }
 
@@ -247,6 +316,9 @@ function cancelValidationParameters(event) {
   const optModo = document.getElementById('optModo');
   if (optModo && validationParametersSnapshot) {
     optModo.value = validationParametersSnapshot.optModo || '';
+  }
+  if (validationParametersSnapshot) {
+    try { aplicarReglasEnModal(JSON.parse(validationParametersSnapshot.reglas || '{}')); } catch (e) {}
   }
   if (modal) modal.classList.remove('active');
   validationParametersSnapshot = null;
@@ -260,6 +332,7 @@ function saveValidationParameters() {
     return;
   }
   saveOptModo(optModo.value);
+  if (!guardarReglasDesdeModal()) return;
   invalidateQuadrantReview('all');
   validationParametersSnapshot = null;
   if (modal) modal.classList.remove('active');
@@ -1692,7 +1765,8 @@ async function validateUploadedData() {
       body: JSON.stringify({
         agents: state.agents,
         flights: state.flights,
-        modo: savedOptModo
+        modo: savedOptModo,
+        reglas: JSON.parse(localStorage.getItem('aeroshift_reglas') || 'null')
       })
     });
     const result = await response.json();
@@ -2519,9 +2593,8 @@ async function runOrToolsOptimization() {
   const payload = {
     agents: state.agents,
     flights: state.flights,
-    min_separation: minSep,
-    prefer_airlines: preferAirlines,
-    modo: optModo
+    modo: optModo,
+    reglas: JSON.parse(localStorage.getItem('aeroshift_reglas') || 'null')
   };
 
   try {

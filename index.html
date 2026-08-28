@@ -67,7 +67,19 @@
       background: #161616 !important;
       color: #ffffff !important;
     }
-  </style>
+    .reg-seccion { margin-top:12px; background:var(--bg-body); border:1px solid var(--border); border-radius:8px; padding:16px; }
+  .reg-titulo { font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:.6px; margin-bottom:12px; }
+  .reg-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .reg-grid label { display:block; font-size:12px; font-weight:700; color:#fff; }
+  .reg-grid input { width:100%; margin-top:7px; padding:8px 11px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:#fff; font-family:inherit; font-size:12px; font-weight:600; outline:none; }
+  .reg-check { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#fff; margin-top:11px; cursor:pointer; }
+  .reg-check input { accent-color:var(--primary); width:15px; height:15px; cursor:pointer; }
+  .reg-nota { color:var(--text-muted); font-size:11px; line-height:1.45; margin:9px 0 0; }
+  details.reg-avanzado > summary { cursor:pointer; list-style:none; }
+  details.reg-avanzado > summary::-webkit-details-marker { display:none; }
+  details.reg-avanzado[open] .reg-titulo::after { content:" −"; }
+  details.reg-avanzado:not([open]) .reg-titulo::after { content:" +"; }
+</style>
 </head>
 <body>
   <!-- HEADER -->
@@ -675,13 +687,80 @@
           <select id="optModo" style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:#fff; cursor:pointer; font-family:inherit; font-size:12px; font-weight:600; outline:none;">
             <option value="">— Seleccionar —</option>
             <option value="PROPORCIONAL">PROPORCIONAL</option>
-            <option value="EQUILIBRADO">EQUILIBRADA</option>
+            <option value="EQUILIBRADO">EQUILIBRADO</option>
           </select>
           <p style="color:var(--text-muted); font-size:11px; line-height:1.45; margin:9px 0 0;">Selecciona la estrategia que utilizará OR-Tools para distribuir las asignaciones.</p>
         </div>
-        <div style="margin-top:14px; padding:11px 13px; border:1px dashed #3a3a3a; border-radius:7px; color:#666; font-size:11px; text-align:center;">
-          Aquí se añadirán los próximos parámetros de validación y planificación.
+        <div class="reg-seccion">
+          <div class="reg-titulo">✈️ Puerta de embarque</div>
+          <div class="reg-grid">
+            <label for="regEmbIni">Apertura (min antes de STD)<input type="number" id="regEmbIni" value="40" min="0" max="120"></label>
+            <label for="regEmbFin">Cierre (min antes de STD)<input type="number" id="regEmbFin" value="15" min="0" max="60"></label>
+          </div>
+          <p class="reg-nota">Ventana en la que el vuelo puede asignarse para embarque.</p>
         </div>
+        <div class="reg-seccion">
+          <div class="reg-titulo">🕐 Ventana de turno</div>
+          <div class="reg-grid">
+            <label for="regPrepEnt">Preparación entrada (min)<input type="number" id="regPrepEnt" value="30" min="0" max="120"></label>
+            <label for="regTolEnt">Tolerancia entrada (±min)<input type="number" id="regTolEnt" value="10" min="0" max="60"></label>
+            <label for="regMgSal">Margen salida (min)<input type="number" id="regMgSal" value="15" min="0" max="60"></label>
+            <label for="regTolSal">Tolerancia salida (±min)<input type="number" id="regTolSal" value="5" min="0" max="60"></label>
+          </div>
+          <label class="reg-check"><input type="checkbox" id="regPausa" checked> Respetar pausa de turno partido</label>
+        </div>
+        <div class="reg-seccion">
+          <div class="reg-titulo">↔️ Separación entre embarques</div>
+          <div class="reg-grid">
+            <label for="regGapSM">Misma zona · mínima (min)<input type="number" id="regGapSM" value="55" min="0" max="180"></label>
+            <label for="regGapSO">Misma zona · deseada (min)<input type="number" id="regGapSO" value="60" min="0" max="180"></label>
+            <label for="regGapDM">Distinta zona · mínima (min)<input type="number" id="regGapDM" value="70" min="0" max="240"></label>
+            <label for="regGapDO">Distinta zona · deseada (min)<input type="number" id="regGapDO" value="75" min="0" max="240"></label>
+          </div>
+          <p class="reg-nota">Según la tabla de zonas (Schengen / No-Schengen) configurada a nivel de empresa. La mínima es obligatoria; la deseada guía el objetivo.</p>
+        </div>
+        <div class="reg-seccion">
+          <div class="reg-titulo">👥 Dotación por vuelo</div>
+          <div class="reg-grid">
+            <label for="regAgVuelo">Agentes por vuelo<input type="number" id="regAgVuelo" value="2" min="1" max="9"></label>
+            <label for="regPaxUmbral">Umbral pax agente único<input type="number" id="regPaxUmbral" value="100" min="0" max="999"></label>
+            <label for="regAgMin">Mínimo si pax ≤ umbral<input type="number" id="regAgMin" value="1" min="0" max="9"></label>
+          </div>
+          <p class="reg-nota">Vuelos con pax &gt; umbral: dotación exacta. Con pax ≤ umbral: entre el mínimo y la dotación (el solver decide).</p>
+        </div>
+        <div class="reg-seccion">
+          <div class="reg-titulo">☕ Descanso CSA</div>
+          <div class="reg-grid">
+            <label for="regDescDur">Duración mínima (min)<input type="number" id="regDescDur" value="70" min="0" max="180"></label>
+            <label for="regDescJor">Obligatorio desde jornada (min)<input type="number" id="regDescJor" value="360" min="0" max="720"></label>
+          </div>
+          <p class="reg-nota">Jornadas de CSA por encima del umbral deben poder descansar, centrado cerca de la mitad del turno.</p>
+        </div>
+        <div class="reg-seccion">
+          <div class="reg-titulo">⚖️ Proporcionalidad</div>
+          <div class="reg-grid">
+            <label for="regPropUmbral">Umbral por jornada (min)<input type="number" id="regPropUmbral" value="60" min="0" max="300"></label>
+          </div>
+          <p class="reg-nota">Quien tenga más jornada debe llevar más embarques (diferencia máxima tolerada).</p>
+        </div>
+        <div class="reg-seccion">
+          <div class="reg-titulo">🛡️ Cobertura de departamentos</div>
+          <div class="reg-grid">
+            <label for="regCobDur">Bloque mínimo (min)<input type="number" id="regCobDur" value="70" min="0" max="180"></label>
+            <label for="regCobJor">Obligatoria hasta jornada (min)<input type="number" id="regCobJor" value="360" min="0" max="720"></label>
+          </div>
+          <p class="reg-nota">Personal operativo de departamento (TKT, GC, rampa…) debe poder cubrir un bloque libre de embarques.</p>
+        </div>
+        <details class="reg-seccion reg-avanzado">
+          <summary><div class="reg-titulo" style="margin-bottom:0;">⚙️ Avanzado</div></summary>
+          <div class="reg-grid" style="margin-top:12px;">
+            <label for="regTiempo">Tiempo límite (seg)<input type="number" id="regTiempo" value="60" min="5" max="120"></label>
+            <label for="regWorkers">Workers<input type="number" id="regWorkers" value="8" min="1" max="16"></label>
+            <label for="regSemilla">Semilla<input type="number" id="regSemilla" value="7" min="0" max="999999"></label>
+          </div>
+          <label class="reg-check"><input type="checkbox" id="regTolerante"> Modo tolerante (construir parrilla aunque haya que incumplir mínimos)</label>
+          <p class="reg-nota">⚠️ En producción (Render) mantén el tiempo ≤ 55 s para no agotar el timeout. La semilla hace el resultado reproducible con 1 worker.</p>
+        </details>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="cancelValidationParameters()">Cancelar</button>

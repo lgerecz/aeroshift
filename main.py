@@ -7,6 +7,7 @@ import sys
 import io
 import contextlib
 import time
+import threading
 import unicodedata
 from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,10 +71,10 @@ def get_zona(iata: str) -> str:
     return 'NS'
 
 def gap_minimo(za: str, zb: str) -> int:
-    return 60 if za == zb else 75
+    return R.gap_misma_zona_objetivo if za == zb else R.gap_distinta_zona_objetivo
 
 def gap_tolerancia(za: str, zb: str) -> int:
-    return 55 if za == zb else 70
+    return R.gap_misma_zona_min if za == zb else R.gap_distinta_zona_min
 
 PUERTAS_REMOTAS = {'B20','B22','C32','C36','C39','C40'}
 ROLES_NO_EMBARCAN = {'DSM','PSM','OPS','TKT','TKD','LL','SOMBRA','SHADOW','SHADOWING','FAMI','SICK','CURSO','NUEVO','NEW','AUTOCHECKIN'}
@@ -344,9 +345,9 @@ def ndisp(ag: dict) -> str:
     return ag['nombre']
 
 def icono_break(mins: int) -> str:
-    if mins >= 70:
+    if mins >= R.descanso_duracion:
         return "✅"
-    if mins >= 55:
+    if mins >= R.ventana_reporte_min:
         return "⏳"
     return ""
 
@@ -375,13 +376,59 @@ class FlightInput(BaseModel):
     charter: Optional[bool] = False
     manual: Optional[bool] = False
 
+class ReglasConfig(BaseModel):
+    """Parámetros del motor — todos opcionales; defaults = comportamiento histórico (Colab)."""
+    # Optimización
+    modo_tolerante: bool = False
+    tiempo_limite_segundos: float = 60.0
+    num_workers: int = 8
+    semilla: int = 7
+    # Puerta de embarque
+    emb_inicio_antes_std: int = 40
+    emb_fin_antes_std: int = 15
+    # Ventana de turno (C2)
+    preparacion_entrada: int = 30
+    tol_entrada: int = 10
+    margen_salida: int = 15
+    tol_salida: int = 5
+    respetar_pausa_partido: bool = True
+    # Gaps entre embarques (C4) — según zona Schengen/No-Schengen
+    gap_misma_zona_min: int = 55
+    gap_misma_zona_objetivo: int = 60
+    gap_distinta_zona_min: int = 70
+    gap_distinta_zona_objetivo: int = 75
+    # Dotación por vuelo (C1)
+    agentes_por_vuelo: int = 2
+    pax_umbral_agente_unico: int = 100
+    agentes_min_pax_bajo: int = 1
+    # Descanso CSA (C5)
+    descanso_duracion: int = 70
+    descanso_jornada_min: int = 360
+    descanso_recomendable_jornada: int = 360
+    # Proporcionalidad (C6)
+    proporcionalidad_umbral: int = 60
+    # Cobertura de departamentos (C7)
+    cobertura_duracion: int = 70
+    cobertura_jornada_min: int = 360
+    # Informes
+    ventana_reporte_min: int = 55
+
+
+R = ReglasConfig()
+_R_LOCK = threading.Lock()
+
+
 class OptimizeRequest(BaseModel):
     agents: List[AgentInput]
     flights: List[FlightInput]
     modo: Optional[str] = 'PROPORCIONAL' # 'EQUILIBRADO' | 'PROPORCIONAL'
+    reglas: Optional[ReglasConfig] = None  # parámetros aceptados en la UI (opcional)
 
 @app.post("/optimize")
 def optimize_schedule(req: OptimizeRequest):
+    global R
+    with _R_LOCK:
+        R = req.reglas or ReglasConfig()
     """
     Usa Google OR-Tools (CP-SAT Solver) para resolver la asignación óptima de agentes a vuelos
     siguiendo estrictamente el modelo matemático y generando los 5 reportes de tu script de Google Colab.
@@ -478,12 +525,12 @@ def optimize_schedule(req: OptimizeRequest):
             'pax': v.pax,
             'charter': v.charter,
             'manual': v.manual,
-            'emb_inicio': std - 40,
-            'emb_fin': std - 15,
+            'emb_inicio': std - R.emb_inicio_antes_std,
+            'emb_fin': std - R.emb_fin_antes_std,
             'std_min': std,
             'zona': get_zona(v.destination),
-            'agentes_req': 3 if v.gate in PUERTAS_REMOTAS else 2,
-            'pax_unico_ok': v.pax <= 100
+            'agentes_req': R.agentes_por_vuelo,  # puertas remotas desactivadas (decisión 28/08)
+            'pax_unico_ok': v.pax <= R.pax_umbral_agente_unico
         }
         VUELOS.append(v_dict)
 
@@ -491,163 +538,186 @@ def optimize_schedule(req: OptimizeRequest):
     SPLIT = 660
 
     # 2. MODELO CP-SAT (FROM COLAB SECTION 7)
-    model = cp_model.CpModel()
-    solver = cp_model.CpSolver()
-    
     A, V = len(activos), len(VUELOS)
     if A == 0 or V == 0:
         raise HTTPException(status_code=400, detail="No hay suficientes agentes activos o vuelos para realizar el cálculo.")
 
-    x = [[model.NewBoolVar(f'x_{a}_{v}') for v in range(V)] for a in range(A)]
-    TOL_ENT, TOL_SAL = 10, 5
+    slacks = []
+    tolerar = False
+    _intento = False
+    for _intento in ([False, True] if R.modo_tolerante else [False]):
+        tolerar = _intento
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        x = [[model.NewBoolVar(f'x_{a}_{v}') for v in range(V)] for a in range(A)]
+        TOL_ENT, TOL_SAL = R.tol_entrada, R.tol_salida
 
-    # Constraint: Flight agents requirement
-    for vi, v in enumerate(VUELOS):
-        total = sum(x[ai][vi] for ai in range(A))
-        if v['pax_unico_ok']:
-            model.Add(total >= 1)
-            model.Add(total <= v['agentes_req'])
-        else:
-            model.Add(total == v['agentes_req'])
-
-    # Constraint: Availability bounds & double blocks
-    for ai, ag in enumerate(activos):
-        disp_desde = ag['_t_ini'] + 30 - TOL_ENT
+        # Constraint: Flight agents requirement
         for vi, v in enumerate(VUELOS):
-            disp_hasta = ag['_t_fin'] + TOL_SAL - 15
-            if v['emb_inicio'] < disp_desde or v['std_min'] > disp_hasta:
-                model.Add(x[ai][vi] == 0)
-                continue
+            total = sum(x[ai][vi] for ai in range(A))
+            if v['pax_unico_ok']:
+                if tolerar:
+                    _sl = model.NewIntVar(0, R.agentes_min_pax_bajo, f'sl_{vi}')
+                    model.Add(total + _sl >= R.agentes_min_pax_bajo)
+                    slacks.append(_sl)
+                else:
+                    model.Add(total >= R.agentes_min_pax_bajo)
+                model.Add(total <= v['agentes_req'])
+            else:
+                if tolerar:
+                    _sl = model.NewIntVar(0, v['agentes_req'], f'sl_{vi}')
+                    model.Add(total + _sl == v['agentes_req'])
+                    slacks.append(_sl)
+                else:
+                    model.Add(total == v['agentes_req'])
+
+        # Constraint: Availability bounds & double blocks
+        for ai, ag in enumerate(activos):
+            disp_desde = ag['_t_ini'] + R.preparacion_entrada - TOL_ENT
+            for vi, v in enumerate(VUELOS):
+                disp_hasta = ag['_t_fin'] + TOL_SAL - R.margen_salida
+                if v['emb_inicio'] < disp_desde or v['std_min'] > disp_hasta:
+                    model.Add(x[ai][vi] == 0)
+                    continue
             
-            # Check overlap with exclusion intervals (like split shift pause or mixed role TKT interval)
-            overlap = False
-            for ex_ini, ex_fin in ag.get('_excl_intervals', []):
-                if v['emb_inicio'] < ex_fin and v['emb_fin'] > ex_ini:
-                    overlap = True
-                    break
-                # Special check: flight starts before pause, but departs after pause starts + TOL_SAL
-                # (applies only to the split shift pause to prevent agent getting trapped at gate)
-                if ag.get('bloque2') and ex_ini == ag['_pausa_ini']:
-                    if v['emb_inicio'] < ag['_pausa_ini'] and v['std_min'] > ag['_pausa_ini'] + TOL_SAL:
+                # Check overlap with exclusion intervals (like split shift pause or mixed role TKT interval)
+                overlap = False
+                for ex_ini, ex_fin in ag.get('_excl_intervals', []):
+                    if v['emb_inicio'] < ex_fin and v['emb_fin'] > ex_ini:
                         overlap = True
                         break
-            if overlap:
-                model.Add(x[ai][vi] == 0)
+                    # Special check: flight starts before pause, but departs after pause starts + TOL_SAL
+                    # (applies only to the split shift pause to prevent agent getting trapped at gate)
+                    if ag.get('bloque2') and ex_ini == ag['_pausa_ini']:
+                        if v['emb_inicio'] < ag['_pausa_ini'] and v['std_min'] > ag['_pausa_ini'] + TOL_SAL:
+                            overlap = True
+                            break
+                if overlap:
+                    model.Add(x[ai][vi] == 0)
 
-    # Constraint: No overlapping flights (simultaneous flights)
-    for ai in range(A):
-        for vi in range(V):
-            for vj in range(vi+1, V):
-                va, vb = VUELOS[vi], VUELOS[vj]
-                if va['emb_inicio'] < vb['emb_fin'] and vb['emb_inicio'] < va['emb_fin']:
-                    model.Add(x[ai][vi] + x[ai][vj] <= 1)
+        # Constraint: No overlapping flights (simultaneous flights)
+        for ai in range(A):
+            for vi in range(V):
+                for vj in range(vi+1, V):
+                    va, vb = VUELOS[vi], VUELOS[vj]
+                    if va['emb_inicio'] < vb['emb_fin'] and vb['emb_inicio'] < va['emb_fin']:
+                        model.Add(x[ai][vi] + x[ai][vj] <= 1)
 
-    # Constraint: Gap times (same-zone / different-zone separation)
-    for ai in range(A):
-        for vi in range(V):
-            for vj in range(V):
-                if vi == vj:
-                    continue
-                va, vb = VUELOS[vi], VUELOS[vj]
-                if vb['emb_inicio'] <= va['emb_inicio']:
-                    continue
-                if vb['emb_inicio'] - va['emb_inicio'] < gap_tolerancia(va['zona'], vb['zona']):
-                    model.Add(x[ai][vi] + x[ai][vj] <= 1)
+        # Constraint: Gap times (same-zone / different-zone separation)
+        for ai in range(A):
+            for vi in range(V):
+                for vj in range(V):
+                    if vi == vj:
+                        continue
+                    va, vb = VUELOS[vi], VUELOS[vj]
+                    if vb['emb_inicio'] <= va['emb_inicio']:
+                        continue
+                    if vb['emb_inicio'] - va['emb_inicio'] < gap_tolerancia(va['zona'], vb['zona']):
+                        model.Add(x[ai][vi] + x[ai][vj] <= 1)
 
-    # Optional flight interval variables for breaks/coverage
-    flight_iv_dict = {}
-    for ai, ag in enumerate(activos):
-        if ag['_jornada'] > 360 or ag['espec']:
-            flight_iv_dict[ai] = [
-                model.NewOptionalIntervalVar(
-                    v['emb_inicio'], 
-                    v['std_min'] - v['emb_inicio'], 
-                    v['std_min'], 
-                    x[ai][vi], 
-                    f'fi_{ai}_{vi}'
-                ) for vi, v in enumerate(VUELOS)
-            ]
+        # Optional flight interval variables for breaks/coverage
+        flight_iv_dict = {}
+        for ai, ag in enumerate(activos):
+            if ag['_jornada'] > R.descanso_jornada_min or ag['espec']:
+                flight_iv_dict[ai] = [
+                    model.NewOptionalIntervalVar(
+                        v['emb_inicio'], 
+                        v['std_min'] - v['emb_inicio'], 
+                        v['std_min'], 
+                        x[ai][vi], 
+                        f'fi_{ai}_{vi}'
+                    ) for vi, v in enumerate(VUELOS)
+                ]
 
-    # Constraint: Lunch Breaks
-    break_iv_dict = {}
-    for ai, ag in enumerate(activos):
-        if ag['_jornada'] > 360:
-            mid = ag['_midpoint']
-            hi = max(mid, ag['_t_fin'] - 70)
-            brk_s = model.NewIntVar(mid, hi, f'bs_{ai}')
-            brk_e = model.NewIntVar(mid+70, ag['_t_fin'], f'be_{ai}')
-            brk_iv = model.NewIntervalVar(brk_s, 70, brk_e, f'bi_{ai}')
-            break_iv_dict[ai] = brk_iv
-            model.AddNoOverlap([brk_iv] + flight_iv_dict[ai])
+        # Constraint: Lunch Breaks
+        break_iv_dict = {}
+        for ai, ag in enumerate(activos):
+            if ag['_jornada'] > R.descanso_jornada_min:
+                mid = ag['_midpoint']
+                hi = max(mid, ag['_t_fin'] - R.descanso_duracion)
+                brk_s = model.NewIntVar(mid, hi, f'bs_{ai}')
+                brk_e = model.NewIntVar(mid + R.descanso_duracion, ag['_t_fin'], f'be_{ai}')
+                brk_iv = model.NewIntervalVar(brk_s, R.descanso_duracion, brk_e, f'bi_{ai}')
+                break_iv_dict[ai] = brk_iv
+                model.AddNoOverlap([brk_iv] + flight_iv_dict[ai])
 
-    # Constraint: Department Coverage (TKT, LL, OPS)
-    for op_idx, op_ag in enumerate(AGENTES):
-        base_operational_role = get_base_role(op_ag['rol'])
-        if (
-            base_operational_role not in ROLES_OPERATIVOS
-            or op_ag['excluir']
-            or get_full_shift_status(op_ag['rol']) == 'SICK'
-            or op_ag['_jornada'] <= 360
-        ):
-            continue
-        dept = base_operational_role
-        op_mid = op_ag['_midpoint']
-        op_fin = op_ag['_t_fin']
-        if op_fin - op_mid < 70:
-            continue
+        # Constraint: Department Coverage (TKT, LL, OPS)
+        for op_idx, op_ag in enumerate(AGENTES):
+            base_operational_role = get_base_role(op_ag['rol'])
+            if (
+                base_operational_role not in ROLES_OPERATIVOS
+                or op_ag['excluir']
+                or get_full_shift_status(op_ag['rol']) == 'SICK'
+                or op_ag['_jornada'] <= R.cobertura_jornada_min
+            ):
+                continue
+            dept = base_operational_role
+            op_mid = op_ag['_midpoint']
+            op_fin = op_ag['_t_fin']
+            if op_fin - op_mid < R.cobertura_duracion:
+                continue
         
-        can_cover = []
-        for cov_ag in cobertura_pool:
-            if dept not in cov_ag['espec']:
-                continue
-            if cov_ag['_t_fin'] <= op_mid or cov_ag['_t_ini'] >= op_fin:
-                continue
-            cov_from = max(op_mid, cov_ag['_t_ini'])
-            cov_to = min(op_fin, cov_ag['_t_fin'])
-            if cov_to - cov_from < 70:
-                continue
+            can_cover = []
+            for cov_ag in cobertura_pool:
+                if dept not in cov_ag['espec']:
+                    continue
+                if cov_ag['_t_fin'] <= op_mid or cov_ag['_t_ini'] >= op_fin:
+                    continue
+                cov_from = max(op_mid, cov_ag['_t_ini'])
+                cov_to = min(op_fin, cov_ag['_t_fin'])
+                if cov_to - cov_from < R.cobertura_duracion:
+                    continue
             
-            is_cov = model.NewBoolVar(f'cov_{cov_ag["nombre"]}_{op_idx}')
-            cov_s = model.NewIntVar(cov_from, cov_to-70, f'cs_{cov_ag["nombre"]}_{op_idx}')
-            cov_e = model.NewIntVar(cov_from+70, cov_to, f'ce_{cov_ag["nombre"]}_{op_idx}')
-            cov_iv = model.NewOptionalIntervalVar(cov_s, 70, cov_e, is_cov, f'civ_{cov_ag["nombre"]}_{op_idx}')
+                is_cov = model.NewBoolVar(f'cov_{cov_ag["nombre"]}_{op_idx}')
+                cov_s = model.NewIntVar(cov_from, cov_to - R.cobertura_duracion, f'cs_{cov_ag["nombre"]}_{op_idx}')
+                cov_e = model.NewIntVar(cov_from + R.cobertura_duracion, cov_to, f'ce_{cov_ag["nombre"]}_{op_idx}')
+                cov_iv = model.NewOptionalIntervalVar(cov_s, R.cobertura_duracion, cov_e, is_cov, f'civ_{cov_ag["nombre"]}_{op_idx}')
             
-            no_ov = [cov_iv]
-            ai = activos_idx.get(cov_ag['id'])
-            if ai is not None:
-                if ai in flight_iv_dict:
-                    no_ov += flight_iv_dict[ai]
-                if ai in break_iv_dict:
-                    no_ov.append(break_iv_dict[ai])
+                no_ov = [cov_iv]
+                ai = activos_idx.get(cov_ag['id'])
+                if ai is not None:
+                    if ai in flight_iv_dict:
+                        no_ov += flight_iv_dict[ai]
+                    if ai in break_iv_dict:
+                        no_ov.append(break_iv_dict[ai])
             
-            model.AddNoOverlap(no_ov)
-            can_cover.append(is_cov)
+                model.AddNoOverlap(no_ov)
+                can_cover.append(is_cov)
         
-        if can_cover:
-            model.Add(sum(can_cover) >= 1)
+            if can_cover:
+                model.Add(sum(can_cover) >= 1)
 
-    # Workload optimization objective
-    carga_ag = [sum(x[ai][vi] for vi in range(V)) for ai in range(A)]
-    for ai in range(A):
-        for aj in range(A):
-            if ai != aj and activos[ai]['_jornada'] > activos[aj]['_jornada'] + 60:
-                model.Add(carga_ag[ai] >= carga_ag[aj])
+        # Workload optimization objective
+        carga_ag = [sum(x[ai][vi] for vi in range(V)) for ai in range(A)]
+        for ai in range(A):
+            for aj in range(A):
+                if ai != aj and activos[ai]['_jornada'] > activos[aj]['_jornada'] + R.proporcionalidad_umbral:
+                    model.Add(carga_ag[ai] >= carga_ag[aj])
 
-    # Objective functions based on Mode
-    if MODO == 'EQUILIBRADO':
-        max_c = model.NewIntVar(0, V, 'mc')
-        min_c = model.NewIntVar(0, V, 'nc')
-        model.AddMaxEquality(max_c, carga_ag)
-        model.AddMinEquality(min_c, carga_ag)
-        diff = model.NewIntVar(0, V, 'd')
-        model.Add(diff == max_c - min_c)
-        model.Minimize(diff)
-    elif MODO == 'PROPORCIONAL':
-        model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)))
+        # Objective functions based on Mode
+        if tolerar:
+            model.Minimize(1_000_000 * sum(slacks) if slacks else 0)
+        elif MODO == 'EQUILIBRADO':
+            max_c = model.NewIntVar(0, V, 'mc')
+            min_c = model.NewIntVar(0, V, 'nc')
+            model.AddMaxEquality(max_c, carga_ag)
+            model.AddMinEquality(min_c, carga_ag)
+            diff = model.NewIntVar(0, V, 'd')
+            model.Add(diff == max_c - min_c)
+            model.Minimize(diff)
+        elif MODO == 'PROPORCIONAL':
+            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)))
 
-    # Solve model
-    solver.parameters.max_time_in_seconds = 60.0
-    status = solver.Solve(model)
+        # Solve model
+        solver.parameters.max_time_in_seconds = float(R.tiempo_limite_segundos)
+        solver.parameters.num_workers = R.num_workers
+        solver.parameters.random_seed = R.semilla
+        status = solver.Solve(model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) or tolerar:
+            break
+
+    tolerante_usado = bool(tolerar and _intento
+                           and status in (cp_model.OPTIMAL, cp_model.FEASIBLE))
 
     # Capture standard output for the 5 Colab Reports!
     stdout_capture = io.StringIO()
@@ -785,9 +855,9 @@ def optimize_schedule(req: OptimizeRequest):
             # SALIDA 5 — DESCANSOS
             # ─────────────────────────────────────────────────────────────
             print("\n"+"═"*72); print("DESCANSOS"); print("═"*72)
-            _oblig_desc = [a for a in todos_csa if a['_jornada'] > 360]
-            _recom_desc = [a for a in todos_csa if a['_jornada'] == 360]
-            _op_desc = [a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and get_full_shift_status(a['rol']) != 'SICK' and not a['excluir'] and a['_jornada'] > 360]
+            _oblig_desc = [a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min]
+            _recom_desc = [a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada]
+            _op_desc = [a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and get_full_shift_status(a['rol']) != 'SICK' and not a['excluir'] and a['_jornada'] > R.descanso_jornada_min]
             print(f"👥 Resumen: 🔴 CSA >6h (obligatorio): {len(_oblig_desc)}  🟡 CSA =6h (recomendable): {len(_recom_desc)}  🔵 Operativo >6h: {len(_op_desc)}")
             
             def tramos_agente(ag):
@@ -829,13 +899,13 @@ def optimize_schedule(req: OptimizeRequest):
                     avail = te - max(ts, mid) if te > mid else 0
                     icon = icono_break(avail) if avail > 0 else ""
                     print(f"  Entre {d} ({m2t(ts)}) y {h} ({m2t(te)}): {dur_str(mins)} {icon}")
-                    if avail >= 70:
+                    if avail >= R.descanso_duracion:
                         hay_ok_2a = True
                 if not mid_ok:
                     print(f"  ── desde {m2t(mid)} descanso preferible ──────────────")
-                if ag['_jornada'] > 360 and not hay_ok_2a:
+                if ag['_jornada'] > R.descanso_jornada_min and not hay_ok_2a:
                     max_a = max((min(te, ag['_t_fin']) - max(ts, mid) for ts, te, _, __ in t if te > mid), default=0)
-                    print(f"  ⚠️  Sin tramo ≥70 min desde {m2t(mid)} — disponible: {dur_str(max_a)} — PSM")
+                    print(f"  ⚠️  Sin tramo ≥{R.descanso_duracion} min desde {m2t(mid)} — disponible: {dur_str(max_a)} — PSM")
 
             def ventanas_libres(ag, desde, hasta):
                 vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
@@ -848,19 +918,19 @@ def optimize_schedule(req: OptimizeRequest):
                         break
                     gs = max(prev, desde)
                     ge = min(v['emb_inicio'], hasta)
-                    if ge - gs >= 55:
+                    if ge - gs >= R.ventana_reporte_min:
                         wins.append((gs, ge, ge-gs))
                     prev = max(prev, v['std_min'])
                 gs = max(prev, desde)
-                if hasta - gs >= 55:
+                if hasta - gs >= R.ventana_reporte_min:
                     wins.append((gs, hasta, hasta-gs))
                 return wins
 
             def descanso_requerido_cobertura(ag):
-                if ag['_jornada'] > 360:
-                    return 70
-                if ag['_jornada'] == 360:
-                    return 55
+                if ag['_jornada'] > R.descanso_jornada_min:
+                    return R.descanso_duracion
+                if ag['_jornada'] == R.descanso_recomendable_jornada:
+                    return R.ventana_reporte_min
                 return 0
 
             def hay_descanso_disjunto(ag, ex_s, ex_e, req):
@@ -879,7 +949,7 @@ def optimize_schedule(req: OptimizeRequest):
                     if get_base_role(col['rol']) == dept and col['id'] != op_ag['id'] and not col['excluir']:
                         ol_s = max(desde, col['_t_ini'])
                         ol_e = min(hasta, col['_t_fin'])
-                        if ol_e - ol_s >= 55:
+                        if ol_e - ol_s >= R.ventana_reporte_min:
                             result.append(('🔵 Colega', ndisp(col), ol_s, ol_e))
                 for cov in cobertura_pool:
                     if dept not in cov['espec']:
@@ -893,7 +963,7 @@ def optimize_schedule(req: OptimizeRequest):
                         continue
                     req = descanso_requerido_cobertura(cov)
                     for ws, we, wd in wins:
-                        if wd < 55:
+                        if wd < R.ventana_reporte_min:
                             continue
                         if req == 0 or hay_descanso_disjunto(cov, ws, we, req) or wd >= req + 55:
                             result.append(('🟢 CSA', ndisp(cov), ws, we))
@@ -901,8 +971,8 @@ def optimize_schedule(req: OptimizeRequest):
 
             # Sort and print breaks
             sort_desc_key = lambda a: (a['_t_ini'], -a['_jornada'], -len(por_ag.get(a['id'], [])), a['nombre'])
-            oblig = sorted([a for a in todos_csa if a['_jornada'] > 360], key=sort_desc_key)
-            recom = sorted([a for a in todos_csa if a['_jornada'] == 360], key=sort_desc_key)
+            oblig = sorted([a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min], key=sort_desc_key)
+            recom = sorted([a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada], key=sort_desc_key)
             
             if oblig:
                 print("\n▶ CSA — DESCANSO OBLIGATORIO (jornada >6h)")
@@ -1005,9 +1075,16 @@ def optimize_schedule(req: OptimizeRequest):
                 workload_by_agent[agent_id] = workload_by_agent.get(agent_id, 0) + 1
         max_workload = max(workload_by_agent.values(), default=0)
 
+        vuelos_bajo_minimo = [
+            v['id'] for v in VUELOS
+            if len(asign[vkey(v)]) < (R.agentes_min_pax_bajo if v['pax_unico_ok'] else v['agentes_req'])
+        ]
         return {
             "success": True,
-            "status": "OPTIMAL" if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "FEASIBLE",
+            "status": "TOLERANTE" if tolerante_usado else ("OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE"),
+            "tolerante": tolerante_usado,
+            "vuelos_bajo_minimo": vuelos_bajo_minimo,
+            "reglas_aplicadas": R.model_dump(),
             "assignments": results_mapped,
             "flight_agent_ids": flight_agent_ids,
             "flight_agent_names": flight_agent_names,
@@ -1019,7 +1096,9 @@ def optimize_schedule(req: OptimizeRequest):
         return {
             "success": False,
             "status": "INFEASIBLE",
-            "message": "No se pudo encontrar un cuadrante viable respetando tus descansos y horarios."
+            "message": ("No se pudo encontrar un cuadrante viable respetando tus descansos y horarios. "
+                        "Activa el modo tolerante en Parámetros o revisa dotación/gaps/descansos."),
+            "reglas_aplicadas": R.model_dump()
         }
 
 # DEMO Fallback Data (Sábado 20 Junio)
