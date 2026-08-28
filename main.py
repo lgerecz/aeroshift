@@ -2068,6 +2068,73 @@ COMPROBACIÓN FINAL
                     expanded_agents.append(agent)
             data["agentes"] = expanded_agents
 
+        def repair_office_positional_schedules(data: Any) -> list[dict]:
+            """
+            Corrige un caso inequívoco: varias personas de oficina recibieron
+            el mismo horario compuesto y cada tramo corresponde por posición.
+            """
+            if not isinstance(data, dict) or not isinstance(data.get("agentes"), list):
+                return []
+            agents = data["agentes"]
+            repairs = []
+            index = 0
+
+            while index < len(agents):
+                agent = agents[index]
+                if not isinstance(agent, dict):
+                    index += 1
+                    continue
+                try:
+                    row_people = int(agent.get("personas_en_fila") or 1)
+                except (TypeError, ValueError):
+                    row_people = 1
+
+                if agent.get("seccion") == "oficina" and row_people > 1:
+                    group = agents[index:index + row_people]
+                    valid_group = (
+                        len(group) == row_people
+                        and all(
+                            isinstance(item, dict)
+                            and item.get("seccion") == "oficina"
+                            and item.get("turno") == agent.get("turno")
+                            and int(item.get("personas_en_fila") or 1) == row_people
+                            for item in group
+                        )
+                    )
+                    if valid_group:
+                        schedules = [str(item.get("horario") or "").strip() for item in group]
+                        if len(set(schedules)) == 1:
+                            combined = schedules[0].replace("//", "/").replace("–", "-").replace("—", "-")
+                            segments = [segment.strip() for segment in combined.split("/") if segment.strip()]
+                            if len(segments) == row_people:
+                                normalized_segments = []
+                                try:
+                                    for segment in segments:
+                                        normalized, minutes = normalize_and_measure_schedule(segment)
+                                        if " / " in normalized or minutes is None or minutes > 600:
+                                            raise ValueError("Tramo individual inválido")
+                                        normalized_segments.append(normalized)
+                                except Exception:
+                                    normalized_segments = []
+
+                                if len(normalized_segments) == row_people:
+                                    for offset, item in enumerate(group):
+                                        previous = item["horario"]
+                                        corrected = normalized_segments[offset]
+                                        item["horario"] = corrected
+                                        repairs.append({
+                                            "indice": index + offset,
+                                            "nombre": str(item.get("nombre") or ""),
+                                            "horario_antes": previous,
+                                            "horario_despues": corrected,
+                                            "motivo": "Horario de oficina asignado por posición",
+                                        })
+                                    index += row_people
+                                    continue
+                index += 1
+
+            return repairs
+
         def validate_turns_json(data: Any) -> list[dict]:
             """
             Valida la estructura y anota problemas recuperables por agente.
@@ -2323,6 +2390,7 @@ COMPROBACIÓN FINAL
         errors = []
         first_extraction_seconds = None
         first_validation_issues = []
+        deterministic_repairs = []
 
         for model_name in models_to_try:
             try:
@@ -2432,6 +2500,7 @@ COMPROBACIÓN FINAL
                 if document_type == "agents":
                     merge_split_initial_agents(parsed_result)
                     expand_merged_passage_names(parsed_result)
+                    deterministic_repairs = repair_office_positional_schedules(parsed_result)
                     first_validation_issues = validate_turns_json(parsed_result)
                 elif document_type == "flights":
                     validate_flights_json(parsed_result)
@@ -2705,13 +2774,19 @@ REGLAS
                     )
 
         final_validation_issues = []
+        validation_row_count = 0
         validation_warning = ""
         if document_type == "agents":
             # Se vuelve a validar después de aplicar las correcciones de la segunda lectura.
             final_validation_issues = validate_turns_json(parsed_result)
+            validation_row_count = len({
+                issue.get("indice") for issue in final_validation_issues
+                if issue.get("indice") is not None
+            })
             if final_validation_issues:
                 validation_warning = (
-                    f"Quedan {len(final_validation_issues)} incidencias pendientes. "
+                    f"Quedan {len(final_validation_issues)} incidencias pendientes "
+                    f"en {validation_row_count} filas. "
                     "Corrige las filas marcadas antes de validar e importar."
                 )
 
@@ -2879,8 +2954,10 @@ REGLAS
             "verification_corrections": verification_corrections,
             "verification_changes": verification_changes,
             "verification_warning": verification_warning,
+            "deterministic_repairs": deterministic_repairs,
             "validation_issues": final_validation_issues,
             "validation_issue_count": len(final_validation_issues),
+            "validation_row_count": validation_row_count,
             "validation_warning": validation_warning,
             "first_extraction_seconds": first_extraction_seconds,
             "verification_seconds": verification_seconds,
