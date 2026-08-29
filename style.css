@@ -1449,6 +1449,28 @@ select option {
 
 .reg-grid input:focus { border-color: var(--primary); }
 
+.reg-grid select {
+  width: 100%;
+  margin-top: 7px;
+  padding: 8px 11px;
+  border: 1px solid #4a5164;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.reg-grid select:focus { border-color: var(--primary); }
+
+.reg-grid select option {
+  background: var(--bg-tertiary);
+  color: #ffffff;
+}
+
 .reg-label {
   display: block;
   font-size: 12px;

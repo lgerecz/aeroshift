@@ -230,7 +230,6 @@ function init() {
   const REGLAS_IDS = {
     regPrepEnt: 'preparacion_entrada',      regTolEnt: 'tol_entrada',
     regMgSal: 'margen_salida',              regTolSal: 'tol_salida',
-    regPausa: 'respetar_pausa_partido',
     regAgVuelo: 'agentes_por_vuelo',        regPaxUmbral: 'pax_umbral_agente_unico',
     regAgMin: 'agentes_min_pax_bajo',
     regDescDur: 'descanso_duracion',        regDescTol: 'descanso_tolerancia',
@@ -243,9 +242,7 @@ function init() {
     for (const [id, clave] of Object.entries(REGLAS_IDS)) {
       const el = document.getElementById(id);
       if (!el) continue;
-      reglas[clave] = el.type === 'checkbox' ? el.checked
-                    : el.type === 'number'   ? Number(el.value)
-                    : el.value;
+      reglas[clave] = el.type === 'checkbox' ? el.checked : Number(el.value);
     }
     const deseado = Number(document.getElementById('regGapDeseado') && document.getElementById('regGapDeseado').value);
     const tol = Number(document.getElementById('regGapTol') && document.getElementById('regGapTol').value);
@@ -264,6 +261,9 @@ function init() {
       const el = document.getElementById(id);
       if (!el || reglas[clave] === undefined) continue;
       if (el.type === 'checkbox') el.checked = !!reglas[clave];
+      else if (el.tagName === 'SELECT') {
+        if (Array.from(el.options).some(o => String(o.value) === String(reglas[clave]))) el.value = String(reglas[clave]);
+      }
       else el.value = reglas[clave];
     }
     const deseado = reglas.gap_misma_zona_objetivo !== undefined ? reglas.gap_misma_zona_objetivo : reglas.gap_distinta_zona_objetivo;
@@ -304,7 +304,7 @@ function init() {
   const NOTAS_MODO = {
     '': 'Selecciona la estrategia que utilizará OR-Tools para distribuir las asignaciones.',
     'PROPORCIONAL': 'A mayor cantidad de horas, mayor cantidad de embarques.',
-    'EQUILIBRADO': 'Intentará compensar la cantidad de embarques.'
+    'EQUILIBRADO': 'Compensará la cantidad de embarques.'
   };
 
   function actualizarNotaModo() {
@@ -2004,7 +2004,7 @@ function renderDetectedAgents() {
           <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.hours)}" id="edit_agent_hours_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px;"></td>
           <td style="padding: 8px;"><input type="text" value="${escapeHtml(a.role)}" id="edit_agent_role_${a.id}" style="width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; background: #000; color: #fff; font-family: inherit; font-size:12px; text-transform: uppercase;"></td>
           <td style="padding: 8px; text-align: center;" colspan="2">
-            <span style="color:#666; font-size:11px; font-style:italic;">Editando...</span>
+            <span style="color:#9ca3b4; font-size:11px; font-style:italic;">Editando...</span>
           </td>
           <td style="padding: 8px; text-align: center;">
             <div style="display: flex; gap: 6px; justify-content: center;">
@@ -2028,7 +2028,7 @@ function renderDetectedAgents() {
         : '';
       const especValue = (a.espec && a.espec.length > 0) ? a.espec[0] : '';
       // Only show the dropdown for non-admin agents (CSA pasajes)
-      const selectHtml = a.type === 'admin' ? '<span style="color:#555;">—</span>' : `
+      const selectHtml = a.type === 'admin' ? '<span style="color:#9ca3b4;">—</span>' : `
         <select onchange="updateAgentEspec(${a.id}, this.value)" style="background: #000; color: #fff; border: 1px solid #333; border-radius: 4px; padding: 2px 4px; font-family: inherit; font-size: 11px; width: 75px; text-align: center; cursor: pointer;">
           <option value="">—</option>
           <option value="OPS" ${especValue === 'OPS' ? 'selected' : ''}>OPS</option>
@@ -2038,13 +2038,13 @@ function renderDetectedAgents() {
       `;
 
       // Only show the checkbox for non-admin agents
-      const checkboxHtml = a.type === 'admin' ? '<span style="color:#555;">—</span>' : `
+      const checkboxHtml = a.type === 'admin' ? '<span style="color:#9ca3b4;">—</span>' : `
         <input type="checkbox" onchange="toggleAgentExclusion(${a.id}, this.checked)" ${a.excluir ? 'checked' : ''} style="width: 15px; height: 16px; cursor: pointer; accent-color: var(--primary); vertical-align: middle;">
       `;
 
       return `
         <tr style="${rowStyle}" ${hoverAttrs}>
-          <td style="padding: 10px 8px; color: #fff; font-weight: bold;">${escapeHtml(a.name)}</td>
+          <td style="padding: 10px 8px; color: #9ca3b4; font-weight: bold;">${escapeHtml(a.name)}</td>
           <td style="padding: 10px 8px; color: ${hasValidationError ? '#fca5a5' : '#a0a0a0'};">${escapeHtml(a.hours)}${warningBadge}</td>
           <td style="padding: 10px 8px;">${getRoleBadge(a.role, a.canonical_role)}</td>
           <td style="padding: 10px 8px; text-align: center;">${selectHtml}</td>
@@ -2063,7 +2063,7 @@ function renderDetectedAgents() {
   // 1. TURNO MAÑANA · Roles Administrativos - Operativos
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 10px 8px; color: #9ca3b4; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO MAÑANA · Roles Administrativos - Operativos
       </td>
     </tr>`;
@@ -2076,7 +2076,7 @@ function renderDetectedAgents() {
   // 2. TURNO MAÑANA · Agentes de Pasaje
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #9ca3b4; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO MAÑANA · Agentes de Pasaje
       </td>
     </tr>`;
@@ -2089,7 +2089,7 @@ function renderDetectedAgents() {
   // 3. TURNO TARDE · Roles Administrativos - Operativos
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #9ca3b4; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO TARDE · Roles Administrativos - Operativos
       </td>
     </tr>`;
@@ -2102,7 +2102,7 @@ function renderDetectedAgents() {
   // 4. TURNO TARDE · Agentes de Pasaje
   html += `
     <tr style="background: #1a1a1a;">
-      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #999999; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
+      <td colspan="6" style="padding: 18px 8px 10px 8px; color: #9ca3b4; font-weight: bold; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; font-family: inherit;">
         — TURNO TARDE · Agentes de Pasaje
       </td>
     </tr>`;
@@ -2295,12 +2295,12 @@ function renderDetectedFlights() {
       
       return `
         <tr style="${rowStyle}" ${hoverAttrs}>
-          <td style="padding: 10px 4px; color: #999999; font-weight: bold;">${idx + 1}</td>
-          <td style="padding: 10px 4px; color: #fff; font-weight: bold;">${destinationDisplay}</td>
+          <td style="padding: 10px 4px; color: #9ca3b4; font-weight: bold;">${idx + 1}</td>
+          <td style="padding: 10px 4px; color: #9ca3b4; font-weight: bold;">${destinationDisplay}</td>
           <td style="padding: 10px 4px;">${numberDisplay}</td>
-          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#a0a0a0'};">${times.apertu}</td>
-          <td style="padding: 10px 4px; color: #777; font-style: italic;">${escapeHtml(f.agents || '')}</td>
-          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#a0a0a0'};">${times.emb}</td>
+          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#9ca3b4'};">${times.apertu}</td>
+          <td style="padding: 10px 4px; color: #9ca3b4; font-style: italic;">${escapeHtml(f.agents || '')}</td>
+          <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#9ca3b4'};">${times.emb}</td>
           <td style="padding: 10px 4px; color: ${timeIsMissing ? '#ef4444' : '#ff9f00'}; font-weight: bold;">${times.std}</td>
           <td style="padding: 10px 4px; color: ${hasPax ? paxColor : '#ef4444'}; font-weight: ${hasPax ? paxWeight : 'bold'};">${paxDisplay}</td>
           <td style="padding: 10px 4px; text-align: center;">
