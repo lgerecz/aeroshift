@@ -1478,6 +1478,13 @@ select option {
   color: #ffffff;
 }
 
+.reg-mini {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
 .reg-nota {
   color: var(--text-secondary);
   font-size: 11px;

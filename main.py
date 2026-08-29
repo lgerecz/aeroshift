@@ -403,6 +403,7 @@ class ReglasConfig(BaseModel):
     agentes_min_pax_bajo: int = 1
     # Descanso CSA (C5)
     descanso_duracion: int = 70
+    descanso_tolerancia: int = 0  # min que el descanso puede adelantarse a la mitad del turno
     descanso_jornada_min: int = 360
     descanso_recomendable_jornada: int = 360
     # Proporcionalidad (C6)
@@ -634,9 +635,10 @@ def optimize_schedule(req: OptimizeRequest):
         for ai, ag in enumerate(activos):
             if ag['_jornada'] > R.descanso_jornada_min:
                 mid = ag['_midpoint']
-                hi = max(mid, ag['_t_fin'] - R.descanso_duracion)
-                brk_s = model.NewIntVar(mid, hi, f'bs_{ai}')
-                brk_e = model.NewIntVar(mid + R.descanso_duracion, ag['_t_fin'], f'be_{ai}')
+                desde = max(0, mid - R.descanso_tolerancia)
+                hi = max(desde, ag['_t_fin'] - R.descanso_duracion)
+                brk_s = model.NewIntVar(desde, hi, f'bs_{ai}')
+                brk_e = model.NewIntVar(min(desde + R.descanso_duracion, ag['_t_fin']), ag['_t_fin'], f'be_{ai}')
                 brk_iv = model.NewIntervalVar(brk_s, R.descanso_duracion, brk_e, f'bi_{ai}')
                 break_iv_dict[ai] = brk_iv
                 model.AddNoOverlap([brk_iv] + flight_iv_dict[ai])

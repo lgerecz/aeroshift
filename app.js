@@ -228,19 +228,14 @@ function init() {
 
   // ── Parámetros del motor (reglas del optimizador) ──
   const REGLAS_IDS = {
-    regEmbIni: 'emb_inicio_antes_std',      regEmbFin: 'emb_fin_antes_std',
     regPrepEnt: 'preparacion_entrada',      regTolEnt: 'tol_entrada',
     regMgSal: 'margen_salida',              regTolSal: 'tol_salida',
     regPausa: 'respetar_pausa_partido',
-    regGapSM: 'gap_misma_zona_min',         regGapSO: 'gap_misma_zona_objetivo',
-    regGapDM: 'gap_distinta_zona_min',      regGapDO: 'gap_distinta_zona_objetivo',
     regAgVuelo: 'agentes_por_vuelo',        regPaxUmbral: 'pax_umbral_agente_unico',
     regAgMin: 'agentes_min_pax_bajo',
-    regDescDur: 'descanso_duracion',        regDescJor: 'descanso_jornada_min',
-    regPropUmbral: 'proporcionalidad_umbral',
-    regCobDur: 'cobertura_duracion',        regCobJor: 'cobertura_jornada_min',
-    regTiempo: 'tiempo_limite_segundos',    regWorkers: 'num_workers',
-    regSemilla: 'semilla',                  regTolerante: 'modo_tolerante'
+    regDescDur: 'descanso_duracion',        regDescTol: 'descanso_tolerancia',
+    regDescJor: 'descanso_jornada_min',
+    regCobDur: 'cobertura_duracion',        regCobJor: 'cobertura_jornada_min'
   };
 
   function leerReglasDelModal() {
@@ -251,6 +246,14 @@ function init() {
       reglas[clave] = el.type === 'checkbox' ? el.checked
                     : el.type === 'number'   ? Number(el.value)
                     : el.value;
+    }
+    const deseado = Number(document.getElementById('regGapDeseado') && document.getElementById('regGapDeseado').value);
+    const tol = Number(document.getElementById('regGapTol') && document.getElementById('regGapTol').value);
+    if (!Number.isNaN(deseado) && !Number.isNaN(tol)) {
+      reglas.gap_misma_zona_objetivo = deseado;
+      reglas.gap_distinta_zona_objetivo = deseado;
+      reglas.gap_misma_zona_min = deseado - tol;
+      reglas.gap_distinta_zona_min = deseado - tol;
     }
     return reglas;
   }
@@ -263,6 +266,14 @@ function init() {
       if (el.type === 'checkbox') el.checked = !!reglas[clave];
       else el.value = reglas[clave];
     }
+    const deseado = reglas.gap_misma_zona_objetivo !== undefined ? reglas.gap_misma_zona_objetivo : reglas.gap_distinta_zona_objetivo;
+    if (deseado !== undefined) {
+      const minimo = reglas.gap_misma_zona_min !== undefined ? reglas.gap_misma_zona_min : deseado;
+      const dEl = document.getElementById('regGapDeseado');
+      const tEl = document.getElementById('regGapTol');
+      if (dEl) dEl.value = deseado;
+      if (tEl) tEl.value = Math.max(0, deseado - minimo);
+    }
   }
 
   function cargarReglasEnModal() {
@@ -274,12 +285,9 @@ function init() {
   function validarReglasDelModal() {
     const num = id => Number(document.getElementById(id) && document.getElementById(id).value);
     const comprobaciones = [
-      [num('regEmbIni') > num('regEmbFin'), 'La apertura del embarque debe ser mayor que el cierre (STD − X min).'],
-      [num('regGapSM') <= num('regGapSO'), 'La separación mínima (misma zona) no puede superar la deseada.'],
-      [num('regGapDM') <= num('regGapDO'), 'La separación mínima (distinta zona) no puede superar la deseada.'],
+      [num('regGapTol') >= 0 && num('regGapTol') <= num('regGapDeseado'), 'La tolerancia de separación no puede superar el tiempo deseado.'],
       [num('regAgMin') <= num('regAgVuelo'), 'El mínimo de agentes (pax bajo) no puede superar los agentes por vuelo.'],
-      [num('regTiempo') > 0, 'El tiempo límite del solver debe ser mayor que 0.'],
-      [num('regTiempo') <= 120, 'El tiempo límite no puede superar 120 segundos.']
+      [num('regDescTol') >= 0, 'La tolerancia del descanso no puede ser negativa.']
     ];
     for (const [ok, mensaje] of comprobaciones) {
       if (!ok) { alert(mensaje); return false; }
@@ -293,6 +301,18 @@ function init() {
     return true;
   }
 
+  const NOTAS_MODO = {
+    '': 'Selecciona la estrategia que utilizará OR-Tools para distribuir las asignaciones.',
+    'PROPORCIONAL': 'A mayor cantidad de horas, mayor cantidad de embarques.',
+    'EQUILIBRADO': 'Intentará compensar la cantidad de embarques.'
+  };
+
+  function actualizarNotaModo() {
+    const select = document.getElementById('optModo');
+    const nota = document.getElementById('regNotaModo');
+    if (select && nota) nota.textContent = NOTAS_MODO[select.value] || NOTAS_MODO[''];
+  }
+
   function saveOptModo(val) {
   localStorage.setItem('aeroshift_opt_modo', val);
 }
@@ -302,6 +322,7 @@ function openValidationParametersModal() {
   const optModo = document.getElementById('optModo');
   if (!modal || !optModo) return;
   optModo.value = '';  // siempre «— Seleccionar —» al abrir: el usuario elige manualmente
+  actualizarNotaModo();
   validationParametersSnapshot = { optModo: '', reglas: localStorage.getItem('aeroshift_reglas') || '' };
   cargarReglasEnModal();
   modal.classList.add('active');
