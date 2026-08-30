@@ -358,7 +358,9 @@ function init() {
   function actualizarEstadoBotonParams() {
     const btn = document.getElementById('btnParametrosValidacion');
     if (!btn) return;
-    const guardado = !!localStorage.getItem('aeroshift_opt_modo');
+    // Verde SOLO cuando se ha guardado el conjunto completo en esta versión
+    // (estrategia + parámetros). El opt_modo antiguo no cuenta: eso era el bug.
+    const guardado = !!localStorage.getItem('aeroshift_parametros_guardados');
     btn.style.borderColor = guardado ? '#10b981' : '#555';
   }
 
@@ -469,6 +471,7 @@ function saveValidationParameters() {
   }
   saveOptModo(optModo.value);
   if (!guardarReglasDesdeModal()) return;
+  localStorage.setItem('aeroshift_parametros_guardados', new Date().toISOString());
   actualizarEstadoBotonParams();
   invalidateQuadrantReview('all');
   validationParametersSnapshot = null;
