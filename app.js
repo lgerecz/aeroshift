@@ -2068,7 +2068,7 @@ function renderDetectedAgents() {
       </td>
     </tr>`;
   if (mañanaAdmins.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #9ca3b4; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
   } else {
     mañanaAdmins.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2081,7 +2081,7 @@ function renderDetectedAgents() {
       </td>
     </tr>`;
   if (mañanaPasajes.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #9ca3b4; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
   } else {
     mañanaPasajes.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2094,7 +2094,7 @@ function renderDetectedAgents() {
       </td>
     </tr>`;
   if (tardeAdmins.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #9ca3b4; font-style: italic; font-size: 11.5px;">Ningún rol administrativo detectado</td></tr>`;
   } else {
     tardeAdmins.forEach(a => { html += renderAgentRow(a); });
   }
@@ -2107,7 +2107,7 @@ function renderDetectedAgents() {
       </td>
     </tr>`;
   if (tardePasajes.length === 0) {
-    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #999999; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
+    html += `<tr><td colspan="6" style="padding: 8px 12px; color: #9ca3b4; font-style: italic; font-size: 11.5px;">Ningún agente de pasaje detectado</td></tr>`;
   } else {
     tardePasajes.forEach(a => { html += renderAgentRow(a); });
   }
