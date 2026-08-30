@@ -238,7 +238,7 @@
           </select>
         </div>
 
-        <button class="btn" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap; background: transparent; border: 1px solid #555; color: #d1d5db; transition: all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='#777'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.borderColor='#555'; this.style.color='#d1d5db'" aria-label="Configurar parámetros de validación">
+        <button class="btn" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap; background: transparent; border: 1px solid #555; color: #d1d5db; transition: all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='#777'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#d1d5db'; actualizarEstadoBotonParams()" aria-label="Configurar parámetros de validación" id="btnParametrosValidacion">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.08A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.08A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
           </svg>
@@ -422,6 +422,7 @@
         <button class="shift-tab" data-shift="night" onclick="filterShift('night', this)">
           <span class="dot dot-night"></span> Noche <small>(22:00–06:00)</small>
         </button>
+        <button class="btn btn-primary" onclick="abrirInforme()" style="margin-left:auto; padding:7px 14px; font-size:12px; font-weight:700;">📋 Informe</button>
       </div>
 
       <!-- SCHEDULE GRID -->
@@ -791,6 +792,44 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="cancelValidationParameters()">Cancelar</button>
         <button class="btn btn-primary" onclick="saveValidationParameters()">Guardar parámetros</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INFORME DE GENERACIÓN -->
+  <div class="modal-overlay" id="informeModal" onclick="cerrarInforme(event)">
+    <div class="modal" style="width: 780px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 style="display:flex; align-items:center; gap:9px; margin:0; color:#fff;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Informe de la parrilla generada
+        </h3>
+        <button class="btn-icon" onclick="cerrarInforme()" aria-label="Cerrar informe">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="informeAviso" style="display:none; background:rgba(245,158,11,0.12); border:1px solid #f59e0b; border-radius:8px; padding:11px 13px; color:#f59e0b; font-size:12px; font-weight:700; margin:0 0 14px;"></div>
+        <div style="font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:.6px; margin:0 0 10px;">Embarques por agente <span style="color:#9ca3b4; font-weight:600; text-transform:none; letter-spacing:0;">(clica una columna para ordenar)</span></div>
+        <div style="max-height:300px; overflow-y:auto; border:1px solid #4a5164; border-radius:8px;">
+          <table style="width:100%; border-collapse:collapse; font-size:12px; color:#9ca3b4;">
+            <thead>
+              <tr style="position:sticky; top:0; background:#242736;">
+                <th onclick="ordenarInforme('nombre')" style="padding:9px 12px; text-align:left; cursor:pointer; color:#fff;">Agente ⇅</th>
+                <th onclick="ordenarInforme('rol')" style="padding:9px 12px; text-align:left; cursor:pointer; color:#fff;">Rol</th>
+                <th onclick="ordenarInforme('embarques')" style="padding:9px 12px; text-align:center; cursor:pointer; color:#fff;">Embarques ⇅</th>
+                <th onclick="ordenarInforme('horario')" style="padding:9px 12px; text-align:left; cursor:pointer; color:#fff;">Primera ⇅</th>
+                <th onclick="ordenarInforme('ultima')" style="padding:9px 12px; text-align:left; cursor:pointer; color:#fff;">Última</th>
+              </tr>
+            </thead>
+            <tbody id="informeTablaBody"></tbody>
+          </table>
+        </div>
+        <details style="margin-top:14px;">
+          <summary style="cursor:pointer; font-size:12px; font-weight:700; color:#fff;">Ver informe completo (texto)</summary>
+          <pre id="informeTexto" style="margin-top:10px; max-height:340px; overflow:auto; background:#121212; border:1px solid #4a5164; border-radius:8px; padding:14px; font-family:'Consolas','Courier New',monospace; font-size:11px; line-height:1.5; color:#9ca3b4; white-space:pre;"></pre>
+        </details>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="cerrarInforme()">Cerrar</button>
       </div>
     </div>
   </div>

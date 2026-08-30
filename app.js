@@ -30,6 +30,8 @@ let uploadedFilesCopy = []; // Accumulative list of uploaded file previews
 let newlyCreatedAgentId = null;
 let newlyCreatedFlightId = null;
 let validationParametersSnapshot = null;
+let ultimoInforme = null;
+let informeOrden = { col: 'embarques', asc: false };
 let pendingClipboardFiles = [];
 const quadrantReviewState = { agents: false, flights: false };
 
@@ -214,6 +216,7 @@ function init() {
 
   // La estrategia SIEMPRE arranca en «— Seleccionar —»: la elige el usuario en el modal.
   cargarReglasEnModal();
+  actualizarEstadoBotonParams();
 
   setupExtractorClipboardAndDrop();
   setupCustomTooltips();
@@ -235,7 +238,7 @@ function init() {
     regAgMin: 'agentes_min_pax_bajo',
     regDescDur: 'descanso_duracion',        regDescTol: 'descanso_tolerancia',
     regDescJor: 'descanso_jornada_min',
-    regCobDur: 'cobertura_duracion',        regCobJor: 'cobertura_jornada_min'
+    regCobDur: 'cobertura_duracion',        regCobJor: 'cobertura_tolerancia'
   };
 
   function leerReglasDelModal() {
@@ -352,6 +355,13 @@ function init() {
     if (select && nota) nota.innerHTML = NOTAS_MODO[select.value] || NOTAS_MODO[''];
   }
 
+  function actualizarEstadoBotonParams() {
+    const btn = document.getElementById('btnParametrosValidacion');
+    if (!btn) return;
+    const guardado = !!localStorage.getItem('aeroshift_opt_modo');
+    btn.style.borderColor = guardado ? '#10b981' : '#555';
+  }
+
   function actualizarAgSiempre() {
     const chk = document.getElementById('regAgSiempre');
     const mostrar = !(chk && chk.checked);
@@ -361,7 +371,64 @@ function init() {
     });
   }
 
-  function saveOptModo(val) {
+  function abrirInforme() {
+    const modal = document.getElementById('informeModal');
+    if (!modal) return;
+    const aviso = document.getElementById('informeAviso');
+    if (aviso) {
+      if (ultimoInforme && ultimoInforme.extra > 0) {
+        aviso.textContent = `Advertencia de tolerancia: no fue posible con lo marcado; se estiró +${ultimoInforme.extra} min (máximo 15). Detalle en el informe completo.`;
+        aviso.style.display = 'block';
+      } else {
+        aviso.style.display = 'none';
+      }
+    }
+    pintarInforme();
+    modal.classList.add('active');
+  }
+
+  function cerrarInforme(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('informeModal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  function ordenarInforme(col) {
+    if (informeOrden.col === col) informeOrden.asc = !informeOrden.asc;
+    else informeOrden = { col: col, asc: (col === 'nombre' || col === 'horario') };
+    pintarInforme();
+  }
+
+  function pintarInforme() {
+    const body = document.getElementById('informeTablaBody');
+    if (!body) return;
+    const filas = Array.from((ultimoInforme && ultimoInforme.resumen) || []);
+    const dir = informeOrden.asc ? 1 : -1;
+    filas.sort((a, b) => {
+      switch (informeOrden.col) {
+        case 'nombre': return dir * String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+        case 'rol': return dir * String(a.rol || '').localeCompare(String(b.rol || ''), 'es');
+        case 'horario': return dir * String(a.primera || '').localeCompare(String(b.primera || ''));
+        default: return dir * ((a.embarques || 0) - (b.embarques || 0)) || dir * ((a.jornada || 0) - (b.jornada || 0));
+      }
+    });
+    body.innerHTML = filas.map(f => '<tr style="border-top:1px solid #2d3148;">'
+      + '<td style="padding:8px 12px; font-weight:700; color:#e8eaf0;">' + escapeHtml(f.nombre || '') + '</td>'
+      + '<td style="padding:8px 12px;">' + escapeHtml(f.rol || '') + '</td>'
+      + '<td style="padding:8px 12px; text-align:center; font-weight:800; color:#fff;">' + (f.embarques ?? 0) + '</td>'
+      + '<td style="padding:8px 12px;">' + escapeHtml(f.primera || '—') + '</td>'
+      + '<td style="padding:8px 12px;">' + escapeHtml(f.ultima || '—') + '</td>'
+      + '</tr>').join('')
+      || '<tr><td colspan="5" style="padding:14px; text-align:center;">Genera una parrilla para ver el informe.</td></tr>';
+    const pre = document.getElementById('informeTexto');
+    if (pre) pre.textContent = (ultimoInforme && ultimoInforme.texto) || '';
+  }
+
+  function nombreNormalizado(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+function saveOptModo(val) {
   localStorage.setItem('aeroshift_opt_modo', val);
 }
 
@@ -390,6 +457,7 @@ function cancelValidationParameters(event) {
   }
   if (modal) modal.classList.remove('active');
   validationParametersSnapshot = null;
+  actualizarEstadoBotonParams();
 }
 
 function saveValidationParameters() {
@@ -401,6 +469,7 @@ function saveValidationParameters() {
   }
   saveOptModo(optModo.value);
   if (!guardarReglasDesdeModal()) return;
+  actualizarEstadoBotonParams();
   invalidateQuadrantReview('all');
   validationParametersSnapshot = null;
   if (modal) modal.classList.remove('active');
@@ -1825,6 +1894,27 @@ async function validateUploadedData() {
     generateButton.innerHTML = '<span class="spinner" style="width:15px;height:15px;"></span> Generando Parrilla...';
   }
 
+  // ASIGNACIONES MANUALES: nombres escritos en la columna Agentes de la parrilla de vuelos
+  const mapaAgentes = {};
+  (extractedData.agents || []).forEach(a => { mapaAgentes[nombreNormalizado(a.name)] = a.id; });
+  const forzadas = [];
+  const noEncontrados = [];
+  (extractedData.flights || []).forEach(f => {
+    String(f.agents || '').split(/[,/]/).forEach(token => {
+      const clave = nombreNormalizado(token);
+      if (!clave || clave === '-' || clave === '—' || clave === 'X') return;
+      const agenteId = mapaAgentes[clave];
+      if (agenteId) forzadas.push({ vuelo_id: f.id, agente_id: agenteId });
+      else noEncontrados.push(`${token.trim()} (vuelo ${f.number || f.id})`);
+    });
+  });
+  if (noEncontrados.length > 0) {
+    alert('Asignaciones manuales: no encuentro en Turnos del Personal a:\n\n- ' +
+      noEncontrados.join('\n- ') +
+      '\n\nRevisa el nombre (debe coincidir con el cuadrante de turnos) y vuelve a generar.');
+    return;
+  }
+
   try {
     const backendUrl = document.getElementById('backendUrl')?.value?.trim() || 'https://aeroshift-backend.onrender.com';
     const response = await fetch(`${backendUrl}/optimize`, {
@@ -1834,7 +1924,8 @@ async function validateUploadedData() {
         agents: state.agents,
         flights: state.flights,
         modo: savedOptModo,
-        reglas: JSON.parse(localStorage.getItem('aeroshift_reglas') || 'null')
+        reglas: JSON.parse(localStorage.getItem('aeroshift_reglas') || 'null'),
+        asignaciones_forzadas: forzadas
       })
     });
     const result = await response.json();
@@ -1845,6 +1936,11 @@ async function validateUploadedData() {
     for (const [flightId, agentId] of Object.entries(result.assignments || {})) {
       state.assignments[date][Number(flightId)] = agentId;
     }
+    ultimoInforme = {
+      resumen: Array.isArray(result.resumen_embarques) ? result.resumen_embarques : [],
+      texto: result.report_text || '',
+      extra: Number(result.tolerancia_extra_usada) || 0
+    };
     const namesByFlight = result.flight_agent_names || {};
     const applyNames = flight => {
       const names = namesByFlight[String(flight.id)] || [];
