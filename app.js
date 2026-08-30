@@ -289,17 +289,47 @@ function init() {
     } catch (e) { /* localStorage corrupto: se usan los defectos del HTML */ }
   }
 
+  function validarBordesEnVivo() {
+    const num = id => Number(document.getElementById(id)?.value);
+    const rojo = [];
+    const marca = (id, mal) => {
+      const el = document.getElementById(id);
+      if (!el || !el.style) return;
+      el.style.borderColor = mal ? '#ef4444' : '';
+      if (mal) rojo.push(id);
+    };
+    // Inicio y fin de turno: margen − tolerancia ≥ mínimo (20 entrada / 10 salida)
+    const mEnt = num('regPrepEnt'), tEnt = num('regTolEnt');
+    marca('regPrepEnt', mEnt < 20);
+    marca('regTolEnt', mEnt >= 20 && mEnt - tEnt < 20);
+    const mSal = num('regMgSal'), tSal = num('regTolSal');
+    marca('regMgSal', mSal < 10);
+    marca('regTolSal', mSal >= 10 && mSal - tSal < 10);
+    // Separación: deseado ≥ mínimo real (55 / 70) y deseado − tolerancia ≥ mínimo real
+    const mzD = num('regGapMZDeseado'), mzT = num('regGapMZTol');
+    marca('regGapMZDeseado', mzD < 55);
+    marca('regGapMZTol', mzD >= 55 && mzD - mzT < 55);
+    const dzD = num('regGapDZDeseado'), dzT = num('regGapDZTol');
+    marca('regGapDZDeseado', dzD < 70);
+    marca('regGapDZTol', dzD >= 70 && dzD - dzT < 70);
+    // Dotación
+    marca('regAgMin', num('regAgMin') < 1);
+    marca('regPaxUmbral', num('regPaxUmbral') < 5);
+    // Descansos: óptimo ≥ 30 y óptimo − tolerancia ≥ 30
+    const dDur = num('regDescDur'), dTol = num('regDescTol');
+    marca('regDescDur', dDur < 30);
+    marca('regDescTol', dDur >= 30 && dDur - dTol < 30);
+    // Cobertura: traslado entre 15 y 30; la Tolerancia nunca se marca
+    const cDur = num('regCobDur');
+    marca('regCobDur', cDur < 15 || cDur > 30);
+    return rojo;
+  }
+
   function validarReglasDelModal() {
-    const num = id => Number(document.getElementById(id) && document.getElementById(id).value);
-    const siempre = document.getElementById('regAgSiempre') && document.getElementById('regAgSiempre').checked;
-    const comprobaciones = [
-      [num('regGapMZTol') <= num('regGapMZDeseado'), 'En «Misma zona», la tolerancia no puede superar el tiempo deseado.'],
-      [num('regGapDZTol') <= num('regGapDZDeseado'), 'En «Distinta zona», la tolerancia no puede superar el tiempo deseado.'],
-      [siempre || num('regAgMin') <= num('regAgVuelo'), 'El mínimo de agentes (pax bajo) no puede superar los agentes por vuelo.'],
-      [num('regDescTol') >= 0, 'La tolerancia del descanso no puede ser negativa.']
-    ];
-    for (const [ok, mensaje] of comprobaciones) {
-      if (!ok) { alert(mensaje); return false; }
+    const rojo = validarBordesEnVivo();
+    if (rojo.length > 0) {
+      alert('Hay valores fuera de los límites permitidos. Revisa los campos marcados en rojo.');
+      return false;
     }
     return true;
   }
@@ -324,8 +354,8 @@ function init() {
 
   function actualizarAgSiempre() {
     const chk = document.getElementById('regAgSiempre');
-    const cell = document.getElementById('regAgMinCell');
-    if (chk && cell && cell.style) cell.style.display = chk.checked ? 'none' : '';
+    const nota = document.getElementById('regAgNota');
+    if (chk && nota && nota.style) nota.style.display = chk.checked ? 'none' : '';
   }
 
   function saveOptModo(val) {
@@ -339,6 +369,7 @@ function openValidationParametersModal() {
   optModo.value = '';  // siempre «— Seleccionar —» al abrir: el usuario elige manualmente
   actualizarNotaModo();
   actualizarAgSiempre();
+  validarBordesEnVivo();
   validationParametersSnapshot = { optModo: '', reglas: localStorage.getItem('aeroshift_reglas') || '' };
   cargarReglasEnModal();
   modal.classList.add('active');
