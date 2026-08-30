@@ -393,24 +393,25 @@ class ReglasConfig(BaseModel):
     tol_salida: int = 5
     respetar_pausa_partido: bool = True
     # Gaps entre embarques (C4) — según zona Schengen/No-Schengen
-    gap_misma_zona_min: int = 55
-    gap_misma_zona_objetivo: int = 60
-    gap_distinta_zona_min: int = 70
-    gap_distinta_zona_objetivo: int = 75
+    gap_misma_zona_min: int = 60
+    gap_misma_zona_objetivo: int = 65
+    gap_distinta_zona_min: int = 75
+    gap_distinta_zona_objetivo: int = 80
     # Dotación por vuelo (C1)
     agentes_por_vuelo: int = 2
+    agentes_siempre: bool = False  # dotación exacta siempre, sin excepción por pax bajo
     pax_umbral_agente_unico: int = 100
     agentes_min_pax_bajo: int = 1
     # Descanso CSA (C5)
     descanso_duracion: int = 70
     descanso_tolerancia: int = 0  # min que el descanso puede adelantarse a la mitad del turno
-    descanso_jornada_min: int = 360
+    descanso_jornada_min: int = 361  # obligatorio jornada > a (6 h exactas = solo recomendable)
     descanso_recomendable_jornada: int = 360
     # Proporcionalidad (C6)
     proporcionalidad_umbral: int = 60
     # Cobertura de departamentos (C7)
-    cobertura_duracion: int = 70
-    cobertura_jornada_min: int = 360
+    cobertura_duracion: int = 15  # tiempo de traslado desde el STD
+    cobertura_jornada_min: int = 0  # cobertura para todo operativo si 0
     # Informes
     ventana_reporte_min: int = 55
 
@@ -531,7 +532,7 @@ def optimize_schedule(req: OptimizeRequest):
             'std_min': std,
             'zona': get_zona(v.destination),
             'agentes_req': R.agentes_por_vuelo,  # puertas remotas desactivadas (decisión 28/08)
-            'pax_unico_ok': v.pax <= R.pax_umbral_agente_unico
+            'pax_unico_ok': (v.pax <= R.pax_umbral_agente_unico) and (not R.agentes_siempre)
         }
         VUELOS.append(v_dict)
 

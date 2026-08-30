@@ -230,7 +230,8 @@ function init() {
   const REGLAS_IDS = {
     regPrepEnt: 'preparacion_entrada',      regTolEnt: 'tol_entrada',
     regMgSal: 'margen_salida',              regTolSal: 'tol_salida',
-    regAgVuelo: 'agentes_por_vuelo',        regPaxUmbral: 'pax_umbral_agente_unico',
+    regAgVuelo: 'agentes_por_vuelo',        regAgSiempre: 'agentes_siempre',
+    regPaxUmbral: 'pax_umbral_agente_unico',
     regAgMin: 'agentes_min_pax_bajo',
     regDescDur: 'descanso_duracion',        regDescTol: 'descanso_tolerancia',
     regDescJor: 'descanso_jornada_min',
@@ -244,14 +245,15 @@ function init() {
       if (!el) continue;
       reglas[clave] = el.type === 'checkbox' ? el.checked : Number(el.value);
     }
-    const deseado = Number(document.getElementById('regGapDeseado') && document.getElementById('regGapDeseado').value);
-    const tol = Number(document.getElementById('regGapTol') && document.getElementById('regGapTol').value);
-    if (!Number.isNaN(deseado) && !Number.isNaN(tol)) {
-      reglas.gap_misma_zona_objetivo = deseado;
-      reglas.gap_distinta_zona_objetivo = deseado;
-      reglas.gap_misma_zona_min = deseado - tol;
-      reglas.gap_distinta_zona_min = deseado - tol;
-    }
+    const par = (deseadoId, tolId) => {
+      const d = Number(document.getElementById(deseadoId)?.value);
+      const t = Number(document.getElementById(tolId)?.value);
+      return Number.isNaN(d) || Number.isNaN(t) ? null : { d, t };
+    };
+    const mz = par('regGapMZDeseado', 'regGapMZTol');
+    if (mz) { reglas.gap_misma_zona_objetivo = mz.d; reglas.gap_misma_zona_min = mz.d - mz.t; }
+    const dz = par('regGapDZDeseado', 'regGapDZTol');
+    if (dz) { reglas.gap_distinta_zona_objetivo = dz.d; reglas.gap_distinta_zona_min = dz.d - dz.t; }
     return reglas;
   }
 
@@ -266,14 +268,19 @@ function init() {
       }
       else el.value = reglas[clave];
     }
-    const deseado = reglas.gap_misma_zona_objetivo !== undefined ? reglas.gap_misma_zona_objetivo : reglas.gap_distinta_zona_objetivo;
-    if (deseado !== undefined) {
-      const minimo = reglas.gap_misma_zona_min !== undefined ? reglas.gap_misma_zona_min : deseado;
-      const dEl = document.getElementById('regGapDeseado');
-      const tEl = document.getElementById('regGapTol');
-      if (dEl) dEl.value = deseado;
-      if (tEl) tEl.value = Math.max(0, deseado - minimo);
-    }
+    const par = (objKey, minKey, deseadoId, tolId) => {
+      if (reglas[objKey] === undefined) return;
+      const dEl = document.getElementById(deseadoId);
+      const tEl = document.getElementById(tolId);
+      if (!dEl || !tEl) return;
+      dEl.value = reglas[objKey];
+      const minimo = reglas[minKey] !== undefined ? reglas[minKey] : reglas[objKey];
+      tEl.value = Math.max(0, reglas[objKey] - minimo);
+    };
+    par('gap_misma_zona_objetivo', 'gap_misma_zona_min', 'regGapMZDeseado', 'regGapMZTol');
+    par('gap_distinta_zona_objetivo', 'gap_distinta_zona_min', 'regGapDZDeseado', 'regGapDZTol');
+    actualizarAgSiempre();
+    actualizarNotaModo();
   }
 
   function cargarReglasEnModal() {
@@ -284,9 +291,11 @@ function init() {
 
   function validarReglasDelModal() {
     const num = id => Number(document.getElementById(id) && document.getElementById(id).value);
+    const siempre = document.getElementById('regAgSiempre') && document.getElementById('regAgSiempre').checked;
     const comprobaciones = [
-      [num('regGapTol') >= 0 && num('regGapTol') <= num('regGapDeseado'), 'La tolerancia de separación no puede superar el tiempo deseado.'],
-      [num('regAgMin') <= num('regAgVuelo'), 'El mínimo de agentes (pax bajo) no puede superar los agentes por vuelo.'],
+      [num('regGapMZTol') <= num('regGapMZDeseado'), 'En «Misma zona», la tolerancia no puede superar el tiempo deseado.'],
+      [num('regGapDZTol') <= num('regGapDZDeseado'), 'En «Distinta zona», la tolerancia no puede superar el tiempo deseado.'],
+      [siempre || num('regAgMin') <= num('regAgVuelo'), 'El mínimo de agentes (pax bajo) no puede superar los agentes por vuelo.'],
       [num('regDescTol') >= 0, 'La tolerancia del descanso no puede ser negativa.']
     ];
     for (const [ok, mensaje] of comprobaciones) {
@@ -302,15 +311,21 @@ function init() {
   }
 
   const NOTAS_MODO = {
-    '': 'Selecciona la estrategia que utilizará OR-Tools para distribuir las asignaciones.',
-    'PROPORCIONAL': 'A mayor cantidad de horas, mayor cantidad de embarques.',
-    'EQUILIBRADO': 'Compensará la cantidad de embarques.'
+    '': 'PROPORCIONAL: A mayor cantidad de horas, mayor cantidad de embarques.<br>EQUILIBRADA: Compensará la cantidad de embarques.',
+    'PROPORCIONAL': 'PROPORCIONAL: A mayor cantidad de horas, mayor cantidad de embarques.',
+    'EQUILIBRADO': 'EQUILIBRADA: Compensará la cantidad de embarques.'
   };
 
   function actualizarNotaModo() {
     const select = document.getElementById('optModo');
     const nota = document.getElementById('regNotaModo');
-    if (select && nota) nota.textContent = NOTAS_MODO[select.value] || NOTAS_MODO[''];
+    if (select && nota) nota.innerHTML = NOTAS_MODO[select.value] || NOTAS_MODO[''];
+  }
+
+  function actualizarAgSiempre() {
+    const chk = document.getElementById('regAgSiempre');
+    const cell = document.getElementById('regAgMinCell');
+    if (chk && cell && cell.style) cell.style.display = chk.checked ? 'none' : '';
   }
 
   function saveOptModo(val) {
@@ -323,6 +338,7 @@ function openValidationParametersModal() {
   if (!modal || !optModo) return;
   optModo.value = '';  // siempre «— Seleccionar —» al abrir: el usuario elige manualmente
   actualizarNotaModo();
+  actualizarAgSiempre();
   validationParametersSnapshot = { optModo: '', reglas: localStorage.getItem('aeroshift_reglas') || '' };
   cargarReglasEnModal();
   modal.classList.add('active');
