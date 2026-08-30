@@ -328,7 +328,7 @@ function init() {
   function validarReglasDelModal() {
     const rojo = validarBordesEnVivo();
     if (rojo.length > 0) {
-      alert('Hay valores fuera de los límites permitidos. Revisa los campos marcados en rojo.');
+      alert('No se pueden guardar los parámetros: hay valores fuera de los límites permitidos. Corrige los campos marcados en rojo.');
       return false;
     }
     return true;
@@ -354,8 +354,11 @@ function init() {
 
   function actualizarAgSiempre() {
     const chk = document.getElementById('regAgSiempre');
-    const nota = document.getElementById('regAgNota');
-    if (chk && nota && nota.style) nota.style.display = chk.checked ? 'none' : '';
+    const mostrar = !(chk && chk.checked);
+    ['regAgMinWrap', 'regPaxUmbralWrap', 'regAgNota'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.style) el.style.display = mostrar ? '' : 'none';
+    });
   }
 
   function saveOptModo(val) {
