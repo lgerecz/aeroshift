@@ -1426,6 +1426,11 @@ select option {
 
 .reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+.reg-lbl {
+  display: block;
+  min-height: 34px;
+}
+
 .reg-grid label {
   display: block;
   font-size: 12px;

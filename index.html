@@ -685,28 +685,37 @@
           <p class="reg-nota" style="margin:0 0 12px;">Tiempo óptimo de desplazamiento antes y después de embarque.</p>
           <div class="reg-grid">
             <div>
-              <label for="regPrepEnt">Margen de entrada<select id="regPrepEnt" class="reg-select"><option>20</option><option>25</option><option selected>30</option></select></label>
+              <label class="reg-lbl" for="regPrepEnt">Margen de entrada</label>
+              <select id="regPrepEnt" class="reg-select"><option>20</option><option>25</option><option selected>30</option></select>
             </div>
             <div>
-              <label for="regTolEnt">Tolerancia entrada<select id="regTolEnt" class="reg-select"><option>0</option><option>5</option><option selected>10</option></select></label>
-            </div>
-            <div>
-              <label for="regMgSal">Margen de salida<select id="regMgSal" class="reg-select"><option>5</option><option>10</option><option selected>15</option></select></label>
-            </div>
-            <div>
-              <label for="regTolSal">Tolerancia salida<select id="regTolSal" class="reg-select"><option>0</option><option selected>5</option><option>10</option></select></label>
+              <label class="reg-lbl" for="regTolEnt">Tolerancia entrada</label>
+              <select id="regTolEnt" class="reg-select"><option>0</option><option>5</option><option selected>10</option></select>
             </div>
           </div>
           <p class="reg-mini">Tiempo antes del primer embarque. Tiempo mínimo, incluida tolerancia, 20 minutos.</p>
+          <div class="reg-grid">
+            <div>
+              <label class="reg-lbl" for="regMgSal">Margen de salida</label>
+              <select id="regMgSal" class="reg-select"><option>5</option><option>10</option><option selected>15</option></select>
+            </div>
+            <div>
+              <label class="reg-lbl" for="regTolSal">Tolerancia salida</label>
+              <select id="regTolSal" class="reg-select"><option>0</option><option selected>5</option><option>10</option></select>
+            </div>
+          </div>
           <p class="reg-mini">Tiempo después del último embarque. Tiempo mínimo, incluida tolerancia, 10 minutos.</p>
-                <div class="reg-seccion">
+        </div>
+        <div class="reg-seccion">
           <div class="reg-titulo">↔️ Separación entre embarques · Misma zona</div>
           <div class="reg-grid">
             <div>
-              <label for="regGapMZDeseado">Tiempo deseado<input type="number" id="regGapMZDeseado" value="65" step="5" min="55" max="240"></label>
+              <label class="reg-lbl" for="regGapMZDeseado">Tiempo deseado</label>
+              <input type="number" id="regGapMZDeseado" value="65" step="5" min="55" max="240">
             </div>
             <div>
-              <label for="regGapMZTol">Tolerancia<select id="regGapMZTol" class="reg-select"><option>0</option><option selected>5</option><option>10</option></select></label>
+              <label class="reg-lbl" for="regGapMZTol">Tolerancia</label>
+              <select id="regGapMZTol" class="reg-select"><option>0</option><option selected>5</option><option>10</option></select>
             </div>
           </div>
           <p class="reg-mini">Tiempo entre embarques de la misma zona, incluida tolerancia, mínimo 55 minutos.</p>
@@ -715,10 +724,12 @@
           <div class="reg-titulo">↔️ Separación entre embarques · Distinta zona</div>
           <div class="reg-grid">
             <div>
-              <label for="regGapDZDeseado">Tiempo deseado<input type="number" id="regGapDZDeseado" value="80" step="5" min="70" max="240"></label>
+              <label class="reg-lbl" for="regGapDZDeseado">Tiempo deseado</label>
+              <input type="number" id="regGapDZDeseado" value="80" step="5" min="70" max="240">
             </div>
             <div>
-              <label for="regGapDZTol">Tolerancia<select id="regGapDZTol" class="reg-select"><option>0</option><option selected>5</option><option>10</option></select></label>
+              <label class="reg-lbl" for="regGapDZTol">Tolerancia</label>
+              <select id="regGapDZTol" class="reg-select"><option>0</option><option selected>5</option><option>10</option></select>
             </div>
           </div>
           <p class="reg-mini">Tiempo entre embarques de distinta zona, incluida tolerancia, mínimo 70 minutos.</p>
@@ -727,28 +738,39 @@
           <div class="reg-titulo">👥 Dotación por vuelo</div>
           <div class="reg-grid">
             <div>
-              <label for="regAgVuelo">Agentes por vuelo<input type="number" id="regAgVuelo" value="2" min="1" max="9"></label>
-              <label for="regAgMin" id="regAgMinWrap" style="margin-top:11px;">Agentes si pax ≤ umbral<input type="number" id="regAgMin" value="1" min="1" max="9"></label>
+              <label class="reg-lbl" for="regAgVuelo">Agentes por vuelo</label>
+              <input type="number" id="regAgVuelo" value="2" min="1" max="9">
             </div>
             <div>
-              <label class="reg-check" style="margin-top:22px;"><input type="checkbox" id="regAgSiempre" onchange="actualizarAgSiempre()"> Siempre</label>
-              <label for="regPaxUmbral" id="regPaxUmbralWrap" style="margin-top:11px;">Umbral pax agente único<input type="number" id="regPaxUmbral" value="100" step="5" min="5" max="999"></label>
+              <label class="reg-check" style="margin-top:34px;"><input type="checkbox" id="regAgSiempre" onchange="actualizarAgSiempre()"> Siempre</label>
+            </div>
+            <div id="regAgMinWrap">
+              <label class="reg-lbl" for="regAgMin">Agentes si pax ≤ umbral</label>
+              <input type="number" id="regAgMin" value="1" min="1" max="9">
+            </div>
+            <div id="regPaxUmbralWrap">
+              <label class="reg-lbl" for="regPaxUmbral">Umbral pax agente único</label>
+              <input type="number" id="regPaxUmbral" value="100" step="5" min="5" max="999">
             </div>
           </div>
           <p class="reg-mini" id="regAgNota">Agentes por vuelo si hay menos o igual a X pax. Se tendrá en cuenta solamente, en caso excepcional donde no haya disponibilidad de agentes.</p>
-                <div class="reg-seccion">
+        </div>
+        <div class="reg-seccion">
           <div class="reg-titulo">☕ Descansos</div>
           <div class="reg-grid">
             <div>
-              <label for="regDescJor">Obligatorio jornada > a<input type="number" id="regDescJor" value="361" min="0" max="720"></label>
+              <label class="reg-lbl" for="regDescJor">Obligatorio jornada &gt; a</label>
+              <input type="number" id="regDescJor" value="361" min="0" max="720">
             </div>
           </div>
           <div class="reg-grid" style="margin-top:12px;">
             <div>
-              <label for="regDescDur">Tiempo óptimo<input type="number" id="regDescDur" value="70" step="5" min="30" max="180"></label>
+              <label class="reg-lbl" for="regDescDur">Tiempo óptimo</label>
+              <input type="number" id="regDescDur" value="70" step="5" min="30" max="180">
             </div>
             <div>
-              <label for="regDescTol">Tolerancia<select id="regDescTol" class="reg-select"><option selected>0</option><option>5</option><option>10</option></select></label>
+              <label class="reg-lbl" for="regDescTol">Tolerancia</label>
+              <select id="regDescTol" class="reg-select"><option selected>0</option><option>5</option><option>10</option></select>
             </div>
           </div>
           <p class="reg-mini">Incluyendo el tiempo de traslado de ida y vuelta.</p>
@@ -757,14 +779,15 @@
           <div class="reg-titulo">🛡️ Cobertura de departamentos</div>
           <div class="reg-grid">
             <div>
-              <label for="regCobDur">Tiempo traslado desde el STD<input type="number" id="regCobDur" value="15" step="5" min="15" max="30"></label>
+              <label class="reg-lbl" for="regCobDur">Tiempo traslado desde el STD</label>
+              <input type="number" id="regCobDur" value="15" step="5" min="15" max="30">
             </div>
             <div>
-              <label for="regCobJor">Tolerancia<select id="regCobJor" class="reg-select"><option selected>0</option><option>5</option><option>10</option></select></label>
+              <label class="reg-lbl" for="regCobJor">Tolerancia</label>
+              <select id="regCobJor" class="reg-select"><option selected>0</option><option>5</option><option>10</option></select>
             </div>
           </div>
         </div>
-      </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="cancelValidationParameters()">Cancelar</button>
         <button class="btn btn-primary" onclick="saveValidationParameters()">Guardar parámetros</button>
