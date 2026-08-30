@@ -1428,7 +1428,7 @@ select option {
 
 .reg-lbl {
   display: block;
-  min-height: 34px;
+  min-height: 20px;
 }
 
 .reg-grid label {
