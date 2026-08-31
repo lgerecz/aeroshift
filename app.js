@@ -653,6 +653,13 @@ function markQuadrantReviewed(type) {
     return;
   }
   const isAgents = type === 'agents';
+  const fechaCuadrante = isAgents ? extractedData.agentsDate : extractedData.flightsDate;
+  if (!fechaCuadrante || !String(fechaCuadrante).trim()) {
+    alert(isAgents
+      ? 'Añade primero la fecha del cuadrante de Turnos del Personal (clic en «Añadir fecha»).'
+      : 'Añade primero la fecha del cuadrante de Parrilla de Vuelos (clic en «Añadir fecha»).');
+    return;
+  }
   const rows = isAgents ? extractedData.agents : extractedData.flights;
   if (!Array.isArray(rows) || rows.length === 0) {
     alert(isAgents ? 'No hay turnos para revisar.' : 'No hay vuelos para revisar.');
@@ -1481,23 +1488,122 @@ function switchView(view) {
 // FILE UPLOAD HANDLER (WEB 3 HIGH-FIDELITY DESIGN WITH DUAL SCROLL RECTANGLES)
 // ========================================== 
 
+// ── Pop-ups de subida por cuadrante (v5.4) ────────────────────────────────
+// Cada cuadrante tiene su propio pop-up ENCIMA de su zona: Turnos a la
+// izquierda, Vuelos a la derecha. Así se ve claro que mientras uno procesa
+// se puede seguir subiendo en el otro. En Vuelos, cada archivo subido añade
+// UNA BARRA NUEVA (las subidas se acumulan en el cuadrante). El botón
+// Cancelar aborta la subida y limpia el cuadrante al instante.
+let subidasActivas = { agents: [], flights: [] };
+
+function procPopRefs(tipo) {
+  const suf = tipo === 'agents' ? 'Agents' : 'Flights';
+  return {
+    pop: document.getElementById('procPop' + suf),
+    title: document.getElementById('procPopTitle' + suf),
+    fase: document.getElementById('procPopFase' + suf),
+    bars: document.getElementById('procPopBars' + suf)
+  };
+}
+
+function crearFilaBarra(bars, lbl) {
+  const row = document.createElement('div');
+  row.className = 'proc-pop-row';
+  const lblDiv = document.createElement('div');
+  lblDiv.className = 'proc-pop-row-lbl';
+  lblDiv.textContent = lbl;
+  const line = document.createElement('div');
+  line.className = 'proc-pop-row-line';
+  const bar = document.createElement('div');
+  bar.className = 'proc-pop-row-bar';
+  const fill = document.createElement('div');
+  fill.className = 'proc-pop-row-fill';
+  bar.appendChild(fill);
+  const pct = document.createElement('div');
+  pct.className = 'proc-pop-row-pct';
+  pct.textContent = '0%';
+  line.appendChild(bar);
+  line.appendChild(pct);
+  row.appendChild(lblDiv);
+  row.appendChild(line);
+  bars.appendChild(row);
+  bars.scrollTop = bars.scrollHeight;
+  return { row, fill, pct };
+}
+
+function animarFilaCompleta(fila) {
+  const inicial = parseFloat(fila.fill.style.width) || 0;
+  const t0 = performance.now();
+  const duracion = 450;
+  const paso = (ahora) => {
+    const r = Math.min(1, (ahora - t0) / duracion);
+    const suave = 1 - Math.pow(1 - r, 3);
+    const p = inicial + (100 - inicial) * suave;
+    fila.fill.style.width = p.toFixed(2) + '%';
+    fila.pct.textContent = Math.floor(p) + '%';
+    if (r < 1) {
+      requestAnimationFrame(paso);
+    } else {
+      fila.fill.classList.add('ok');
+      fila.fill.style.width = '100%';
+      fila.pct.textContent = '100%';
+    }
+  };
+  requestAnimationFrame(paso);
+}
+
+function ocultarPopSiVacio(tipo) {
+  const refs = procPopRefs(tipo);
+  if (refs.pop && refs.bars && refs.bars.children.length === 0) {
+    refs.pop.style.display = 'none';
+    if (refs.fase) refs.fase.textContent = '';
+  }
+}
+
+// Cancelar: aborta toda subida en curso que alimente este cuadrante y lo
+// limpia al instante (sin confirm): datos, fecha, revisión y lista de archivos.
+function cancelarSubida(tipo) {
+  (subidasActivas[tipo] || []).forEach(u => {
+    u.cancelada = true;
+    try { u.controller.abort(); } catch (e) { /* ya abortada */ }
+  });
+  vaciarCuadrante(tipo);
+}
+
+function vaciarCuadrante(tipo) {
+  ensureExtractedDataShape();
+  const refs = procPopRefs(tipo);
+  if (refs.pop) refs.pop.style.display = 'none';
+  if (refs.bars) refs.bars.innerHTML = '';
+  if (refs.fase) refs.fase.textContent = '';
+  if (tipo === 'agents') {
+    extractedData.agents = [];
+    extractedData.agentsDate = '';
+    invalidateQuadrantReview('agents');
+    uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'agents');
+    renderDetectedAgents();
+  } else {
+    extractedData.flights = [];
+    extractedData.flightsDate = '';
+    invalidateQuadrantReview('flights');
+    uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'flights');
+    renderDetectedFlights();
+  }
+  renderUploadedFilesList();
+}
+
 async function uploadFileToBackend(files, type) {
   if (!files || files.length === 0) return;
 
-  const modal = document.getElementById('processingModal');
-  const title = document.getElementById('procTitle');
-  const sub = document.getElementById('procSub');
-  const progress = document.getElementById('procProgress');
-  const status = document.getElementById('procStatus');
   const openaiKey = localStorage.getItem('aeroshift_openai_key') || '';
   const backendInput = document.getElementById('backendUrl');
   const backendUrl = backendInput ? backendInput.value.trim() : 'http://localhost:8000';
   const backendModelInput = document.getElementById('backendModel');
   const selectedModel = backendModelInput ? backendModelInput.value : 'gpt-5.6-luna';
 
-  if (!modal) return;
+  // Cuadrantes alimentados por esta subida ('all' → los dos).
+  const tiposAfectados = (type === 'all') ? ['agents', 'flights'] : [type];
 
-  // Setup file list copies for preview tags
   const filesCopy = [];
   for (let i = 0; i < files.length; i++) {
     filesCopy.push({
@@ -1505,25 +1611,31 @@ async function uploadFileToBackend(files, type) {
       blobUrl: URL.createObjectURL(files[i])
     });
   }
-
-  // Reset progress bar & texts
-  progress.style.width = '0%';
-  status.textContent = 'PROCESANDO 0%';
-  
-  if (filesCopy.length === 1) {
-    title.textContent = 'Analizando ' + filesCopy[0].name + '...';
-  } else {
-    title.textContent = 'Analizando ' + filesCopy.length + ' archivos seleccionados...';
-  }
-  sub.textContent = 'Conectando con el motor de Visión de AeroShift...';
-
-  modal.classList.add('active');
-
+  const etiqueta = filesCopy.length === 1 ? filesCopy[0].name : (filesCopy.length + ' archivos');
   // Progreso estimado: la API no comunica un porcentaje real mientras trabaja.
   // Turnos alcanza el 90% en 75s; Vuelos en 45s. Después suma 1% cada 15s.
-  let currentPercent = 0;
-  const progressStartedAt = performance.now();
-  const timeToNinety = type === 'flights' ? 45000 : 75000;
+  const tiempoHastaNoventa = (type === 'flights') ? 45000 : 75000;
+
+  // Si la subida arranca desde fuera de la vista de cuadrantes, salta a ella
+  // para que los pop-ups sean visibles desde el primer segundo.
+  if (type === 'all') switchView('extractor-preview');
+
+  // Prepara los pop-ups y sus filas de barra. Turnos reinicia a UNA barra
+  // (sus datos se sustituyen); Vuelos AÑADE una barra por cada subida.
+  const filas = [];
+  tiposAfectados.forEach(tipo => {
+    const refs = procPopRefs(tipo);
+    if (!refs.pop || !refs.bars) return;
+    if (tipo === 'agents' || type === 'all') refs.bars.innerHTML = '';
+    if (refs.title) refs.title.textContent = 'Analizando ' + etiqueta + '...';
+    if (refs.fase) refs.fase.textContent = 'Conectando con el motor de Visión de AeroShift...';
+    refs.pop.style.display = 'flex';
+    filas.push({ tipo, refs, fila: crearFilaBarra(refs.bars, etiqueta) });
+  });
+  if (filas.length === 0) return;
+
+  const subirFase = (msg) => filas.forEach(f => { if (f.refs.fase) f.refs.fase.textContent = msg; });
+
   const stages = [
     { p: 15, msg: 'Conectando con el motor de Visión de AeroShift...' },
     { p: 45, msg: 'Escaneando imágenes y detectando texto...' },
@@ -1532,59 +1644,39 @@ async function uploadFileToBackend(files, type) {
     { p: 99, msg: 'Esperando la respuesta final del modelo de inteligencia artificial...' }
   ];
 
-  const renderEstimatedProgress = () => {
-    progress.style.width = currentPercent.toFixed(2) + '%';
-    status.textContent = 'PROCESANDO ' + Math.floor(currentPercent) + '%';
-    const stage = stages.find(stageItem => currentPercent <= stageItem.p);
-    if (stage) sub.textContent = stage.msg;
-  };
-
-  const interval = setInterval(() => {
-    const elapsed = performance.now() - progressStartedAt;
-    if (elapsed <= timeToNinety) {
-      currentPercent = Math.min(90, (elapsed / timeToNinety) * 90);
-    } else {
-      const additionalPercent = (elapsed - timeToNinety) / 15000;
-      currentPercent = Math.min(99, 90 + additionalPercent);
-    }
-    renderEstimatedProgress();
-  }, 250);
-
-  const completeProgressQuickly = () => {
-    clearInterval(interval);
-    const initialPercent = currentPercent;
-    const animationStartedAt = performance.now();
-    const animationDuration = 450;
-    const animate = (now) => {
-      const ratio = Math.min(1, (now - animationStartedAt) / animationDuration);
-      const eased = 1 - Math.pow(1 - ratio, 3);
-      currentPercent = initialPercent + (100 - initialPercent) * eased;
-      progress.style.width = currentPercent.toFixed(2) + '%';
-      status.textContent = 'PROCESANDO ' + Math.floor(currentPercent) + '%';
-      if (ratio < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        currentPercent = 100;
-        progress.style.width = '100%';
-        status.textContent = 'PROCESANDO 100%';
-      }
-    };
-    requestAnimationFrame(animate);
-  };
-
-  // Prepare FormData payload for the backend API
-  const formData = new FormData();
-  for (let i = 0; i < files.length; i++) {
-    formData.append('files', files[i]);
-  }
-
   // Límite máximo visible para una extracción con doble revisión: tres minutos y medio.
   const extractionController = new AbortController();
   const extractionTimeoutId = setTimeout(() => {
     extractionController.abort();
   }, 210000);
+  const registro = { controller: extractionController, cancelada: false };
+  tiposAfectados.forEach(tipo => subidasActivas[tipo].push(registro));
+
+  let currentPercent = 0;
+  const progressStartedAt = performance.now();
+  const interval = setInterval(() => {
+    const elapsed = performance.now() - progressStartedAt;
+    if (elapsed <= tiempoHastaNoventa) {
+      currentPercent = Math.min(90, (elapsed / tiempoHastaNoventa) * 90);
+    } else {
+      const additionalPercent = (elapsed - tiempoHastaNoventa) / 15000;
+      currentPercent = Math.min(99, 90 + additionalPercent);
+    }
+    filas.forEach(f => {
+      f.fila.fill.style.width = currentPercent.toFixed(2) + '%';
+      f.fila.pct.textContent = Math.floor(currentPercent) + '%';
+    });
+    const stage = stages.find(stageItem => currentPercent <= stageItem.p);
+    if (stage) subirFase(stage.msg);
+  }, 250);
 
   try {
+    // Prepare FormData payload for the backend API
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files', files[i]);
+    }
+
     const response = await fetch(`${backendUrl}/extract?model=${selectedModel}&type=${type}`, {
       method: 'POST',
       headers: {
@@ -1600,8 +1692,10 @@ async function uploadFileToBackend(files, type) {
 
     const data = await response.json();
     clearTimeout(extractionTimeoutId);
+    clearInterval(interval);
     if (data.success) {
-      invalidateQuadrantReview(type);
+      invalidateQuadrantReview(type === 'all' ? 'agents' : type);
+      if (type === 'all') invalidateQuadrantReview('flights');
       // Inicializa y migra la estructura con fechas independientes.
       ensureExtractedDataShape();
 
@@ -1651,21 +1745,22 @@ async function uploadFileToBackend(files, type) {
       if (type === 'agents' || type === 'all') extractedData.agentsDate = '';
       if (type === 'flights' || type === 'all') extractedData.flightsDate = '';
 
-      completeProgressQuickly();
+      filas.forEach(f => animarFilaCompleta(f.fila));
       if (type === 'agents' && data.verification_completed === true) {
         const corrected = Number(data.verification_corrections || 0);
         const firstTime = Number(data.first_extraction_seconds || 0).toFixed(1);
         const verificationTime = Number(data.verification_seconds || 0).toFixed(1);
         const totalTime = Number(data.total_backend_seconds || 0).toFixed(1);
-        sub.textContent = `Completado. Extracción: ${firstTime}s · Verificación: ${verificationTime}s · Total: ${totalTime}s · Correcciones: ${corrected}.`;
+        subirFase(`Completado. Extracción: ${firstTime}s · Verificación: ${verificationTime}s · Total: ${totalTime}s · Correcciones: ${corrected}.`);
       } else {
-        sub.textContent = '¡Análisis de Visión IA completado con éxito!';
+        subirFase('¡Análisis de Visión IA completado con éxito!');
       }
 
       setTimeout(() => {
         try {
-          modal.classList.remove('active');
-          
+          filas.forEach(f => { f.fila.row.remove(); });
+          tiposAfectados.forEach(tipo => ocultarPopSiVacio(tipo));
+
           // Accumulate the new files into our global array with their associated type!
           filesCopy.forEach(f => {
             uploadedFilesCopy.push({
@@ -1694,7 +1789,7 @@ async function uploadFileToBackend(files, type) {
           const verificationChangesNote = verificationChanges.length
             ? `\n\nCambios realizados por la segunda verificación:\n${changesPreview}${extraChanges}`
             : '';
-          
+
           if (!data.is_real_ai) {
             alert(`Aviso del Servidor:\nLa extracción por IA no se completó.\n\nDetalle: Existen ciertos problemas de conexión con tu ordenador. Por favor, inténtalo nuevamente.`);
           } else if (type === 'agents' && Number(data.validation_issue_count || 0) > 0) {
@@ -1732,25 +1827,44 @@ async function uploadFileToBackend(files, type) {
     }
   } catch (error) {
     clearTimeout(extractionTimeoutId);
-    const displayedError = error && error.name === 'AbortError'
-      ? new Error('La extracción superó el tiempo máximo de 3 minutos y 30 segundos.')
-      : error;
-    console.error('La extracción no se completó:', displayedError);
-
     clearInterval(interval);
-    progress.style.width = '100%';
-    status.textContent = 'ERROR DE EXTRACCIÓN';
-    sub.textContent = displayedError.message || 'No se pudieron extraer los datos.';
 
-    // No se cargan agentes ni vuelos ficticios. Conservamos intactos los
-    // datos que el usuario ya tuviera antes de esta operación fallida.
-    setTimeout(() => {
-      modal.classList.remove('active');
-      alert(
-        'La extracción por IA no se completó.\n\n' +
-        (displayedError.message || 'Error desconocido del servidor.')
-      );
-    }, 500);
+    if (registro.cancelada) {
+      // Cancelación manual: el cuadrante ya se limpió en cancelarSubida();
+      // aquí solo se retira la barra, sin ningún aviso.
+      setTimeout(() => {
+        filas.forEach(f => { f.fila.row.remove(); });
+        tiposAfectados.forEach(tipo => ocultarPopSiVacio(tipo));
+      }, 150);
+    } else {
+      const displayedError = error && error.name === 'AbortError'
+        ? new Error('La extracción superó el tiempo máximo de 3 minutos y 30 segundos.')
+        : error;
+      console.error('La extracción no se completó:', displayedError);
+
+      filas.forEach(f => {
+        f.fila.fill.classList.add('err');
+        f.fila.fill.style.width = '100%';
+        f.fila.pct.textContent = 'ERR';
+      });
+      subirFase(displayedError.message || 'No se pudieron extraer los datos.');
+
+      // No se cargan agentes ni vuelos ficticios. Conservamos intactos los
+      // datos que el usuario ya tuviera antes de esta operación fallida.
+      setTimeout(() => {
+        filas.forEach(f => { f.fila.row.remove(); });
+        tiposAfectados.forEach(tipo => ocultarPopSiVacio(tipo));
+        alert(
+          'La extracción por IA no se completó.\n\n' +
+          (displayedError.message || 'Error desconocido del servidor.')
+        );
+      }, 900);
+    }
+  } finally {
+    // Da de baja esta subida en todos los cuadrantes afectados.
+    tiposAfectados.forEach(tipo => {
+      subidasActivas[tipo] = (subidasActivas[tipo] || []).filter(u => u !== registro);
+    });
   }
 }
 
@@ -2577,7 +2691,10 @@ function openQuadrantDatePicker(type, event) {
   picker.type = 'date';
   picker.id = 'quadrantDatePicker';
   const currentValue = type === 'agents' ? extractedData.agentsDate : extractedData.flightsDate;
-  picker.value = parseQuadrantDateToISO(currentValue);
+  // Sin fecha guardada se abre SIN valor: el calendario arranca en el mes
+  // actual con hoy marcado y «Hoy»/el día de hoy SÍ disparan el cambio
+  // (si se precargara hoy, el navegador lo ignoraría por no haber cambio).
+  picker.value = currentValue && currentValue.trim() ? parseQuadrantDateToISO(currentValue) : '';
   const rect = event?.currentTarget?.getBoundingClientRect();
   const pickerWidth = 170;
   const left = rect ? Math.min(Math.max(8, rect.left), window.innerWidth - pickerWidth - 8) : 8;
@@ -2599,8 +2716,17 @@ function openQuadrantDatePicker(type, event) {
         extractedData.flightsDate = displayDate;
         renderDetectedFlights();
       }
-      invalidateQuadrantReview(type);
+    } else if (type === 'agents') {
+      // «Borrar» en el calendario: la fecha vuelve a «Añadir fecha».
+      extractedData.agentsDate = '';
+      renderDetectedAgents();
+    } else {
+      extractedData.flightsDate = '';
+      renderDetectedFlights();
     }
+    // Cambiar o borrar la fecha saca el cuadrante del estado revisado:
+    // para el marco verde hacen falta fecha + verificación sin avisos.
+    invalidateQuadrantReview(type);
     removePicker();
   };
   picker.onblur = removePicker;
@@ -3447,29 +3573,13 @@ async function downloadExtractionXlsx(type) {
 
 function clearDetectedAgents() {
   if (confirm('¿Deseas vaciar por completo la lista de turnos de personal?')) {
-    ensureExtractedDataShape();
-    extractedData.agents = [];
-    extractedData.agentsDate = '';
-    invalidateQuadrantReview('agents');
-
-    // Filter out turnos files from the global file preview list!
-    uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'agents');
-    renderDetectedAgents();
-    renderUploadedFilesList();
+    vaciarCuadrante('agents');
   }
 }
 
 function clearDetectedFlights() {
   if (confirm('¿Deseas vaciar por completo la parrilla de vuelos?')) {
-    ensureExtractedDataShape();
-    extractedData.flights = [];
-    extractedData.flightsDate = '';
-    invalidateQuadrantReview('flights');
-
-    // Filter out flights files from the global file list!
-    uploadedFilesCopy = uploadedFilesCopy.filter(f => f.type !== 'flights');
-    renderDetectedFlights();
-    renderUploadedFilesList();
+    vaciarCuadrante('flights');
   }
 }
 

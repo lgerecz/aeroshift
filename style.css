@@ -1545,3 +1545,100 @@ details.reg-avanzado > summary { cursor: pointer; list-style: none; }
 details.reg-avanzado > summary::-webkit-details-marker { display: none; }
 details.reg-avanzado[open] .reg-titulo::after { content: " −"; }
 details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
+
+
+/* ═══ Pop-ups de subida por cuadrante (v5.4) ═══ */
+.proc-pop {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* deja pasar clics y arrastres: el cuadrante sigue utilizable */
+}
+.proc-pop-card {
+  width: min(320px, 86%);
+  max-height: 88%;
+  background: #1e2130;
+  border: 1px solid #3a3f54;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+.proc-pop-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.proc-pop-fase {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #9ca3b4;
+  margin: 5px 0 10px 0;
+  min-height: 15px;
+}
+.proc-pop-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 0 2px;
+}
+.proc-pop-row-lbl {
+  font-size: 10px;
+  color: #9ca3b4;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.proc-pop-row-line { display: flex; align-items: center; gap: 8px; }
+.proc-pop-row-bar {
+  flex: 1;
+  height: 8px;
+  background: #12141c;
+  border: 1px solid #2d3148;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.proc-pop-row-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #1e70c5, #378add);
+  border-radius: 5px;
+  transition: width 0.2s linear;
+}
+.proc-pop-row-fill.ok { background: linear-gradient(90deg, #0ea371, #10b981); }
+.proc-pop-row-fill.err { background: #ef4444; }
+.proc-pop-row-pct {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #e8eaf0;
+  min-width: 36px;
+  text-align: right;
+}
+.proc-pop-cancel {
+  pointer-events: auto; /* único elemento clicable del pop-up: Cancelar */
+  margin: 12px auto 0 auto;
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  border-radius: 6px;
+  padding: 6px 20px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: block;
+}
+.proc-pop-cancel:hover { background: rgba(239, 68, 68, 0.12); }
