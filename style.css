@@ -1642,3 +1642,97 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   display: block;
 }
 .proc-pop-cancel:hover { background: rgba(239, 68, 68, 0.12); }
+
+
+/* ═══ Parrilla vertical de resultados (v6.2) ═══ */
+.schedule-table.parrilla-vertical {
+  table-layout: auto;
+}
+.schedule-table.parrilla-vertical th:first-child,
+.schedule-table.parrilla-vertical td:first-child {
+  position: static;
+  min-width: 0;
+  padding-left: 12px;
+}
+.schedule-table.parrilla-vertical td {
+  height: auto;
+  min-width: 0;
+  padding: 7px 12px;
+  border-right: none;
+  text-align: left;
+}
+.schedule-table.parrilla-vertical thead th {
+  background: #121212;
+  border-top: 2px double #444;
+  border-bottom: 2px double #444;
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: #9ca3b4;
+  white-space: nowrap;
+}
+.schedule-table.parrilla-vertical .pv-num {
+  width: 34px;
+  text-align: right;
+  color: #6b7280;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+.schedule-table.parrilla-vertical .pv-vuelo {
+  width: 92px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-weight: 700;
+  color: #e8eaf0;
+  white-space: nowrap;
+}
+.schedule-table.parrilla-vertical .pv-dest {
+  width: 74px;
+  font-weight: 700;
+  color: #e8eaf0;
+  letter-spacing: 0.5px;
+}
+.schedule-table.parrilla-vertical .pv-hora {
+  width: 96px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #9ca3b4;
+  white-space: nowrap;
+}
+.schedule-table.parrilla-vertical .pv-pax {
+  width: 48px;
+  text-align: right;
+  color: #9ca3b4;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+.schedule-table.parrilla-vertical .pv-agentes {
+  padding: 6px 14px;
+}
+.schedule-table.parrilla-vertical .pv-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.022);
+}
+.schedule-table.parrilla-vertical .pv-row-sin td {
+  background: rgba(239, 68, 68, 0.05);
+}
+.pv-chip {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(55, 138, 221, 0.14);
+  border: 1px solid rgba(55, 138, 221, 0.45);
+  color: #cfe4fa;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.pv-sin {
+  color: #ef4444;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.pv-vacio {
+  text-align: center;
+  padding: 48px 0;
+  color: #6b7280;
+}
+.pv-vacio p { margin: 0 0 6px 0; font-weight: 700; color: #9ca3b4; }

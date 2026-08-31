@@ -133,7 +133,7 @@ function normalizeAgents(agentsList) {
       shifts: a.shifts || shifts,
       espec: a.espec || [],
       excluir: a.excluir || false,
-      excluir_embarque: a.excluir || false,
+      excluir_embarque: a.excluir_embarque || false,
       airline: a.airline || '',
       inicio: inicio,
       fin: fin,
@@ -724,6 +724,16 @@ function renderAll() {
 }
 
 // ===== RENDER AGENTS =====
+// Roles SIN derecho a embarque (oficina y estados especiales) — espejo del motor
+const ROLES_SIN_EMBARQUE_FRONT = ['DSM', 'PSM', 'OPS', 'TKT', 'TKD', 'LL', 'SOMBRA', 'SHADOW', 'SHADOWING', 'FAMI', 'SICK', 'CURSO', 'NUEVO', 'NEW', 'AUTOCHECKIN'];
+
+function esAgenteDeEmbarque(agent) {
+  if (agent.excluir || agent.excluir_embarque) return false;
+  const canon = String(agent.canonical_role || agent.role || '').toUpperCase();
+  const base = (canon.match(/^[A-Z]+/) || [''])[0];
+  return base !== '' && !ROLES_SIN_EMBARQUE_FRONT.includes(base);
+}
+
 function renderAgents() {
   const container = document.getElementById('agentList');
   
@@ -739,7 +749,18 @@ function renderAgents() {
     return;
   }
 
-  container.innerHTML = state.agents.map((agent, i) => {
+  // Solo agentes de EMBARQUE: los administrativos de oficina (TKT/LL/OPS…),
+  // los excluidos y los «sin embarque» no figuran en este panel.
+  const visibles = state.agents.filter(esAgenteDeEmbarque);
+  if (visibles.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>Sin agentes de embarque</p>
+        <small>Aquí solo figura el personal que embarca (los puestos de oficina no)</small>
+      </div>`;
+    return;
+  }
+  container.innerHTML = visibles.map((agent, i) => {
     const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
     const initials = agent.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
     const shiftDots = agent.shifts.map(s => 
@@ -829,150 +850,78 @@ function renderFlights() {
 
 // ===== RENDER SCHEDULE =====
 function renderSchedule() {
-  const date = document.getElementById('currentDate').value;
-  const assignments = state.assignments[date] || {};
-  
-  // Get agents filtered by shift
-  let agents = getAgentsForShift(currentShiftFilter);
-  
-  // Build time slots: 30-minute intervals for 24h
-  const slots = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      slots.push({
-        hour: h,
-        minute: m,
-        label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`,
-        isHour: m === 0
-      });
-    }
+  // Modelo VERTICAL (como la parrilla de vuelos impresa): una fila por vuelo,
+  // ordenada por STD, con los agentes asignados en la columna central.
+  let flights = getFlightsForDate();
+  if (currentShiftFilter !== 'all') {
+    flights = flights.filter(f => vueloEnTurno(f.time, currentShiftFilter));
   }
+  flights = [...flights].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
 
-  // Get date flights
-  const dateFlights = getFlightsForDate();
-
-  // Header
   const thead = document.getElementById('scheduleHead');
   thead.innerHTML = `
     <tr>
-      <th>Agente</th>
-      ${slots.map(slot => `
-        <th class="${slot.isHour ? 'hour-mark' : ''}" title="${slot.label}">
-          ${slot.isHour ? slot.label : '·'}
-        </th>
-      `).join('')}
+      <th class="pv-num">#</th>
+      <th class="pv-vuelo">VUELO</th>
+      <th class="pv-dest">DESTINO</th>
+      <th class="pv-hora">STD</th>
+      <th class="pv-agentes">AGENTES DEL EMBARQUE</th>
+      <th class="pv-hora">EMBARQUE</th>
+      <th class="pv-pax">PAX</th>
     </tr>`;
 
-  // Body
   const tbody = document.getElementById('scheduleBody');
-  
-  if (agents.length === 0 && dateFlights.length === 0) {
+  if (flights.length === 0) {
+    const hayVuelos = getFlightsForDate().length > 0;
     tbody.innerHTML = `
       <tr>
-        <td colspan="${slots.length + 1}" style="text-align:center; padding:60px; color:var(--text-muted)">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom:12px;opacity:0.3">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          <br>Añade agentes y embarques para ver la parrilla
+        <td colspan="7" class="pv-vacio">
+          <p>${hayVuelos ? 'Sin vuelos en este turno' : 'Sin vuelos para este día'}</p>
+          <small>${hayVuelos ? 'Prueba con otro turno (Todos / Mañana / Tarde / Noche)' : 'Sube la parrilla de vuelos y genera para ver los agentes asignados'}</small>
         </td>
       </tr>`;
     return;
   }
 
-  let rows = '';
+  const [embIni, embFin] = ventanaEmbarque();
+  const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-  // Agent rows
-  agents.forEach((agent, idx) => {
-    const color = AVATAR_COLORS[state.agents.indexOf(agent) % AVATAR_COLORS.length];
-    const initials = agent.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-    const agentFlights = getAgentFlightsForDate(agent.id, date);
-    const shiftInfo = agent.shifts.map(s => SHIFTS[s].label).join('/');
-
-    let cells = '';
-    slots.forEach((slot, slotIdx) => {
-      const flight = agentFlights.find(f => {
-        const [fh, fm] = f.time.split(':').map(Number);
-        return fh === slot.hour && fm === slot.minute;
-      });
-
-      if (flight) {
-        const airlineColor = AIRLINE_COLORS[flight.airline] || AIRLINE_COLORS.OTHER;
-        cells += `
-          <td class="has-flight">
-            <div class="cell-flight" onclick="openAssignModal(${flight.id})" 
-                 style="border-color:${airlineColor}40; background:${airlineColor}15"
-                 title="${flight.number} — ${flight.gate} — ${flight.destination}">
-              <span class="cell-flight-code" style="color:${airlineColor}">${flight.number}</span>
-              <span class="cell-flight-gate">${flight.gate}</span>
-            </div>
-          </td>`;
-      } else {
-        cells += `<td class="drop-target" 
-                      ondragover="onCellDragOver(event)" 
-                      ondrop="onCellDrop(event, ${agent.id}, '${slot.label}')"
-                      onclick="onCellClick(${agent.id}, '${slot.label}')"></td>`;
-      }
-    });
-
-    rows += `
-      <tr data-agent-id="${agent.id}">
-        <td>
-          <div class="td-agent">
-            <div class="td-agent-avatar" style="background:${color}">${initials}</div>
-            <div class="td-agent-info">
-              <div class="td-agent-name">${escapeHtml(agent.name)}</div>
-              <div class="td-agent-shift">${shiftInfo} · ${agent.code}</div>
-            </div>
-          </div>
-        </td>
-        ${cells}
+  tbody.innerHTML = flights.map((f, idx) => {
+    const std = t2m(f.time);
+    const nombres = String(f.agents || '').split(',').map(s => s.trim()).filter(Boolean);
+    const agentes = nombres.length > 0
+      ? nombres.map(n => `<span class="pv-chip" title="Agente asignado al embarque">${escapeHtml(n)}</span>`).join('')
+      : '<span class="pv-sin">⚠ Sin asignar</span>';
+    return `
+      <tr class="pv-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
+        <td class="pv-num">${idx + 1}</td>
+        <td class="pv-vuelo">${escapeHtml(f.number || '')}</td>
+        <td class="pv-dest">${escapeHtml(f.destination || '')}</td>
+        <td class="pv-hora">${escapeHtml(f.time || '')}</td>
+        <td class="pv-agentes">${agentes}</td>
+        <td class="pv-hora">${m2t(std - embIni)}–${m2t(std - embFin)}</td>
+        <td class="pv-pax">${f.pax === null || f.pax === undefined || f.pax === '' ? '—' : Number(f.pax)}</td>
       </tr>`;
-  });
+  }).join('');
+}
 
-  // Unassigned flights row
-  const unassignedFlights = dateFlights.filter(f => !assignments[f.id]);
-  if (unassignedFlights.length > 0) {
-    let unassignedCells = '';
-    slots.forEach(slot => {
-      const flight = unassignedFlights.find(f => {
-        const [fh, fm] = f.time.split(':').map(Number);
-        return fh === slot.hour && fm === slot.minute;
-      });
+// ¿El vuelo cae dentro del turno seleccionado? (Mañana 06–14, Tarde 14–22, Noche 22–06)
+function vueloEnTurno(time, turno) {
+  const p = String(time || '').split(':').map(Number);
+  const mins = (p[0] || 0) * 60 + (p[1] || 0);
+  if (turno === 'morning') return mins >= 360 && mins < 840;
+  if (turno === 'afternoon') return mins >= 840 && mins < 1320;
+  if (turno === 'night') return mins >= 1320 || mins < 360;
+  return true;
+}
 
-      if (flight) {
-        const airlineColor = AIRLINE_COLORS[flight.airline] || AIRLINE_COLORS.OTHER;
-        unassignedCells += `
-          <td class="has-flight">
-            <div class="cell-flight" onclick="openAssignModal(${flight.id})"
-                 style="border-color:${airlineColor}40; background:${airlineColor}15; border: 1px dashed var(--danger);">
-              <span class="cell-flight-code" style="color:var(--danger)">${flight.number}</span>
-              <span class="cell-flight-gate">⚠ Sin asignar</span>
-            </div>
-          </td>`;
-      } else {
-        unassignedCells += `<td></td>`;
-      }
-    });
-
-    rows += `
-      <tr class="unassigned-row">
-        <td>
-          <div class="td-agent">
-            <div class="td-agent-avatar" style="background:var(--danger)">!</div>
-            <div class="td-agent-info">
-              <div class="td-agent-name" style="color:var(--danger)">Sin asignar</div>
-              <div class="td-agent-shift">${unassignedFlights.length} embarque(s)</div>
-            </div>
-          </div>
-        </td>
-        ${unassignedCells}
-      </tr>`;
-  }
-
-  tbody.innerHTML = rows;
-
-  // Auto-scroll to first flight
-  scrollToFirstFlight(dateFlights, slots);
+// Ventana de embarque guardada (defecto fijo: STD−40 → STD−15)
+function ventanaEmbarque() {
+  try {
+    const r = JSON.parse(localStorage.getItem('aeroshift_reglas') || '{}');
+    return [Number(r.emb_inicio_antes_std) || 40, Number(r.emb_fin_antes_std) || 15];
+  } catch (e) { return [40, 15]; }
 }
 
 function scrollToFirstFlight(flights, slots) {
