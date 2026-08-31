@@ -438,11 +438,14 @@ function openValidationParametersModal() {
   const modal = document.getElementById('validationParametersModal');
   const optModo = document.getElementById('optModo');
   if (!modal || !optModo) return;
-  optModo.value = '';  // siempre «— Seleccionar —» al abrir: el usuario elige manualmente
+  // Muestra la estrategia guardada (si aún no hay ninguna: «— Seleccionar —»).
+  // Nunca se envía nada al motor sin guardar: esto solo refleja lo persistido.
+  const optModoGuardado = localStorage.getItem('aeroshift_opt_modo') || '';
+  optModo.value = optModoGuardado;
   actualizarNotaModo();
   actualizarAgSiempre();
   validarBordesEnVivo();
-  validationParametersSnapshot = { optModo: '', reglas: localStorage.getItem('aeroshift_reglas') || '' };
+  validationParametersSnapshot = { optModo: optModoGuardado, reglas: localStorage.getItem('aeroshift_reglas') || '' };
   cargarReglasEnModal();
   modal.classList.add('active');
 }
@@ -473,7 +476,8 @@ function saveValidationParameters() {
   if (!guardarReglasDesdeModal()) return;
   localStorage.setItem('aeroshift_parametros_guardados', new Date().toISOString());
   actualizarEstadoBotonParams();
-  invalidateQuadrantReview('all');
+  // Los cuadrantes ya validados (marco verde) NO se desmarcan al guardar
+  // parámetros: la revisión de filas y fecha no depende de estos valores.
   validationParametersSnapshot = null;
   if (modal) modal.classList.remove('active');
 }
