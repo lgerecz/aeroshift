@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=70">
+  <link rel="stylesheet" href="style.css?v=72">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -80,7 +80,7 @@
           <path d="M22 20L34 32L22 44" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M34 20L46 32L34 44" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <h1 style="margin-left: 8px;">AeroShift</h1>
+        <h1 style="margin-left: 8px;">AeroShift <span class="ver-badge" title="Versión desplegada de la interfaz">v7.0</span></h1>
       </div>
       <span class="subtitle">Parrilla de Turnos — Handling</span>
     </div>
@@ -440,7 +440,12 @@
         <button class="shift-tab" data-shift="night" onclick="filterShift('night', this)">
           <span class="dot dot-night"></span> Noche <small>(22:00–06:00)</small>
         </button>
-        <button class="btn btn-primary" onclick="abrirInforme()" style="margin-left:auto; padding:7px 14px; font-size:12px; font-weight:700;">📋 Informe</button>
+        <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+          <span style="font-size:11px; color:#6b7280; letter-spacing:.5px;">VISTA</span>
+          <button class="shift-tab active" id="btnVistaVertical" onclick="cambiarVistaParrilla('vertical')">▦ Vertical</button>
+          <button class="shift-tab" id="btnVistaHorizontal" onclick="cambiarVistaParrilla('horizontal')">▤ Horizontal</button>
+        </span>
+        <button class="btn btn-primary" onclick="abrirInforme()" style="margin-left:10px; padding:7px 14px; font-size:12px; font-weight:700;">📋 Informe</button>
       </div>
 
       <!-- SCHEDULE GRID -->
@@ -873,6 +878,21 @@
   </div>
 
 
-  <script src="app.js?v=82"></script>
+  <!-- POP-UP DE GENERACIÓN DE PARRILLA (v7.0): operación global, centrado -->
+  <div id="generandoPop" style="display: none;">
+    <div class="gen-pop-card">
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="spinner" style="stroke:#378add; display:block; margin:0 auto 10px auto;">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+      </svg>
+      <div class="gen-pop-title">Generando la parrilla…</div>
+      <div class="gen-pop-fase" id="genPopFase">Enviando cuadrantes al motor…</div>
+      <div class="gen-pop-bar"><div class="gen-pop-fill" id="genPopFill"></div></div>
+      <div class="gen-pop-pct" id="genPopPct">PROCESANDO 0%</div>
+      <button class="gen-pop-cancel" onclick="cancelarGeneracion()">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="app.js?v=85"></script>
 </body>
 </html>

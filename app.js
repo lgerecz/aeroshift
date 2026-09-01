@@ -214,9 +214,19 @@ function init() {
     }
   }
 
-  // La estrategia SIEMPRE arranca en «— Seleccionar —»: la elige el usuario en el modal.
-  cargarReglasEnModal();
-  actualizarEstadoBotonParams();
+  // CADA NUEVA ENTRADA a AeroShift: parámetros SIN completar. La estrategia
+  // y los valores se eligen de nuevo en esta sesión; el botón "Parámetros de
+  // Validación" solo se pone verde tras guardar AHORA (no hereda visitas
+  // anteriores guardadas en el navegador).
+  localStorage.removeItem('aeroshift_opt_modo');
+  localStorage.removeItem('aeroshift_parametros_guardados');
+  localStorage.removeItem('aeroshift_reglas');
+  cargarReglasEnModal();          // sin datos guardados → valores por defecto
+  actualizarEstadoBotonParams();  // gris hasta guardar en esta sesión
+  const bv = document.getElementById('btnVistaVertical');
+  const bh = document.getElementById('btnVistaHorizontal');
+  if (bv) bv.classList.toggle('active', vistaParrilla === 'vertical');
+  if (bh) bh.classList.toggle('active', vistaParrilla === 'horizontal');
 
   setupExtractorClipboardAndDrop();
   setupCustomTooltips();
@@ -428,6 +438,66 @@ function init() {
 
   function nombreNormalizado(s) {
   return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+// ── Pop-up de carga al GENERAR PARRILLA (v7.0) ────────────────────────────
+let genPopEstado = null;
+
+function abrirGenerandoPop(controller) {
+  const pop = document.getElementById('generandoPop');
+  if (!pop) return;
+  genPopEstado = { controller, intervalo: null, cancelada: false };
+  const fill = document.getElementById('genPopFill');
+  const pct = document.getElementById('genPopPct');
+  const fase = document.getElementById('genPopFase');
+  if (fill) fill.style.width = '0%';
+  if (pct) pct.textContent = 'PROCESANDO 0%';
+  if (fase) fase.textContent = 'Enviando cuadrantes al motor…';
+  pop.style.display = 'flex';
+  // Progreso estimado: el motor resuelve en ≤55 s (después pinta la parrilla).
+  // Alcanza el 90% en 40 s y luego avanza despacio hasta el 99%.
+  const t0 = performance.now();
+  const fases = [
+    { p: 15, msg: 'Enviando cuadrantes al motor…' },
+    { p: 40, msg: 'Repartiendo embarques con OR-Tools…' },
+    { p: 70, msg: 'Respetando descansos, separaciones y cobertura…' },
+    { p: 90, msg: 'Puliendo el reparto…' },
+    { p: 99, msg: 'Cerrando el cálculo…' }
+  ];
+  genPopEstado.intervalo = setInterval(() => {
+    const el = performance.now() - t0;
+    const valor = el <= 40000 ? Math.min(90, (el / 40000) * 90) : Math.min(99, 90 + (el - 40000) / 6000);
+    if (fill) fill.style.width = valor.toFixed(2) + '%';
+    if (pct) pct.textContent = 'PROCESANDO ' + Math.floor(valor) + '%';
+    const f = fases.find(x => valor <= x.p);
+    if (f && fase) fase.textContent = f.msg;
+  }, 250);
+}
+
+function finalizarGenerandoPop(modo) {
+  if (!genPopEstado) return;
+  clearInterval(genPopEstado.intervalo);
+  genPopEstado = null;
+  const pop = document.getElementById('generandoPop');
+  const fill = document.getElementById('genPopFill');
+  const pct = document.getElementById('genPopPct');
+  if (modo === 'ok') {
+    if (fill) { fill.style.width = '100%'; fill.classList.add('ok'); }
+    if (pct) pct.textContent = '¡PARRILLA LISTA!';
+    setTimeout(() => { if (pop) { pop.style.display = 'none'; } if (fill) fill.classList.remove('ok'); }, 500);
+  } else if (modo === 'error') {
+    if (fill) { fill.style.width = '100%'; fill.classList.add('err'); }
+    if (pct) pct.textContent = 'ERROR';
+    setTimeout(() => { if (pop) { pop.style.display = 'none'; } if (fill) fill.classList.remove('err'); }, 900);
+  } else {
+    if (pop) pop.style.display = 'none';
+  }
+}
+
+function cancelarGeneracion() {
+  if (!genPopEstado) return;
+  genPopEstado.cancelada = true;
+  try { genPopEstado.controller.abort(); } catch (e) { /* ya abortado */ }
 }
 
 function saveOptModo(val) {
@@ -849,14 +919,37 @@ function renderFlights() {
 }
 
 // ===== RENDER SCHEDULE =====
+// Vista de la parrilla de resultados: 'vertical' (por defecto) u 'horizontal'
+let vistaParrilla = localStorage.getItem('aeroshift_vista_parrilla') === 'horizontal' ? 'horizontal' : 'vertical';
+
 function renderSchedule() {
+  if (vistaParrilla === 'horizontal') renderScheduleHorizontal();
+  else renderScheduleVertical();
+}
+
+// Conmutador de vista (botones Vertical / Horizontal de las pestañas)
+function cambiarVistaParrilla(vista) {
+  vistaParrilla = vista === 'horizontal' ? 'horizontal' : 'vertical';
+  localStorage.setItem('aeroshift_vista_parrilla', vistaParrilla);
+  const bv = document.getElementById('btnVistaVertical');
+  const bh = document.getElementById('btnVistaHorizontal');
+  if (bv) bv.classList.toggle('active', vistaParrilla === 'vertical');
+  if (bh) bh.classList.toggle('active', vistaParrilla === 'horizontal');
+  renderSchedule();
+}
+
+function renderScheduleVertical() {
   // Modelo VERTICAL (como la parrilla de vuelos impresa): una fila por vuelo,
   // ordenada por STD, con los agentes asignados en la columna central.
   let flights = getFlightsForDate();
   if (currentShiftFilter !== 'all') {
     flights = flights.filter(f => vueloEnTurno(f.time, currentShiftFilter));
   }
-  flights = [...flights].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+  // Orden por STD real (minutos): el compare de texto fallaba con horas sin
+  // cero ("12:10" < "5:45"). Los empates (misma hora) conservan el orden de
+  // la parrilla de vuelos (sort estable).
+  const pv_t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  flights = [...flights].sort((a, b) => pv_t2m(a.time) - pv_t2m(b.time));
 
   const thead = document.getElementById('scheduleHead');
   thead.innerHTML = `
@@ -922,6 +1015,142 @@ function ventanaEmbarque() {
     const r = JSON.parse(localStorage.getItem('aeroshift_reglas') || '{}');
     return [Number(r.emb_inicio_antes_std) || 40, Number(r.emb_fin_antes_std) || 15];
   } catch (e) { return [40, 15]; }
+}
+
+// Modelo HORIZONTAL (Gantt): agentes en filas, horas en columnas, con los
+// vuelos colocados en su franja. Solo agentes de EMBARQUE (los de oficina
+// no embarcan y no figuran).
+function renderScheduleHorizontal() {
+  const date = document.getElementById('currentDate').value;
+  const assignments = state.assignments[date] || {};
+
+  let agents = getAgentsForShift(currentShiftFilter).filter(esAgenteDeEmbarque);
+
+  // Franjas de 30 minutos para las 24 h
+  const slots = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      slots.push({ hour: h, minute: m, label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, isHour: m === 0 });
+    }
+  }
+
+  const dateFlights = getFlightsForDate();
+
+  const thead = document.getElementById('scheduleHead');
+  thead.innerHTML = `
+    <tr>
+      <th>Agente</th>
+      ${slots.map(slot => `
+        <th class="${slot.isHour ? 'hour-mark' : ''}" title="${slot.label}">
+          ${slot.isHour ? slot.label : '·'}
+        </th>
+      `).join('')}
+    </tr>`;
+
+  const tbody = document.getElementById('scheduleBody');
+
+  if (agents.length === 0 && dateFlights.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="${slots.length + 1}" style="text-align:center; padding:60px; color:var(--text-muted)">
+          Añade agentes y embarques para ver la parrilla
+        </td>
+      </tr>`;
+    return;
+  }
+
+  let rows = '';
+
+  agents.forEach(agent => {
+    const color = AVATAR_COLORS[state.agents.indexOf(agent) % AVATAR_COLORS.length];
+    const initials = agent.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    const agentFlights = getAgentFlightsForDate(agent.id, date);
+    const shiftInfo = agent.shifts.map(s => SHIFTS[s].label).join('/');
+
+    let cells = '';
+    slots.forEach(slot => {
+      const flight = agentFlights.find(f => {
+        const [fh, fm] = String(f.time || '').split(':').map(Number);
+        const mins = (fh || 0) * 60 + (fm || 0);
+        // El vuelo pinta en la franja de 30 min que lo contiene
+        // (antes solo aparecía si caía en :00/:30 exactos y casi nada se veía).
+        return mins >= slot.hour * 60 + slot.minute && mins < slot.hour * 60 + slot.minute + 30;
+      });
+
+      if (flight) {
+        const airlineColor = AIRLINE_COLORS[flight.airline] || AIRLINE_COLORS.OTHER;
+        cells += `
+          <td class="has-flight">
+            <div class="cell-flight" onclick="openAssignModal(${flight.id})"
+                 style="border-color:${airlineColor}40; background:${airlineColor}15"
+                 title="${flight.number} — ${flight.gate} — ${flight.destination}">
+              <span class="cell-flight-code" style="color:${airlineColor}">${flight.number}</span>
+              <span class="cell-flight-gate">${flight.gate}</span>
+            </div>
+          </td>`;
+      } else {
+        cells += `<td class="drop-target"
+                      ondragover="onCellDragOver(event)"
+                      ondrop="onCellDrop(event, ${agent.id}, '${slot.label}')"
+                      onclick="onCellClick(${agent.id}, '${slot.label}')"></td>`;
+      }
+    });
+
+    rows += `
+      <tr data-agent-id="${agent.id}">
+        <td>
+          <div class="td-agent">
+            <div class="td-agent-avatar" style="background:${color}">${initials}</div>
+            <div class="td-agent-info">
+              <div class="td-agent-name">${escapeHtml(agent.name)}</div>
+              <div class="td-agent-shift">${shiftInfo} · ${agent.code}</div>
+            </div>
+          </div>
+        </td>
+        ${cells}
+      </tr>`;
+  });
+
+  // Fila de vuelos sin asignar
+  const unassignedFlights = dateFlights.filter(f => !assignments[f.id]);
+  if (unassignedFlights.length > 0) {
+    let unassignedCells = '';
+    slots.forEach(slot => {
+      const flight = unassignedFlights.find(f => {
+        const [fh, fm] = String(f.time || '').split(':').map(Number);
+        const mins = (fh || 0) * 60 + (fm || 0);
+        return mins >= slot.hour * 60 + slot.minute && mins < slot.hour * 60 + slot.minute + 30;
+      });
+      if (flight) {
+        unassignedCells += `
+          <td class="has-flight">
+            <div class="cell-flight" onclick="openAssignModal(${flight.id})"
+                 style="border-color:var(--danger)40; background:var(--danger)15; border: 1px dashed var(--danger);">
+              <span class="cell-flight-code" style="color:var(--danger)">${flight.number}</span>
+              <span class="cell-flight-gate">⚠ Sin asignar</span>
+            </div>
+          </td>`;
+      } else {
+        unassignedCells += `<td></td>`;
+      }
+    });
+    rows += `
+      <tr class="unassigned-row">
+        <td>
+          <div class="td-agent">
+            <div class="td-agent-avatar" style="background:var(--danger)">!</div>
+            <div class="td-agent-info">
+              <div class="td-agent-name" style="color:var(--danger)">Sin asignar</div>
+              <div class="td-agent-shift">${unassignedFlights.length} embarque(s)</div>
+            </div>
+          </div>
+        </td>
+        ${unassignedCells}
+      </tr>`;
+  }
+
+  tbody.innerHTML = rows;
+  scrollToFirstFlight(dateFlights, slots);
 }
 
 function scrollToFirstFlight(flights, slots) {
@@ -1957,6 +2186,10 @@ async function validateUploadedData() {
   const date = agentsDateISO;
   state.assignments[date] = {};
 
+  // Pop-up de carga con progreso estimado y botón Cancelar (v7.0)
+  const genController = new AbortController();
+  abrirGenerandoPop(genController);
+
   const generateButton = document.getElementById('generateBoardButton');
   const originalButtonHtml = generateButton ? generateButton.innerHTML : '';
   if (generateButton) {
@@ -1996,7 +2229,8 @@ async function validateUploadedData() {
         modo: savedOptModo,
         reglas: JSON.parse(localStorage.getItem('aeroshift_reglas') || 'null'),
         asignaciones_forzadas: forzadas
-      })
+      }),
+      signal: genController.signal
     });
     const result = await response.json();
     if (!response.ok || !result.success) {
@@ -2023,6 +2257,7 @@ async function validateUploadedData() {
     renderAll();
     renderDetectedFlights();
     switchView('parrilla');
+    finalizarGenerandoPop('ok');
 
     const unassigned = Array.isArray(result.unassigned_flights)
       ? result.unassigned_flights.length
@@ -2034,7 +2269,11 @@ async function validateUploadedData() {
       `Carga máxima: ${result.max_workload ?? 0} embarques por agente.`
     );
   } catch (error) {
-    alert(`No se pudo generar la parrilla:\n\n${error.message}`);
+    const generacionCancelada = !!(genPopEstado && genPopEstado.cancelada);
+    finalizarGenerandoPop(generacionCancelada ? 'cancelado' : 'error');
+    if (!generacionCancelada) {
+      alert(`No se pudo generar la parrilla:\n\n${error.message}`);
+    }
   } finally {
     if (generateButton) {
       generateButton.disabled = false;
