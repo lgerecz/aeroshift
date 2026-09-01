@@ -1685,6 +1685,9 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   color: #e8eaf0;
   white-space: nowrap;
 }
+.schedule-table.parrilla-vertical .pv-vuelo-ext {
+  color: #ef4444;
+}
 .schedule-table.parrilla-vertical .pv-dest {
   width: 74px;
   font-weight: 700;

@@ -955,11 +955,12 @@ function renderScheduleVertical() {
   thead.innerHTML = `
     <tr>
       <th class="pv-num">#</th>
-      <th class="pv-vuelo">VUELO</th>
       <th class="pv-dest">DESTINO</th>
-      <th class="pv-hora">STD</th>
+      <th class="pv-vuelo">VUELO</th>
+      <th class="pv-hora">APERTURA</th>
       <th class="pv-agentes">AGENTES DEL EMBARQUE</th>
-      <th class="pv-hora">EMBARQUE</th>
+      <th class="pv-hora">CIERRE</th>
+      <th class="pv-hora">STD</th>
       <th class="pv-pax">PAX</th>
     </tr>`;
 
@@ -976,7 +977,8 @@ function renderScheduleVertical() {
     return;
   }
 
-  const [embIni, embFin] = ventanaEmbarque();
+  const [cierreMin] = ventanaEmbarque(); // cierre de embarque guardado (defecto STD−40)
+  const APERTURA_MIN = 180;              // apertura de mostrador: STD−3 h (como el cuadrante impreso)
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
@@ -986,14 +988,17 @@ function renderScheduleVertical() {
     const agentes = nombres.length > 0
       ? nombres.map(n => `<span class="pv-chip" title="Agente asignado al embarque">${escapeHtml(n)}</span>`).join('')
       : '<span class="pv-sin">⚠ Sin asignar</span>';
+    const prefijo = (String(f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
+    const esFR = prefijo === 'FR';
     return `
       <tr class="pv-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
         <td class="pv-num">${idx + 1}</td>
-        <td class="pv-vuelo">${escapeHtml(f.number || '')}</td>
         <td class="pv-dest">${escapeHtml(f.destination || '')}</td>
-        <td class="pv-hora">${escapeHtml(f.time || '')}</td>
+        <td class="pv-vuelo${esFR ? '' : ' pv-vuelo-ext'}" title="${esFR ? 'Ryanair' : 'Compañía ' + prefijo}">${escapeHtml(f.number || '')}</td>
+        <td class="pv-hora">${m2t(std - APERTURA_MIN)}</td>
         <td class="pv-agentes">${agentes}</td>
-        <td class="pv-hora">${m2t(std - embIni)}–${m2t(std - embFin)}</td>
+        <td class="pv-hora">${m2t(std - cierreMin)}</td>
+        <td class="pv-hora">${escapeHtml(f.time || '')}</td>
         <td class="pv-pax">${f.pax === null || f.pax === undefined || f.pax === '' ? '—' : Number(f.pax)}</td>
       </tr>`;
   }).join('');
