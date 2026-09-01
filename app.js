@@ -833,18 +833,14 @@ function renderAgents() {
   container.innerHTML = visibles.map((agent, i) => {
     const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
     const initials = agent.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-    const shiftDots = agent.shifts.map(s => 
-      `<span class="agent-shift-badge dot-${s}"></span>`
-    ).join('');
 
     return `
       <div class="agent-card" data-agent-id="${agent.id}">
         <div class="agent-avatar" style="background:${color}">${initials}</div>
         <div class="agent-info">
           <div class="agent-name">${escapeHtml(agent.name)}</div>
-          <div class="agent-code">${escapeHtml(agent.code)}${agent.airline ? ' · ' + agent.airline : ''}</div>
+          <div class="agent-code">🕐 ${escapeHtml(agent.hours || 'Sin horario')}</div>
         </div>
-        <div class="agent-shifts">${shiftDots}</div>
         <div class="agent-actions">
           <button class="agent-action-btn" onclick="editAgent(${agent.id})" title="Editar">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1066,7 +1062,8 @@ function renderScheduleHorizontal() {
 
   thead.innerHTML = `
     <tr>
-      <th rowspan="2" style="text-align:left;">Agentes</th>
+      <th rowspan="2" class="gh-num">#</th>
+      <th rowspan="2" style="text-align:center;">Agentes</th>
       ${horas.map(h => `<th colSpan="12" class="hour-mark">${String(h).padStart(2, '0')}:00</th>`).join('')}
     </tr>
     <tr>
@@ -1077,9 +1074,11 @@ function renderScheduleHorizontal() {
   const colorPorNombre = (nombre) => {
     const clave = norm(nombre);
     const idx = state.agents.findIndex(a => norm(a.name) === clave);
+    const ag = idx >= 0 ? state.agents[idx] : null;
     return {
       color: AVATAR_COLORS[(idx >= 0 ? idx : 0) % AVATAR_COLORS.length],
-      inicial: (String(nombre || '').trim()[0] || '?').toUpperCase()
+      inicial: (String(nombre || '').trim()[0] || '?').toUpperCase(),
+      horario: ag ? (ag.hours || '') : ''
     };
   };
 
@@ -1087,11 +1086,11 @@ function renderScheduleHorizontal() {
     const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean);
     const iniciales = nombres.map(colorPorNombre);
     const avatarIzq = iniciales.length > 0
-      ? `<div class="gh-avatar" style="background:${iniciales[0].color}" title="${escapeHtml(nombres[0])}">${iniciales[0].inicial}</div>` : '';
+      ? `<div class="gh-avatar" style="background:${iniciales[0].color}" title="${escapeHtml(nombres[0])}${iniciales[0].horario ? ' · ' + escapeHtml(iniciales[0].horario) : ''}">${iniciales[0].inicial}</div>` : '';
     const avatarDer = iniciales.length > 1
-      ? `<div class="gh-avatar" style="background:${iniciales[1].color}" title="${escapeHtml(nombres[1])}">${iniciales[1].inicial}</div>` : '';
+      ? `<div class="gh-avatar" style="background:${iniciales[1].color}" title="${escapeHtml(nombres[1])}${iniciales[1].horario ? ' · ' + escapeHtml(iniciales[1].horario) : ''}">${iniciales[1].inicial}</div>` : '';
     const bloqueNombres = nombres.length > 0
-      ? `<div class="gh-nombres">${nombres.map(n => `<div class="gh-nombre" title="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('')}</div>`
+      ? `<div class="gh-nombres">${nombres.map(n => `<div class="gh-nombre">${escapeHtml(n)}</div>`).join('')}</div>`
       : '<div class="gh-nombres"><div class="pv-sin">⚠ Sin asignar</div></div>';
     const airline = (d.f.airline || String(d.f.number || '').replace(/[^A-Za-z]/g, '').slice(0, 2)).toUpperCase();
     const colorVuelo = AIRLINE_COLORS[airline] || AIRLINE_COLORS.OTHER;
@@ -1101,6 +1100,7 @@ function renderScheduleHorizontal() {
       : `<td class="gh-vacia"></td>`).join('');
     return `
       <tr class="gh-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
+        <td class="gh-num">${datos.indexOf(d) + 1}</td>
         <td class="gh-agentes">
           <div class="gh-fila-ag">${avatarIzq}${bloqueNombres}${avatarDer}</div>
         </td>
@@ -1248,30 +1248,34 @@ function resetAgentForm() {
 function saveAgent() {
   const id = document.getElementById('agentId').value;
   const name = document.getElementById('agentName').value.trim();
-  const code = document.getElementById('agentCode').value.trim();
-  const shifts = [];
-  if (document.getElementById('agentMorning').checked) shifts.push('morning');
-  if (document.getElementById('agentAfternoon').checked) shifts.push('afternoon');
-  if (document.getElementById('agentNight').checked) shifts.push('night');
-  const airline = document.getElementById('agentAirline').value;
+  const inicio = document.getElementById('agentInicio').value;
+  const fin = document.getElementById('agentFin').value;
+  const espec = [];
+  if (document.getElementById('agentDepOPS').checked) espec.push('OPS');
+  if (document.getElementById('agentDepTKT').checked) espec.push('TKT');
+  if (document.getElementById('agentDepLL').checked) espec.push('LL');
+  const airline = document.getElementById('agentAirline').value || 'FR';
+  const hours = inicio && fin ? `${inicio}-${fin}` : '';
 
   if (!name) { alert('El nombre es obligatorio'); return; }
-  if (!code) { alert('El código es obligatorio'); return; }
-  if (shifts.length === 0) { alert('Selecciona al menos un turno'); return; }
+  if (!hours) { alert('Indica el horario laboral (inicio y fin).'); return; }
 
   if (id) {
     // Edit
     const agent = state.agents.find(a => a.id === parseInt(id));
     if (agent) {
       agent.name = name;
-      agent.code = code;
-      agent.shifts = shifts;
+      agent.hours = hours;
+      agent.espec = espec;
       agent.airline = airline;
+      agent.role = agent.role || 'CSA';
+      agent.canonical_role = agent.canonical_role || 'CSA';
+      if (!agent.code) agent.code = 'AG-' + String(agent.id).padStart(3, '0');
     }
   } else {
     // Create
     const maxId = state.agents.reduce((max, a) => Math.max(max, a.id), 0);
-    state.agents.push({ id: maxId + 1, name, code, shifts, airline });
+    state.agents.push({ id: maxId + 1, name, code: 'AG-' + String(maxId + 1).padStart(3, '0'), hours, shifts: [], espec, airline, role: 'CSA', canonical_role: 'CSA' });
   }
 
   saveData();
@@ -1285,11 +1289,14 @@ function editAgent(id) {
 
   document.getElementById('agentId').value = agent.id;
   document.getElementById('agentName').value = agent.name;
-  document.getElementById('agentCode').value = agent.code;
-  document.getElementById('agentMorning').checked = agent.shifts.includes('morning');
-  document.getElementById('agentAfternoon').checked = agent.shifts.includes('afternoon');
-  document.getElementById('agentNight').checked = agent.shifts.includes('night');
-  document.getElementById('agentAirline').value = agent.airline || '';
+  const bloque1 = String(agent.hours || '').split('/')[0].split('-');
+  document.getElementById('agentInicio').value = (bloque1[0] || '').trim();
+  document.getElementById('agentFin').value = (bloque1[1] || '').trim();
+  const especAg = Array.isArray(agent.espec) ? agent.espec.map(x => String(x).toUpperCase()) : [];
+  document.getElementById('agentDepOPS').checked = especAg.includes('OPS');
+  document.getElementById('agentDepTKT').checked = especAg.includes('TKT');
+  document.getElementById('agentDepLL').checked = especAg.includes('LL');
+  document.getElementById('agentAirline').value = 'FR';
   document.getElementById('agentModalTitle').textContent = 'Editar Agente';
   
   openModal('agentModal');

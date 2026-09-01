@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=75">
+  <link rel="stylesheet" href="style.css?v=76">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -442,8 +442,8 @@
         </button>
         <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
           <span style="font-size:11px; color:#6b7280; letter-spacing:.5px;">VISTA</span>
-          <button class="shift-tab active" id="btnVistaVertical" onclick="cambiarVistaParrilla('vertical')">▦ Vertical</button>
-          <button class="shift-tab" id="btnVistaHorizontal" onclick="cambiarVistaParrilla('horizontal')">▤ Horizontal</button>
+          <button class="btn-vista active" id="btnVistaVertical" onclick="cambiarVistaParrilla('vertical')">▦ Vertical</button>
+          <button class="btn-vista" id="btnVistaHorizontal" onclick="cambiarVistaParrilla('horizontal')">▤ Horizontal</button>
         </span>
         <button class="btn btn-primary" onclick="abrirInforme()" style="margin-left:10px; padding:7px 14px; font-size:12px; font-weight:700;">📋 Informe</button>
       </div>
@@ -546,39 +546,35 @@
           <input type="text" id="agentName" placeholder="Ej: Juan García López">
         </div>
         <div class="form-group">
-          <label for="agentCode">Código / ID</label>
-          <input type="text" id="agentCode" placeholder="Ej: AG-001">
+          <label for="agentInicio">Horario laboral</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            🕐 <input type="time" id="agentInicio" style="flex:1;">
+            <span style="color:#6b7280;">a</span>
+            🕐 <input type="time" id="agentFin" style="flex:1;">
+          </div>
+          <small style="display:block; margin-top:4px; color:#6b7280; font-size:11px;">Para turno partido (08:00-14:00/16:00-22:00), edítalo en el cuadrante de turnos.</small>
         </div>
         <div class="form-group">
-          <label>Turnos asignados</label>
+          <label>Departamentos</label>
           <div class="checkbox-group">
             <label class="checkbox-label">
-              <input type="checkbox" id="agentMorning" checked>
-              <span class="dot dot-morning"></span> Mañana
+              <input type="checkbox" id="agentDepOPS">
+              OPS
             </label>
             <label class="checkbox-label">
-              <input type="checkbox" id="agentAfternoon">
-              <span class="dot dot-afternoon"></span> Tarde
+              <input type="checkbox" id="agentDepTKT">
+              TKT
             </label>
             <label class="checkbox-label">
-              <input type="checkbox" id="agentNight">
-              <span class="dot dot-night"></span> Noche
+              <input type="checkbox" id="agentDepLL">
+              LL
             </label>
           </div>
         </div>
         <div class="form-group">
           <label for="agentAirline">Aerolínea asignada</label>
           <select id="agentAirline">
-            <option value="">Todas</option>
-            <option value="IB">Iberia</option>
-            <option value="VY">Vueling</option>
-            <option value="UX">Air Europa</option>
-            <option value="FR">Ryanair</option>
-            <option value="EW">EasyJet</option>
-            <option value="LH">Lufthansa</option>
-            <option value="AF">Air France</option>
-            <option value="BA">British Airways</option>
-            <option value="TK">Turkish Airlines</option>
+            <option value="FR" selected>Ryanair</option>
           </select>
         </div>
       </div>
@@ -893,6 +889,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=88"></script>
+  <script src="app.js?v=89"></script>
 </body>
 </html>

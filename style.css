@@ -1851,13 +1851,13 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .schedule-table td.gh-vacia,
 .schedule-table td.gh-celda {
   height: 48px;
-  background: #1C1D38;
+  background: #1E2130;
   border-right: 1px solid rgba(45, 49, 72, 0.45);
   padding: 0;
   transition: background 0.12s;
 }
 .schedule-table td.gh-vacia:hover,
-.schedule-table td.gh-celda:hover { background: #262947; }
+.schedule-table td.gh-celda:hover { background: #1c1d38; }
 .schedule-table td.gh-celda { position: relative; }
 /* Tarjeta del vuelo: desborda sobre los cortes vecinos (2 mm no se tocan) */
 .schedule-table .gh-flight-card {
@@ -1917,6 +1917,9 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 1px;
   min-width: 0;
 }
@@ -1929,5 +1932,40 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   text-overflow: ellipsis;
 }
 .schedule-table tr.gh-row td {
-  border-bottom: 1px solid rgba(45, 49, 72, 0.35);
+  border-bottom: 1px solid #2d3148;
+}
+.schedule-table td.gh-num {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: #121212;
+  width: 38px;
+  min-width: 38px;
+  text-align: right;
+  padding-right: 10px;
+  color: #6b7280;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #2d3148;
+}
+
+
+/* Botones del conmutador de vista (v7.5) */
+.btn-vista {
+  border: 1px solid #3a3f54;
+  background: transparent;
+  color: #9ca3b4;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.btn-vista:hover { border-color: #378add; color: #e8eaf0; }
+.btn-vista.active {
+  background: #378add;
+  border-color: #378add;
+  color: #ffffff;
 }
