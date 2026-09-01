@@ -1026,136 +1026,66 @@ function ventanaEmbarque() {
 // vuelos colocados en su franja. Solo agentes de EMBARQUE (los de oficina
 // no embarcan y no figuran).
 function renderScheduleHorizontal() {
-  const date = document.getElementById('currentDate').value;
-  const assignments = state.assignments[date] || {};
+  // Gantt POR VUELO (v7.3): una fila por vuelo ordenada por hora de salida
+  // (igual que la vertical), con los agentes asignados en la primera columna
+  // y el embarque colocado en su corte de 5 minutos. Solo se dibujan las
+  // horas con embarques (las vacías, fuera). En la celda: el DESTINO.
+  const [cierreMin] = ventanaEmbarque(); // hora de embarque = STD − cierre (defecto 40)
+  const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-  let agents = getAgentsForShift(currentShiftFilter).filter(esAgenteDeEmbarque);
-
-  // Franjas de 30 minutos para las 24 h
-  const slots = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      slots.push({ hour: h, minute: m, label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, isHour: m === 0 });
-    }
+  let vuelos = getFlightsForDate();
+  if (currentShiftFilter !== 'all') {
+    vuelos = vuelos.filter(f => vueloEnTurno(f.time, currentShiftFilter));
   }
-
-  const dateFlights = getFlightsForDate();
+  const datos = vuelos
+    .map(f => {
+      let emb = t2m(f.time) - cierreMin;
+      if (emb < 0) emb += 1440; // salidas pasadas medianoche: embarque el día anterior
+      return { f, std: t2m(f.time), emb };
+    })
+    .sort((a, b) => a.std - b.std); // orden estable: empates = orden de la parrilla
 
   const thead = document.getElementById('scheduleHead');
-  thead.innerHTML = `
-    <tr>
-      <th>Agente</th>
-      ${slots.map(slot => `
-        <th class="${slot.isHour ? 'hour-mark' : ''}" title="${slot.label}">
-          ${slot.isHour ? slot.label : '·'}
-        </th>
-      `).join('')}
-    </tr>`;
-
   const tbody = document.getElementById('scheduleBody');
 
-  if (agents.length === 0 && dateFlights.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="${slots.length + 1}" style="text-align:center; padding:60px; color:var(--text-muted)">
-          Añade agentes y embarques para ver la parrilla
-        </td>
-      </tr>`;
+  if (datos.length === 0) {
+    thead.innerHTML = '<tr><th>Agentes</th></tr>';
+    tbody.innerHTML = `<tr><td style="text-align:center; padding:60px; color:var(--text-muted)">Sin vuelos para este día o turno</td></tr>`;
     return;
   }
 
-  let rows = '';
+  // Solo las horas que tienen al menos un embarque
+  const horas = [...new Set(datos.map(d => Math.floor(d.emb / 60)))].sort((a, b) => a - b);
+  const slots = [];
+  horas.forEach(h => { for (let m = 0; m < 60; m += 5) slots.push({ h, m, mins: h * 60 + m }); });
 
-  agents.forEach(agent => {
-    const color = AVATAR_COLORS[state.agents.indexOf(agent) % AVATAR_COLORS.length];
-    const initials = agent.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-    const agentFlights = getAgentFlightsForDate(agent.id, date);
-    const shiftInfo = agent.shifts.map(s => SHIFTS[s].label).join('/');
+  thead.innerHTML = `
+    <tr>
+      <th rowspan="2" style="text-align:left;">Agentes</th>
+      ${horas.map(h => `<th colSpan="12" class="hour-mark">${String(h).padStart(2, '0')}:00</th>`).join('')}
+    </tr>
+    <tr>
+      ${slots.map(s => `<th class="gh-min${s.m === 0 ? ' gh-min-hora' : ''}" title="${m2t(s.mins)}">${String(s.m).padStart(2, '0')}</th>`).join('')}
+    </tr>`;
 
-    let cells = '';
-    slots.forEach(slot => {
-      const flight = agentFlights.find(f => {
-        const [fh, fm] = String(f.time || '').split(':').map(Number);
-        const mins = (fh || 0) * 60 + (fm || 0);
-        // El vuelo pinta en la franja de 30 min que lo contiene
-        // (antes solo aparecía si caía en :00/:30 exactos y casi nada se veía).
-        return mins >= slot.hour * 60 + slot.minute && mins < slot.hour * 60 + slot.minute + 30;
-      });
-
-      if (flight) {
-        const airlineColor = AIRLINE_COLORS[flight.airline] || AIRLINE_COLORS.OTHER;
-        cells += `
-          <td class="has-flight">
-            <div class="cell-flight" onclick="openAssignModal(${flight.id})"
-                 style="border-color:${airlineColor}40; background:${airlineColor}15"
-                 title="${flight.number} — ${flight.gate} — ${flight.destination}">
-              <span class="cell-flight-code" style="color:${airlineColor}">${flight.number}</span>
-              <span class="cell-flight-gate">${flight.gate}</span>
-            </div>
-          </td>`;
-      } else {
-        cells += `<td class="drop-target"
-                      ondragover="onCellDragOver(event)"
-                      ondrop="onCellDrop(event, ${agent.id}, '${slot.label}')"
-                      onclick="onCellClick(${agent.id}, '${slot.label}')"></td>`;
+  tbody.innerHTML = datos.map(d => {
+    const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean);
+    const etiqueta = nombres.length > 0
+      ? nombres.map(n => `<span class="pv-chip gh-chip" title="Agente asignado al embarque">${escapeHtml(n)}</span>`).join('')
+      : '<span class="pv-sin">⚠ Sin asignar</span>';
+    const celdas = slots.map(s => {
+      if (s.mins === d.emb) {
+        return `<td class="has-flight gh-celda"><div class="cell-flight" title="${escapeHtml(d.f.number || '')} — ${escapeHtml(d.f.destination || '')} — STD ${m2t(d.std)}"><span class="gh-destino">${escapeHtml(d.f.destination || '')}</span><span class="gh-std">${m2t(d.std)}</span></div></td>`;
       }
-    });
-
-    rows += `
-      <tr data-agent-id="${agent.id}">
-        <td>
-          <div class="td-agent">
-            <div class="td-agent-avatar" style="background:${color}">${initials}</div>
-            <div class="td-agent-info">
-              <div class="td-agent-name">${escapeHtml(agent.name)}</div>
-              <div class="td-agent-shift">${shiftInfo} · ${agent.code}</div>
-            </div>
-          </div>
-        </td>
-        ${cells}
+      return `<td class="gh-vacia"></td>`;
+    }).join('');
+    return `
+      <tr class="gh-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
+        <td class="gh-agentes">${etiqueta}</td>
+        ${celdas}
       </tr>`;
-  });
-
-  // Fila de vuelos sin asignar
-  const unassignedFlights = dateFlights.filter(f => !assignments[f.id]);
-  if (unassignedFlights.length > 0) {
-    let unassignedCells = '';
-    slots.forEach(slot => {
-      const flight = unassignedFlights.find(f => {
-        const [fh, fm] = String(f.time || '').split(':').map(Number);
-        const mins = (fh || 0) * 60 + (fm || 0);
-        return mins >= slot.hour * 60 + slot.minute && mins < slot.hour * 60 + slot.minute + 30;
-      });
-      if (flight) {
-        unassignedCells += `
-          <td class="has-flight">
-            <div class="cell-flight" onclick="openAssignModal(${flight.id})"
-                 style="border-color:var(--danger)40; background:var(--danger)15; border: 1px dashed var(--danger);">
-              <span class="cell-flight-code" style="color:var(--danger)">${flight.number}</span>
-              <span class="cell-flight-gate">⚠ Sin asignar</span>
-            </div>
-          </td>`;
-      } else {
-        unassignedCells += `<td></td>`;
-      }
-    });
-    rows += `
-      <tr class="unassigned-row">
-        <td>
-          <div class="td-agent">
-            <div class="td-agent-avatar" style="background:var(--danger)">!</div>
-            <div class="td-agent-info">
-              <div class="td-agent-name" style="color:var(--danger)">Sin asignar</div>
-              <div class="td-agent-shift">${unassignedFlights.length} embarque(s)</div>
-            </div>
-          </div>
-        </td>
-        ${unassignedCells}
-      </tr>`;
-  }
-
-  tbody.innerHTML = rows;
-  scrollToFirstFlight(dateFlights, slots);
+  }).join('');
 }
 
 function scrollToFirstFlight(flights, slots) {

@@ -1394,7 +1394,7 @@ select option {
 #validationParametersModal .modal-header h3 { color: #ffffff; }
 
 #validationParametersModal .modal-footer {
-  padding: 0px 20px 20px 0px;
+  padding: 0px 24px 20px 0px;
 }
 
 #validationParametersModal .modal {
@@ -1826,4 +1826,59 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.4px;
+}
+
+
+/* ═══ Gantt por vuelo con cortes de 5 minutos (v7.3) ═══ */
+.schedule-table th.gh-min {
+  padding: 3px 0;
+  font-size: 8.5px;
+  min-width: 30px;
+  font-weight: 600;
+  color: #6b7280;
+  text-align: center;
+}
+.schedule-table th.gh-min-hora {
+  color: #e8eaf0;
+  font-weight: 800;
+  border-left: 1px solid var(--border-light);
+}
+.schedule-table td.gh-vacia {
+  height: 42px;
+  border-right: 1px solid rgba(45, 49, 72, 0.35);
+}
+.schedule-table td.gh-celda {
+  padding: 4px 3px;
+}
+.schedule-table .gh-celda .cell-flight {
+  min-width: 58px;
+}
+.schedule-table .gh-destino {
+  display: block;
+  font-weight: 800;
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+  color: #e8eaf0;
+}
+.schedule-table .gh-std {
+  display: block;
+  font-size: 9px;
+  color: #9ca3b4;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+.schedule-table td.gh-agentes {
+  min-width: 175px;
+  padding: 6px 10px;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: var(--bg-primary);
+}
+.schedule-table .gh-chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  margin: 1px 4px 1px 0;
+}
+.schedule-table tr.gh-row td {
+  border-bottom: 1px solid rgba(45, 49, 72, 0.35);
 }
