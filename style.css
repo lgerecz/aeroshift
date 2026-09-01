@@ -1829,55 +1829,104 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 }
 
 
-/* ═══ Gantt por vuelo con cortes de 5 minutos (v7.3) ═══ */
+/* ═══ Gantt por vuelo con cortes de 5 minutos (v7.4) ═══ */
+/* Cortes FIJOS de 2 mm (≈8 px): una hora ≈ 2,4 cm. No se estiran. */
+.schedule-table.gantt-fijo {
+  width: auto;
+  table-layout: auto;
+}
 .schedule-table th.gh-min {
+  width: 8px;
+  min-width: 8px;
+  max-width: 8px;
   padding: 3px 0;
-  font-size: 8.5px;
-  min-width: 30px;
+  font-size: 8px;
   font-weight: 600;
   color: #6b7280;
   text-align: center;
+  white-space: nowrap;
+  overflow: visible;
 }
-.schedule-table th.gh-min-hora {
-  color: #e8eaf0;
-  font-weight: 800;
-  border-left: 1px solid var(--border-light);
-}
-.schedule-table td.gh-vacia {
-  height: 42px;
-  border-right: 1px solid rgba(45, 49, 72, 0.35);
-}
+.schedule-table th.gh-min-hora { color: #e8eaf0; font-weight: 800; }
+.schedule-table td.gh-vacia,
 .schedule-table td.gh-celda {
-  padding: 4px 3px;
+  height: 48px;
+  background: #1C1D38;
+  border-right: 1px solid rgba(45, 49, 72, 0.45);
+  padding: 0;
+  transition: background 0.12s;
 }
-.schedule-table .gh-celda .cell-flight {
-  min-width: 58px;
+.schedule-table td.gh-vacia:hover,
+.schedule-table td.gh-celda:hover { background: #262947; }
+.schedule-table td.gh-celda { position: relative; }
+/* Tarjeta del vuelo: desborda sobre los cortes vecinos (2 mm no se tocan) */
+.schedule-table .gh-flight-card {
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 96px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid;
+  text-align: center;
+  z-index: 4;
+  cursor: default;
+  line-height: 1.15;
 }
 .schedule-table .gh-destino {
   display: block;
   font-weight: 800;
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.5px;
-  color: #e8eaf0;
+  white-space: nowrap;
 }
-.schedule-table .gh-std {
+.schedule-table .gh-emb {
   display: block;
-  font-size: 9px;
-  color: #9ca3b4;
+  font-size: 8.5px;
   font-family: 'Consolas', 'Courier New', monospace;
+  opacity: 0.92;
 }
+/* Primera columna: fondo negro, iniciales con color a los costados */
 .schedule-table td.gh-agentes {
-  min-width: 175px;
-  padding: 6px 10px;
+  min-width: 210px;
+  padding: 5px 10px;
   position: sticky;
   left: 0;
   z-index: 5;
-  background: var(--bg-primary);
+  background: #121212;
 }
-.schedule-table .gh-chip {
-  font-size: 10.5px;
-  padding: 2px 8px;
-  margin: 1px 4px 1px 0;
+.schedule-table .gh-fila-ag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.schedule-table .gh-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.schedule-table .gh-nombres {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.schedule-table .gh-nombre {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e8eaf0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .schedule-table tr.gh-row td {
   border-bottom: 1px solid rgba(45, 49, 72, 0.35);

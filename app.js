@@ -923,6 +923,8 @@ function renderFlights() {
 let vistaParrilla = localStorage.getItem('aeroshift_vista_parrilla') === 'horizontal' ? 'horizontal' : 'vertical';
 
 function renderSchedule() {
+  const tabla = document.getElementById('scheduleTable');
+  if (tabla) tabla.classList.toggle('gantt-fijo', vistaParrilla === 'horizontal');
   if (vistaParrilla === 'horizontal') renderScheduleHorizontal();
   else renderScheduleVertical();
 }
@@ -1026,13 +1028,15 @@ function ventanaEmbarque() {
 // vuelos colocados en su franja. Solo agentes de EMBARQUE (los de oficina
 // no embarcan y no figuran).
 function renderScheduleHorizontal() {
-  // Gantt POR VUELO (v7.3): una fila por vuelo ordenada por hora de salida
-  // (igual que la vertical), con los agentes asignados en la primera columna
-  // y el embarque colocado en su corte de 5 minutos. Solo se dibujan las
-  // horas con embarques (las vacías, fuera). En la celda: el DESTINO.
+  // Gantt POR VUELO (v7.4): filas = vuelos por hora de salida; primera
+  // columna con las iniciales de color de los agentes asignados a los
+  // costados y los nombres apilados en el centro; cortes FIJOS de 5 min
+  // (2 mm); la tarjeta del vuelo (DESTINO + hora de embarque) desborda
+  // sobre los cortes vecinos; tooltip: DESTINO — VUELO — STD.
   const [cierreMin] = ventanaEmbarque(); // hora de embarque = STD − cierre (defecto 40)
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
 
   let vuelos = getFlightsForDate();
   if (currentShiftFilter !== 'all') {
@@ -1069,20 +1073,37 @@ function renderScheduleHorizontal() {
       ${slots.map(s => `<th class="gh-min${s.m === 0 ? ' gh-min-hora' : ''}" title="${m2t(s.mins)}">${String(s.m).padStart(2, '0')}</th>`).join('')}
     </tr>`;
 
+  // Color de avatar por agente (como el panel lateral), buscándolo por nombre
+  const colorPorNombre = (nombre) => {
+    const clave = norm(nombre);
+    const idx = state.agents.findIndex(a => norm(a.name) === clave);
+    return {
+      color: AVATAR_COLORS[(idx >= 0 ? idx : 0) % AVATAR_COLORS.length],
+      inicial: (String(nombre || '').trim()[0] || '?').toUpperCase()
+    };
+  };
+
   tbody.innerHTML = datos.map(d => {
     const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean);
-    const etiqueta = nombres.length > 0
-      ? nombres.map(n => `<span class="pv-chip gh-chip" title="Agente asignado al embarque">${escapeHtml(n)}</span>`).join('')
-      : '<span class="pv-sin">⚠ Sin asignar</span>';
-    const celdas = slots.map(s => {
-      if (s.mins === d.emb) {
-        return `<td class="has-flight gh-celda"><div class="cell-flight" title="${escapeHtml(d.f.number || '')} — ${escapeHtml(d.f.destination || '')} — STD ${m2t(d.std)}"><span class="gh-destino">${escapeHtml(d.f.destination || '')}</span><span class="gh-std">${m2t(d.std)}</span></div></td>`;
-      }
-      return `<td class="gh-vacia"></td>`;
-    }).join('');
+    const iniciales = nombres.map(colorPorNombre);
+    const avatarIzq = iniciales.length > 0
+      ? `<div class="gh-avatar" style="background:${iniciales[0].color}" title="${escapeHtml(nombres[0])}">${iniciales[0].inicial}</div>` : '';
+    const avatarDer = iniciales.length > 1
+      ? `<div class="gh-avatar" style="background:${iniciales[1].color}" title="${escapeHtml(nombres[1])}">${iniciales[1].inicial}</div>` : '';
+    const bloqueNombres = nombres.length > 0
+      ? `<div class="gh-nombres">${nombres.map(n => `<div class="gh-nombre" title="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('')}</div>`
+      : '<div class="gh-nombres"><div class="pv-sin">⚠ Sin asignar</div></div>';
+    const airline = (d.f.airline || String(d.f.number || '').replace(/[^A-Za-z]/g, '').slice(0, 2)).toUpperCase();
+    const colorVuelo = AIRLINE_COLORS[airline] || AIRLINE_COLORS.OTHER;
+    const tarjeta = `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(d.f.destination || '')} — ${escapeHtml(d.f.number || '')} — STD ${m2t(d.std)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
+    const celdas = slots.map(s => s.mins === d.emb
+      ? `<td class="gh-celda">${tarjeta}</td>`
+      : `<td class="gh-vacia"></td>`).join('');
     return `
       <tr class="gh-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
-        <td class="gh-agentes">${etiqueta}</td>
+        <td class="gh-agentes">
+          <div class="gh-fila-ag">${avatarIzq}${bloqueNombres}${avatarDer}</div>
+        </td>
         ${celdas}
       </tr>`;
   }).join('');
