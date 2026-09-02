@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=76">
+  <link rel="stylesheet" href="style.css?v=77">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -425,20 +425,8 @@
     <main class="main-content">
       <!-- SHIFT TABS -->
       <div class="shift-tabs">
-        <button class="shift-tab active" data-shift="all" onclick="filterShift('all', this)">
-          <span class="dot dot-all"></span> Todos
-        </button>
-        <button class="shift-tab" data-shift="morning" onclick="filterShift('morning', this)">
-          <span class="dot dot-morning"></span> Mañana <small>(06:00–14:00)</small>
-        </button>
-        <button class="shift-tab" data-shift="afternoon" onclick="filterShift('afternoon', this)">
-          <span class="dot dot-afternoon"></span> Tarde <small>(14:00–22:00)</small>
-        </button>
-        <button class="shift-tab" data-shift="night" onclick="filterShift('night', this)">
-          <span class="dot dot-night"></span> Noche <small>(22:00–06:00)</small>
-        </button>
         <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-          <span style="font-size:11px; color:#6b7280; letter-spacing:.5px;">VISTA</span>
+          <span style="font-size:11px; color:#9CA3B4; letter-spacing:.5px;">VISTA</span>
           <button class="btn-vista active" id="btnVistaVertical" onclick="cambiarVistaParrilla('vertical')">▦ Vertical</button>
           <button class="btn-vista" id="btnVistaHorizontal" onclick="cambiarVistaParrilla('horizontal')">▤ Horizontal</button>
         </span>
@@ -491,10 +479,7 @@
         <!-- Embarques se renderizan aquí -->
       </div>
       <div class="sidebar-footer">
-        <button class="btn btn-primary btn-block" onclick="openModal('flightModal')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nuevo Embarque
-        </button>
+        
       </div>
     </aside>
   </div>
@@ -886,6 +871,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=90"></script>
+  <script src="app.js?v=91"></script>
 </body>
 </html>

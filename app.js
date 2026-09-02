@@ -873,7 +873,12 @@ function renderFlights() {
     const assignedAgentId = assignments[flight.id];
     const agent = assignedAgentId ? state.agents.find(a => a.id === assignedAgentId) : null;
     const isAssigned = !!agent;
-    const airlineColor = AIRLINE_COLORS[flight.airline] || AIRLINE_COLORS.OTHER;
+    // Nomenclatura: FR conserva su color; cualquier otra compañía, ROJO.
+    const prefijo = (String(flight.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
+    const esFR = prefijo === 'FR';
+    const airlineColor = esFR ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444';
+    // TODOS los agentes del embarque (desde el cruce del motor)
+    const nombresAg = String(flight.agents || '').split(',').map(s => s.trim()).filter(Boolean);
 
     return `
       <div class="flight-card ${isAssigned ? 'assigned' : ''}" 
@@ -890,21 +895,21 @@ function renderFlights() {
           </button>
         </div>
         <div class="flight-card-header">
-          <span class="flight-number">${escapeHtml(flight.number)}</span>
+          <span class="flight-number">${escapeHtml(flight.destination)}</span>
           <span class="flight-time">${flight.time}</span>
         </div>
         <div class="flight-details">
-          <span class="flight-airline-badge" style="background:${airlineColor}">${flight.airline}</span>
+          <span class="flight-airline-badge" style="background:${airlineColor}">${escapeHtml(prefijo || flight.airline)}</span>
           <span class="flight-gate">🚪 ${escapeHtml(flight.gate)}</span>
-          <span class="flight-dest">${escapeHtml(flight.destination)}</span>
+          <span class="flight-dest${esFR ? '' : ' ext'}" ${esFR ? '' : 'style="color:#ef4444;"'}>${escapeHtml(flight.number)}</span>
           <span class="flight-type-badge ${flight.type}">${flight.type === 'departure' ? 'SAL' : 'LLE'}</span>
         </div>
-        ${isAssigned ? `
+        ${(nombresAg.length > 0 ? nombresAg : (isAssigned ? [agent.name] : [])).map(n => `
           <div class="flight-assigned-agent">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            ${escapeHtml(agent.name)}
+            ${escapeHtml(n)}
           </div>
-        ` : ''}
+        `).join('')}
       </div>`;
   }).join('');
 }
@@ -1058,7 +1063,7 @@ function renderScheduleHorizontal() {
   thead.innerHTML = `
     <tr>
       <th rowspan="2" class="gh-num">#</th>
-      <th rowspan="2" style="text-align:center;">Agentes</th>
+      <th rowspan="2" class="gh-agentes-th" style="text-align:center;">Agentes</th>
       ${horas.map(h => `<th colSpan="12" class="hour-mark">${String(h).padStart(2, '0')}:00</th>`).join('')}
     </tr>
     <tr>
@@ -1087,8 +1092,8 @@ function renderScheduleHorizontal() {
     const bloqueNombres = nombres.length > 0
       ? `<div class="gh-nombres">${nombres.map(n => `<div class="gh-nombre">${escapeHtml(n)}</div>`).join('')}</div>`
       : '<div class="gh-nombres"><div class="pv-sin">⚠ Sin asignar</div></div>';
-    const airline = (d.f.airline || String(d.f.number || '').replace(/[^A-Za-z]/g, '').slice(0, 2)).toUpperCase();
-    const colorVuelo = AIRLINE_COLORS[airline] || AIRLINE_COLORS.OTHER;
+    const airline = (String(d.f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
+    const colorVuelo = airline === 'FR' ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444'; // no-FR → rojo
     const tarjeta = `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(d.f.destination || '')} — ${escapeHtml(d.f.number || '')} — STD ${m2t(d.std)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
     const celdas = slots.map(s => s.mins === d.emb
       ? `<td class="gh-celda">${tarjeta}</td>`

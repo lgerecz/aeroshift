@@ -1675,7 +1675,7 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .schedule-table.parrilla-vertical .pv-num {
   width: 34px;
   text-align: right;
-  color: #6b7280;
+  color: #9CA3B4;
   font-family: 'Consolas', 'Courier New', monospace;
 }
 .schedule-table.parrilla-vertical .pv-vuelo {
@@ -1736,7 +1736,7 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .pv-vacio {
   text-align: center;
   padding: 48px 0;
-  color: #6b7280;
+  color: #9CA3B4;
 }
 .pv-vacio p { margin: 0 0 6px 0; font-weight: 700; color: #9ca3b4; }
 
@@ -1842,7 +1842,7 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   padding: 3px 0;
   font-size: 8px;
   font-weight: 600;
-  color: #6b7280;
+  color: #9CA3B4;
   text-align: center;
   white-space: nowrap;
   overflow: visible;
@@ -1943,7 +1943,7 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   min-width: 38px;
   text-align: right;
   padding-right: 10px;
-  color: #6b7280;
+  color: #9CA3B4;
   font-family: 'Consolas', 'Courier New', monospace;
   font-size: 12px;
   border-bottom: 1px solid #2d3148;
@@ -1952,9 +1952,9 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 
 /* Botones del conmutador de vista (v7.5) */
 .btn-vista {
-  border: 1px solid #3a3f54;
+  border: 1px solid #888888;
   background: transparent;
-  color: #9ca3b4;
+  color: #9CA3B4;
   padding: 7px 14px;
   border-radius: 8px;
   font-size: 12px;
@@ -1969,3 +1969,26 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   border-color: #378add;
   color: #ffffff;
 }
+
+
+/* Estandarización de color de textos (v7.7): #9CA3B4 */
+.sidebar-header h2 { color: #9CA3B4 !important; }
+.agent-code { color: #9CA3B4 !important; }
+.stat-label { color: #9CA3B4 !important; }
+.stat-value { color: #e8eaf0 !important; }
+/* Gantt: la columna de agentes acompaña a la numeración al desplazar */
+.schedule-table th.gh-num {
+  position: sticky;
+  left: 0;
+  z-index: 11;
+  background: #121212;
+}
+.schedule-table th.gh-agentes-th {
+  position: sticky;
+  left: 38px;
+  z-index: 11;
+  background: #121212;
+}
+.schedule-table td.gh-agentes { left: 38px; }
+/* Tarjetas del panel derecho: nomenclatura no-FR en rojo */
+.flight-number.ext { color: #ef4444; }
