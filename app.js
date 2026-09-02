@@ -841,16 +841,11 @@ function renderAgents() {
           <div class="agent-name">${escapeHtml(agent.name)}</div>
           <div class="agent-code">🕐 ${escapeHtml(agent.hours || 'Sin horario')}</div>
         </div>
-        <div class="agent-actions">
-          <button class="agent-action-btn" onclick="editAgent(${agent.id})" title="Editar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="agent-action-btn delete" onclick="deleteAgent(${agent.id})" title="Eliminar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-          </button>
-        </div>
       </div>`;
   }).join('');
+
+  // Nota: los datos vienen del cuadrante validado (solo lectura aquí).
+  container.innerHTML += `<div style="padding:10px 6px; font-size:10.5px; color:#6b7280; text-align:center;">Datos del cuadrante de turnos validado · solo lectura</div>`;
 }
 
 // ===== RENDER FLIGHTS =====
