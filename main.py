@@ -814,34 +814,47 @@ def optimize_schedule(req: OptimizeRequest):
             # SALIDA 1 — TURNOS DEL PERSONAL
             # ─────────────────────────────────────────────────────────────
             print("═"*72); print("TURNOS DEL PERSONAL"); print("═"*72)
+            # Los administrativos-operativos son roles reales de oficina
+            # (DSM/PSM/OPS/TKT/TKD/LL). Los SICK/sombra/curso NO son operativos:
+            # van al final como dato informativo (sección AUSENTES).
+            es_ausente = lambda a: no_cuenta_descanso(a['rol'])
+            def linea_persona(a):
+                b2 = f" / {a['bloque2']['inicio']}–{a['bloque2']['fin']}" if a['bloque2'] else ""
+                esp = f" [{'/'.join(a['espec'])}]" if a['espec'] and get_base_role(a['rol']) not in ROLES_OPERATIVOS else ""
+                nota = " ← COBERTURA" if a.get('excluir_embarque') else ""
+                print(f"  {a['nombre']:<15} {a['inicio']}–{a['fin']}{b2:<20} {a['rol']}{esp}{nota}")
             secciones = [
                 ("TURNO MAÑANA · Roles Administrativos - Operativos",
-                 [a for a in AGENTES if is_non_boarding_role(a['rol']) and a['_t_ini'] < SPLIT]),
+                 [a for a in AGENTES if is_non_boarding_role(a['rol']) and not es_ausente(a) and a['_t_ini'] < SPLIT]),
                 ("TURNO MAÑANA · Agentes de Pasaje",
                  [a for a in AGENTES if not is_non_boarding_role(a['rol']) and a['_t_ini'] < SPLIT and not a['excluir'] and not a.get('excluir_embarque')]),
-                ("TURNO MAÑANA · Solo cobertura de departamento",
+                ("TURNO MAÑANA · Cobertura de departamento",
                  [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and a['_t_ini'] < SPLIT]),
-                ("TURNO MAÑANA · Excluidos hoy",
-                 [a for a in AGENTES if a['excluir'] and a['_t_ini'] < SPLIT]),
                 ("TURNO TARDE · Roles Administrativos - Operativos",
-                 [a for a in AGENTES if is_non_boarding_role(a['rol']) and a['_t_ini'] >= SPLIT]),
+                 [a for a in AGENTES if is_non_boarding_role(a['rol']) and not es_ausente(a) and a['_t_ini'] >= SPLIT]),
                 ("TURNO TARDE · Agentes de Pasaje",
                  [a for a in AGENTES if not is_non_boarding_role(a['rol']) and a['_t_ini'] >= SPLIT and not a['excluir'] and not a.get('excluir_embarque')]),
-                ("TURNO TARDE · Solo cobertura de departamento",
+                ("TURNO TARDE · Cobertura de departamento",
                  [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and a['_t_ini'] >= SPLIT]),
-                ("TURNO TARDE · Excluidos hoy",
-                 [a for a in AGENTES if a['excluir'] and a['_t_ini'] >= SPLIT]),
             ]
             for titulo, grupo in secciones:
                 if not grupo: continue
                 print(f"\n── {titulo}")
                 for a in grupo:
-                    b2 = f" / {a['bloque2']['inicio']}–{a['bloque2']['fin']}" if a['bloque2'] else ""
-                    esp = f" [{'/'.join(a['espec'])}]" if a['espec'] and get_base_role(a['rol']) not in ROLES_OPERATIVOS else ""
-                    nota = " ← SOLO COBERTURA" if a.get('excluir_embarque') else (" ← EXCLUIDO" if a['excluir'] else "")
-                    print(f"  {a['nombre']:<15} {a['inicio']}–{a['fin']}{b2:<20} {a['rol']}{esp}{nota}")
+                    linea_persona(a)
+            # ── INFORMATIVO AL FINAL: ausentes (SICK/sombra/curso) y excluidos ──
+            ausentes = [a for a in AGENTES if es_ausente(a)]
+            excluidos_hoy = [a for a in AGENTES if a['excluir']]
+            if ausentes:
+                print("\n── AUSENTES · NO EMBARCAN (INFORMATIVO)")
+                for a in ausentes:
+                    linea_persona(a)
+            if excluidos_hoy:
+                print("\n── EXCLUIDOS HOY (INFORMATIVO · MANTIENEN DESCANSOS)")
+                for a in excluidos_hoy:
+                    linea_persona(a)
             n_excluir_emb = sum(1 for a in AGENTES if a.get('excluir_embarque') and not a['excluir'])
-            print(f"\n  Total nómina: {len(AGENTES)} · CSA embarcan: {len(activos)} · Solo cobertura: {n_excluir_emb} · Ausentes: {sum(1 for a in AGENTES if a['excluir'])}")
+            print(f"\n  Total nómina: {len(AGENTES)} · CSA embarcan: {len(activos)} · Cobertura: {n_excluir_emb} · Ausentes: {len(ausentes)} · Excluidos: {len(excluidos_hoy)}")
             print(f"  Modo: {MODO}"); print("─"*72)
 
             # ─────────────────────────────────────────────────────────────

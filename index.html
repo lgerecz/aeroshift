@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroShift — Parrilla de Turnos Handling</title>
-  <link rel="stylesheet" href="style.css?v=77">
+  <link rel="stylesheet" href="style.css?v=78">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     .tooltip-container {
@@ -429,6 +429,9 @@
           <span style="font-size:11px; color:#9CA3B4; letter-spacing:.5px;">VISTA</span>
           <button class="btn-vista active" id="btnVistaVertical" onclick="cambiarVistaParrilla('vertical')">▦ Vertical</button>
           <button class="btn-vista" id="btnVistaHorizontal" onclick="cambiarVistaParrilla('horizontal')">▤ Horizontal</button>
+          <button class="btn-vista" onclick="exportarExcelVertical()" title="Descargar la parrilla vertical en Excel">⬇ Excel V</button>
+          <button class="btn-vista" onclick="exportarExcelHorizontal()" title="Descargar el Gantt en Excel">⬇ Excel H</button>
+          <button class="btn-vista" onclick="imprimirVertical()" title="Imprimir la parrilla vertical en A4">🖨 A4</button>
         </span>
         <button class="btn btn-primary" onclick="abrirInforme()" style="margin-left:10px; padding:7px 14px; font-size:12px; font-weight:700;">📋 Informe</button>
       </div>
@@ -871,6 +874,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=91"></script>
+  <script src="app.js?v=92"></script>
 </body>
 </html>

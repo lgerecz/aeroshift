@@ -804,6 +804,94 @@ function esAgenteDeEmbarque(agent) {
   return base !== '' && !ROLES_SIN_EMBARQUE_FRONT.includes(base);
 }
 
+// ── Exportaciones de la parrilla (v7.8) ──────────────────────────────────
+function descargarExcel(tablaHtml, nombre) {
+  const doc = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Parrilla</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>' + tablaHtml + '</body></html>';
+  const blob = new Blob(['\ufeff' + doc], { type: 'application/vnd.ms-excel' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function fechaParaArchivo() {
+  return (document.getElementById('currentDate')?.value || '').replace(/-/g, '') || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function construirTablaExcelVertical() {
+  const [cierreMin] = ventanaEmbarque();
+  const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const filas = getFlightsForDate()
+    .map(f => ({ f, std: t2m(f.time) }))
+    .sort((a, b) => a.std - b.std);
+  let cuerpo = '';
+  filas.forEach((d, i) => {
+    const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(', ');
+    const pax = (d.f.pax === null || d.f.pax === undefined || d.f.pax === '') ? '' : Number(d.f.pax);
+    cuerpo += `<tr><td>${i + 1}</td><td><b>${escapeHtml(d.f.destination || '')}</b></td><td><b>${escapeHtml(d.f.number || '')}</b></td><td>${m2t(d.std - 180)}</td><td>${escapeHtml(nombres)}</td><td>${m2t(d.std - cierreMin)}</td><td>${escapeHtml(d.f.time || '')}</td><td>${pax}</td></tr>`;
+  });
+  return `<table border="1"><thead><tr style="background:#1E2130;color:#FFFFFF;font-weight:bold;">
+    <th>#</th><th>DESTINO</th><th>VUELO</th><th>APERTURA</th><th>AGENTES DEL EMBARQUE</th><th>CIERRE</th><th>STD</th><th>PAX</th>
+  </tr></thead><tbody>${cuerpo}</tbody></table>`;
+}
+
+function exportarExcelVertical() {
+  descargarExcel(construirTablaExcelVertical(), `parrilla_vertical_${fechaParaArchivo()}.xls`);
+}
+
+function construirTablaExcelHorizontal() {
+  const [cierreMin] = ventanaEmbarque();
+  const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const datos = getFlightsForDate()
+    .map(f => {
+      let emb = t2m(f.time) - cierreMin;
+      if (emb < 0) emb += 1440;
+      return { f, std: t2m(f.time), emb };
+    })
+    .sort((a, b) => a.std - b.std);
+  const horas = [...new Set(datos.map(d => Math.floor(d.emb / 60)))].sort((a, b) => a - b);
+  const slots = [];
+  horas.forEach(h => { for (let m = 0; m < 60; m += 5) slots.push({ h, m, mins: h * 60 + m }); });
+  let cabecera = '<th>#</th><th>Agentes</th>';
+  slots.forEach(s => { cabecera += `<th>${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}</th>`; });
+  let cuerpo = '';
+  datos.forEach((d, i) => {
+    const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(', ');
+    let celdas = '';
+    slots.forEach(s => {
+      celdas += (s.mins === d.emb)
+        ? `<td style="background:#FFF3D6;font-weight:bold;">${escapeHtml(d.f.destination || '')}</td>`
+        : '<td></td>';
+    });
+    cuerpo += `<tr><td>${i + 1}</td><td>${escapeHtml(nombres)}</td>${celdas}</tr>`;
+  });
+  return `<table border="1"><thead><tr style="background:#1E2130;color:#FFFFFF;font-weight:bold;">${cabecera}</tr></thead><tbody>${cuerpo}</tbody></table>`;
+}
+
+function exportarExcelHorizontal() {
+  descargarExcel(construirTablaExcelHorizontal(), `parrilla_horizontal_${fechaParaArchivo()}.xls`);
+}
+
+// Imprimir la VERTICAL en A4: renderiza la vertical, imprime y restaura la vista
+function imprimirVertical() {
+  const vistaPrevia = vistaParrilla;
+  vistaParrilla = 'vertical';
+  renderSchedule();
+  document.body.classList.add('imprimir-vertical');
+  window.print();
+  setTimeout(() => {
+    document.body.classList.remove('imprimir-vertical');
+    vistaParrilla = vistaPrevia;
+    renderSchedule();
+  }, 400);
+}
+
 function renderAgents() {
   const container = document.getElementById('agentList');
   
@@ -869,6 +957,9 @@ function renderFlights() {
   // Sort by time
   const sorted = [...dateFlights].sort((a, b) => a.time.localeCompare(b.time));
 
+  const [cierreMin] = ventanaEmbarque(); // hora de embarque = STD − cierre
+  const t2mCard = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  const m2tCard = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   container.innerHTML = sorted.map(flight => {
     const assignedAgentId = assignments[flight.id];
     const agent = assignedAgentId ? state.agents.find(a => a.id === assignedAgentId) : null;
@@ -879,24 +970,13 @@ function renderFlights() {
     const airlineColor = esFR ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444';
     // TODOS los agentes del embarque (desde el cruce del motor)
     const nombresAg = String(flight.agents || '').split(',').map(s => s.trim()).filter(Boolean);
+    const horaEmbarque = m2tCard(t2mCard(flight.time) - cierreMin);
 
     return `
-      <div class="flight-card ${isAssigned ? 'assigned' : ''}" 
-           draggable="true"
-           ondragstart="onFlightDragStart(event, ${flight.id})"
-           ondragend="onFlightDragEnd(event)"
-           onclick="openAssignModal(${flight.id})">
-        <div class="flight-actions">
-          <button class="flight-action-btn" onclick="event.stopPropagation(); editFlight(${flight.id})" title="Editar">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="flight-action-btn delete" onclick="event.stopPropagation(); deleteFlight(${flight.id})" title="Eliminar">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-          </button>
-        </div>
+      <div class="flight-card ${isAssigned ? 'assigned' : ''}">
         <div class="flight-card-header">
           <span class="flight-number">${escapeHtml(flight.destination)}</span>
-          <span class="flight-time">${flight.time}</span>
+          <span class="flight-time" title="STD ${escapeHtml(flight.time || '')} · Embarque ${horaEmbarque}">${horaEmbarque}</span>
         </div>
         <div class="flight-details">
           <span class="flight-airline-badge" style="background:${airlineColor}">${escapeHtml(prefijo || flight.airline)}</span>
@@ -1062,8 +1142,7 @@ function renderScheduleHorizontal() {
 
   thead.innerHTML = `
     <tr>
-      <th rowspan="2" class="gh-num">#</th>
-      <th rowspan="2" class="gh-agentes-th" style="text-align:center;">Agentes</th>
+      <th rowspan="2" class="gh-agentes-th" style="text-align:center;">#&nbsp;&nbsp;Agentes</th>
       ${horas.map(h => `<th colSpan="12" class="hour-mark">${String(h).padStart(2, '0')}:00</th>`).join('')}
     </tr>
     <tr>
@@ -1100,8 +1179,7 @@ function renderScheduleHorizontal() {
       : `<td class="gh-vacia"></td>`).join('');
     return `
       <tr class="gh-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
-        <td class="gh-num">${datos.indexOf(d) + 1}</td>
-        <td class="gh-agentes">
+        <td class="gh-agentes"><span class="gh-num-linea">${datos.indexOf(d) + 1}</span>
           <div class="gh-fila-ag">${avatarIzq}${bloqueNombres}${avatarDer}</div>
         </td>
         ${celdas}
