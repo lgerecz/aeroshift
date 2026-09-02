@@ -804,92 +804,109 @@ function esAgenteDeEmbarque(agent) {
   return base !== '' && !ROLES_SIN_EMBARQUE_FRONT.includes(base);
 }
 
-// ── Exportaciones de la parrilla (v7.8) ──────────────────────────────────
-function descargarExcel(tablaHtml, nombre) {
-  const doc = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Parrilla</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>' + tablaHtml + '</body></html>';
-  const blob = new Blob(['\ufeff' + doc], { type: 'application/vnd.ms-excel' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nombre;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
+// ── Exportaciones de la parrilla (v7.9): .xlsx real vía backend ──────────
 function fechaParaArchivo() {
   return (document.getElementById('currentDate')?.value || '').replace(/-/g, '') || new Date().toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-function construirTablaExcelVertical() {
+const SEPARADOR_AGENTES = ' / ';
+const _agCell = f => String(f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(SEPARADOR_AGENTES);
+
+function filasParrillaVertical() {
   const [cierreMin] = ventanaEmbarque();
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  const filas = getFlightsForDate()
-    .map(f => ({ f, std: t2m(f.time) }))
-    .sort((a, b) => a.std - b.std);
-  let cuerpo = '';
-  filas.forEach((d, i) => {
-    const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(', ');
-    const pax = (d.f.pax === null || d.f.pax === undefined || d.f.pax === '') ? '' : Number(d.f.pax);
-    cuerpo += `<tr><td>${i + 1}</td><td><b>${escapeHtml(d.f.destination || '')}</b></td><td><b>${escapeHtml(d.f.number || '')}</b></td><td>${m2t(d.std - 180)}</td><td>${escapeHtml(nombres)}</td><td>${m2t(d.std - cierreMin)}</td><td>${escapeHtml(d.f.time || '')}</td><td>${pax}</td></tr>`;
-  });
-  return `<table border="1"><thead><tr style="background:#1E2130;color:#FFFFFF;font-weight:bold;">
-    <th>#</th><th>DESTINO</th><th>VUELO</th><th>APERTURA</th><th>AGENTES DEL EMBARQUE</th><th>CIERRE</th><th>STD</th><th>PAX</th>
-  </tr></thead><tbody>${cuerpo}</tbody></table>`;
+  const orden = getFlightsForDate().map(f => ({ f, std: t2m(f.time) })).sort((a, b) => a.std - b.std);
+  const filas = orden.map((d, i) => [
+    i + 1,
+    d.f.destination || '',
+    d.f.number || '',
+    m2t(d.std - 180),
+    _agCell(d.f),
+    m2t(d.std - cierreMin),
+    d.f.time || '',
+    (d.f.pax === null || d.f.pax === undefined || d.f.pax === '') ? '' : Number(d.f.pax)
+  ]);
+  return {
+    cabecera: ['#', 'DESTINO', 'VUELO', 'APERTURA', 'AGENTES DEL EMBARQUE', 'CIERRE', 'STD', 'PAX'],
+    filas, resaltados: [], anchos: [5, 10, 9, 10, 40, 9, 8, 7], congelar: 'A2'
+  };
 }
 
-function exportarExcelVertical() {
-  descargarExcel(construirTablaExcelVertical(), `parrilla_vertical_${fechaParaArchivo()}.xls`);
-}
-
-function construirTablaExcelHorizontal() {
+function filasParrillaHorizontal() {
   const [cierreMin] = ventanaEmbarque();
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
-  const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   const datos = getFlightsForDate()
-    .map(f => {
-      let emb = t2m(f.time) - cierreMin;
-      if (emb < 0) emb += 1440;
-      return { f, std: t2m(f.time), emb };
-    })
+    .map(f => { let emb = t2m(f.time) - cierreMin; if (emb < 0) emb += 1440; return { f, std: t2m(f.time), emb }; })
     .sort((a, b) => a.std - b.std);
   const horas = [...new Set(datos.map(d => Math.floor(d.emb / 60)))].sort((a, b) => a - b);
   const slots = [];
   horas.forEach(h => { for (let m = 0; m < 60; m += 5) slots.push({ h, m, mins: h * 60 + m }); });
-  let cabecera = '<th>#</th><th>Agentes</th>';
-  slots.forEach(s => { cabecera += `<th>${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}</th>`; });
-  let cuerpo = '';
-  datos.forEach((d, i) => {
-    const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(', ');
-    let celdas = '';
+  const cabecera = ['#', 'Agentes', ...slots.map(s => `${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}`)];
+  const resaltados = [];
+  const filas = datos.map((d, i) => {
+    const fila = [i + 1, _agCell(d.f)];
     slots.forEach(s => {
-      celdas += (s.mins === d.emb)
-        ? `<td style="background:#FFF3D6;font-weight:bold;">${escapeHtml(d.f.destination || '')}</td>`
-        : '<td></td>';
+      if (s.mins === d.emb) {
+        fila.push(d.f.destination || '');
+        resaltados.push([i + 2, fila.length]);
+      } else if (s.mins > d.emb && s.mins < d.std) {
+        fila.push('');
+        resaltados.push([i + 2, fila.length]);
+      } else {
+        fila.push('');
+      }
     });
-    cuerpo += `<tr><td>${i + 1}</td><td>${escapeHtml(nombres)}</td>${celdas}</tr>`;
+    return fila;
   });
-  return `<table border="1"><thead><tr style="background:#1E2130;color:#FFFFFF;font-weight:bold;">${cabecera}</tr></thead><tbody>${cuerpo}</tbody></table>`;
+  return {
+    cabecera, filas, resaltados,
+    anchos: [4, 30, ...slots.map(() => 4.5)], congelar: 'C2'
+  };
 }
 
-function exportarExcelHorizontal() {
-  descargarExcel(construirTablaExcelHorizontal(), `parrilla_horizontal_${fechaParaArchivo()}.xls`);
-}
-
-// Imprimir la VERTICAL en A4: renderiza la vertical, imprime y restaura la vista
-function imprimirVertical() {
-  const vistaPrevia = vistaParrilla;
-  vistaParrilla = 'vertical';
-  renderSchedule();
-  document.body.classList.add('imprimir-vertical');
-  window.print();
-  setTimeout(() => {
-    document.body.classList.remove('imprimir-vertical');
-    vistaParrilla = vistaPrevia;
-    renderSchedule();
-  }, 400);
+// Un solo botón ⇩: descarga la parrilla en .xlsx según la vista activa
+async function descargarParrilla() {
+  const vertical = vistaParrilla !== 'horizontal';
+  const datos = vertical ? filasParrillaVertical() : filasParrillaHorizontal();
+  if (!datos.filas.length) { alert('No hay vuelos en la parrilla para descargar.'); return; }
+  const backendInput = document.getElementById('backendUrl');
+  const backendUrl = backendInput ? backendInput.value.trim() : 'https://aeroshift-backend.onrender.com';
+  try {
+    const response = await fetch(`${backendUrl}/export-parrilla-xlsx`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vista: vertical ? 'vertical' : 'horizontal',
+        fecha: fechaParaArchivo(),
+        cabecera: datos.cabecera,
+        filas: datos.filas,
+        resaltados: datos.resaltados,
+        anchos: datos.anchos,
+        congelar: datos.congelar
+      })
+    });
+    if (!response.ok) {
+      let mensaje = 'No se pudo generar el archivo Excel.';
+      try { const err = await response.json(); mensaje = err.detail || mensaje; } catch (_) {}
+      throw new Error(mensaje);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const m = disposition.match(/filename="?([^";]+)"?/i);
+    const nombre = m ? m[1] : `parrilla_${vertical ? 'vertical' : 'horizontal'}_${fechaParaArchivo()}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (error) {
+    console.error('descargarParrilla:', error);
+    alert(error && error.message ? error.message : 'No se pudo generar el archivo Excel.');
+  }
 }
 
 function renderAgents() {
@@ -970,7 +987,9 @@ function renderFlights() {
     const airlineColor = esFR ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444';
     // TODOS los agentes del embarque (desde el cruce del motor)
     const nombresAg = String(flight.agents || '').split(',').map(s => s.trim()).filter(Boolean);
-    const horaEmbarque = m2tCard(t2mCard(flight.time) - cierreMin);
+    let _embCalc = t2mCard(flight.time) - cierreMin;
+    if (_embCalc < 0) _embCalc += 1440;
+    const horaEmbarque = m2tCard(_embCalc);
 
     return `
       <div class="flight-card ${isAssigned ? 'assigned' : ''}">

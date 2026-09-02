@@ -860,8 +860,8 @@ def optimize_schedule(req: OptimizeRequest):
             # ─────────────────────────────────────────────────────────────
             # SALIDA 2 — PARRILLA
             # ─────────────────────────────────────────────────────────────
-            print("\n"+"═"*72); print(f"PARRILLA DE EMBARQUES  [{MODO}]"); print("═"*72)
-            print(f"{'Nº':<4}{'DEST':<5}{'VUELO':<10}{'APERTU':<8}{'AGENTES':<30}{'EMB':<7}{'STD'}"); print("─"*72)
+            print("\n"+"═"*78); print(f"PARRILLA DE EMBARQUES  [{MODO}]"); print("═"*78)
+            print(f"{'Nº':<4}{'DEST':<5}{'VUELO':<10}{'APERTU':<8}{'AGENTES':<30}{'EMB':<7}{'STD':<6}{'PAX'}"); print("─"*78)
             for v in VUELOS_ORD:
                 ags = asign[vkey(v)]
                 noms = [a['nombre'] for a in ags]
@@ -875,7 +875,7 @@ def optimize_schedule(req: OptimizeRequest):
                     ag_s = f"{noms[0]} / {noms[1]}"
                 else:
                     ag_s = f"{noms[0]} / {noms[1]} / {noms[2]}"
-                print(f"{v['num']:<4}{v['destino']:<5}{v['codigo']+suf:<10}{m2t(v['std_min']-180):<8}{ag_s+warn:<30}{m2t(v['emb_inicio']):<7}{v['std']}")
+                print(f"{v['num']:<4}{v['destino']:<5}{v['codigo']+suf:<10}{m2t(v['std_min']-180):<8}{ag_s+warn:<30}{m2t(v['emb_inicio']):<7}{v['std']:<6}{v['pax'] if v['pax'] is not None else ''}")
 
             # ─────────────────────────────────────────────────────────────
             # SALIDA 3 — TOLERANCIAS
@@ -1487,6 +1487,81 @@ def export_extraction_xlsx(payload: Dict[str, Any] = Body(...)):
         raise
     except Exception as error:
         print(f"Error exportando Excel: {error}")
+        raise HTTPException(status_code=500, detail="No se pudo generar el archivo Excel.")
+
+
+@app.post("/export-parrilla-xlsx")
+def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
+    """Exporta la parrilla de embarques (vista vertical u horizontal) a un .xlsx real."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        cabecera = payload.get("cabecera") or []
+        filas = payload.get("filas") or []
+        if not isinstance(cabecera, list) or not cabecera or not isinstance(filas, list) or not filas:
+            raise HTTPException(status_code=400, detail="No hay datos de la parrilla para descargar.")
+
+        vista = str(payload.get("vista") or "vertical").lower().strip()
+        if vista not in {"vertical", "horizontal"}:
+            vista = "vertical"
+        fecha = re.sub(r"[^0-9A-Za-z_-]+", "-", str(payload.get("fecha") or "")).strip("-") or "sin-fecha"
+        filename = f"parrilla_{vista}_{fecha}.xlsx"
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Parrilla"
+        fill_cabecera = PatternFill("solid", fgColor="1F2937")
+        font_cabecera = Font(color="FFFFFF", bold=True, size=10)
+        fill_corte = PatternFill("solid", fgColor="FFF3D6")
+        for c, texto in enumerate(cabecera, 1):
+            celda = ws.cell(row=1, column=c, value=str(texto))
+            celda.fill = fill_cabecera
+            celda.font = font_cabecera
+            celda.alignment = Alignment(horizontal="center", vertical="center")
+        for r, fila in enumerate(filas, 2):
+            if not isinstance(fila, list):
+                continue
+            for c, valor in enumerate(fila, 1):
+                if valor is None or valor == "":
+                    continue
+                celda = ws.cell(row=r, column=c, value=valor)
+                if vista == "vertical" and c in (2, 3):
+                    celda.font = Font(bold=True)
+        for par in (payload.get("resaltados") or []):
+            try:
+                celda = ws.cell(row=int(par[0]), column=int(par[1]))
+                celda.fill = fill_corte
+                if celda.value not in (None, ""):
+                    celda.font = Font(bold=True)
+            except Exception:
+                pass
+        for i, ancho in enumerate(payload.get("anchos") or [], 1):
+            try:
+                if ancho:
+                    ws.column_dimensions[get_column_letter(i)].width = float(ancho)
+            except Exception:
+                pass
+        congelar = str(payload.get("congelar") or "").strip()
+        if re.fullmatch(r"[A-Z]{1,3}[0-9]+", congelar):
+            ws.freeze_panes = congelar
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error exportando parrilla: {error}")
         raise HTTPException(status_code=500, detail="No se pudo generar el archivo Excel.")
 
 

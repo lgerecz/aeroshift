@@ -1900,6 +1900,7 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: 22px;
 }
 .schedule-table .gh-avatar {
   width: 28px;
@@ -1934,22 +1935,6 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .schedule-table tr.gh-row td {
   border-bottom: 1px solid #2d3148;
 }
-.schedule-table td.gh-num {
-  position: sticky;
-  left: 0;
-  z-index: 6;
-  background: #121212;
-  width: 38px;
-  min-width: 38px;
-  text-align: right;
-  padding-right: 10px;
-  color: #9CA3B4;
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 12px;
-  border-bottom: 1px solid #2d3148;
-}
-
-
 /* Botones del conmutador de vista (v7.5) */
 .btn-vista {
   border: 1px solid #888888;
@@ -1977,12 +1962,6 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .stat-label { color: #9CA3B4 !important; }
 .stat-value { color: #e8eaf0 !important; }
 /* Gantt: la columna de agentes acompaña a la numeración al desplazar */
-.schedule-table th.gh-num {
-  position: sticky;
-  left: 0;
-  z-index: 11;
-  background: #121212;
-}
 .schedule-table th.gh-agentes-th {
   position: sticky;
   left: 0;
@@ -1992,7 +1971,7 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .schedule-table td.gh-agentes { left: 0; }
 .schedule-table .gh-num-linea {
   position: absolute;
-  left: 8px;
+  left: 6px;
   top: 50%;
   transform: translateY(-50%);
   color: #9CA3B4;
@@ -2001,24 +1980,3 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 }
 /* Tarjetas del panel derecho: nomenclatura no-FR en rojo */
 .flight-number.ext { color: #ef4444; }
-
-
-/* Impresión A4 vertical de la parrilla (v7.8) */
-@media print {
-  @page { size: A4 portrait; margin: 10mm; }
-  body * { visibility: hidden !important; }
-  .schedule-wrapper, .schedule-wrapper * { visibility: visible !important; }
-  .schedule-wrapper { position: absolute; left: 0; top: 0; width: 100%; }
-  .schedule-table th, .schedule-table td {
-    background: #ffffff !important;
-    color: #000000 !important;
-    border-color: #999999 !important;
-  }
-  .pv-chip {
-    background: #ffffff !important;
-    color: #000000 !important;
-    border: 1px solid #999999 !important;
-  }
-  .pv-vuelo-ext, .pv-sin { color: #c00000 !important; }
-  .gh-num-linea { color: #000000 !important; }
-}
