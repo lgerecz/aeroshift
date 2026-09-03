@@ -2608,7 +2608,7 @@ function renderDetectedAgents() {
       const especValue = (a.espec && a.espec.length > 0) ? a.espec[0] : '';
       // Only show the dropdown for non-admin agents (CSA pasajes)
       const selectHtml = a.type === 'admin' ? '<span style="color:#9ca3b4;">—</span>' : `
-        <select onchange="updateAgentEspec(${a.id}, this.value)" style="background: #000; color: #fff; border: 1px solid #333; border-radius: 4px; padding: 2px 4px; font-family: inherit; font-size: 11px; width: 75px; text-align: center; cursor: pointer;">
+        <select onchange="updateAgentEspec(${a.id}, this.value)" style="background: #000; color: #fff; border: 1px solid #999999; border-radius: 4px; padding: 2px 4px; font-family: inherit; font-size: 11px; width: 75px; text-align: center; cursor: pointer;">
           <option value="">—</option>
           <option value="OPS" ${especValue === 'OPS' ? 'selected' : ''}>OPS</option>
           <option value="TKT" ${especValue === 'TKT' ? 'selected' : ''}>TKT</option>
@@ -2624,7 +2624,7 @@ function renderDetectedAgents() {
       return `
         <tr style="${rowStyle}" ${hoverAttrs}>
           <td style="padding: 10px 8px; color: #9ca3b4; font-weight: bold;">${escapeHtml(a.name)}</td>
-          <td style="padding: 10px 8px; color: ${hasValidationError ? '#fca5a5' : '#a0a0a0'};">${escapeHtml(a.hours)}${warningBadge}</td>
+          <td style="padding: 10px 8px; color: ${hasValidationError ? '#fca5a5' : '#9CA3B4'};">${escapeHtml(a.hours)}${warningBadge}</td>
           <td style="padding: 10px 8px;">${getRoleBadge(a.role, a.canonical_role)}</td>
           <td style="padding: 10px 8px; text-align: center;">${selectHtml}</td>
           <td style="padding: 10px 8px; text-align: center;">${checkboxHtml}</td>
