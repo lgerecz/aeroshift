@@ -1231,8 +1231,8 @@ function renderScheduleHorizontal() {
     const airline = (String(d.f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
     const colorVuelo = airline === 'FR' ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444'; // no-FR → rojo
     const ags = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(' / ');
-    const titulo = `${d.f.destination || ''} — ${d.f.number || ''} — STD ${m2t(d.std)}${ags ? '\n' + ags : ''}`; // 2.ª línea: agentes del vuelo
-    return `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(titulo)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
+    const l1 = `${escapeHtml(d.f.destination || '')} — ${escapeHtml(d.f.number || '')} — STD ${m2t(d.std)}`;
+    return `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span><span class="gh-tip-box"><span class="gh-tip-l1">${l1}</span>${ags ? `<span class="gh-tip-l2">${escapeHtml(ags)}</span>` : ''}</span></div>`;
   };
   const celdasDe = vuelosDelAgente => slots.map(s => {
     const d = vuelosDelAgente.find(v => v.emb === s.mins);
