@@ -996,6 +996,7 @@ function renderFlights() {
   const [cierreMin] = ventanaEmbarque(); // hora de embarque = STD − cierre
   const t2mCard = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2tCard = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const normH = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   container.innerHTML = sorted.map(flight => {
     const assignedAgentId = assignments[flight.id];
     const agent = assignedAgentId ? state.agents.find(a => a.id === assignedAgentId) : null;
@@ -1022,12 +1023,16 @@ function renderFlights() {
           <span class="flight-dest${esFR ? '' : ' ext'}" ${esFR ? '' : 'style="color:#ef4444;"'}>${escapeHtml(flight.number)}</span>
           <span class="flight-type-badge ${flight.type}">${flight.type === 'departure' ? 'SAL' : 'LLE'}</span>
         </div>
-        ${(nombresAg.length > 0 ? nombresAg : (isAssigned ? [agent.name] : [])).map(n => `
+        ${(nombresAg.length > 0 ? nombresAg : (isAssigned ? [agent.name] : [])).map(n => {
+          const agH = state.agents.find(a => normH(a.name) === normH(n));
+          const horario = agH && agH.hours ? agH.hours : '';
+          return `
           <div class="flight-assigned-agent">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg>
             ${escapeHtml(n)}
-          </div>
-        `).join('')}
+            ${horario ? `<span style="margin-left:auto; color:#9CA3B4; font-size:10px; font-weight:600; white-space:nowrap;" title="Horario laboral">🕐 ${escapeHtml(horario)}</span>` : ''}
+          </div>`;
+        }).join('')}
       </div>`;
   }).join('');
 }
@@ -1098,11 +1103,19 @@ function renderScheduleVertical() {
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
+  const normV = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const horarioDe = n => {
+    const a = state.agents.find(x => normV(x.name) === normV(n));
+    return a && a.hours ? a.hours : '';
+  };
   tbody.innerHTML = flights.map((f, idx) => {
     const std = t2m(f.time);
     const nombres = String(f.agents || '').split(',').map(s => s.trim()).filter(Boolean);
     const agentes = nombres.length > 0
-      ? nombres.map(n => `<span class="pv-chip" title="Agente asignado al embarque">${escapeHtml(n)}</span>`).join('')
+      ? nombres.map(n => {
+        const h = horarioDe(n);
+        return `<span class="pv-chip"${h ? ` title="🕐 ${escapeHtml(h)}"` : ''}>${escapeHtml(n)}</span>`;
+      }).join('')
       : '<span class="pv-sin">⚠ Sin asignar</span>';
     const prefijo = (String(f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
     const esFR = prefijo === 'FR';
@@ -1110,7 +1123,7 @@ function renderScheduleVertical() {
       <tr class="pv-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
         <td class="pv-num">${idx + 1}</td>
         <td class="pv-dest">${escapeHtml(f.destination || '')}</td>
-        <td class="pv-vuelo${esFR ? '' : ' pv-vuelo-ext'}" title="${esFR ? 'Ryanair' : 'Compañía ' + prefijo}">${escapeHtml(f.number || '')}</td>
+        <td class="pv-vuelo${esFR ? '' : ' pv-vuelo-ext'}">${escapeHtml(f.number || '')}</td>
         <td class="pv-hora">${m2t(std - APERTURA_MIN)}</td>
         <td class="pv-agentes">${agentes}</td>
         <td class="pv-hora">${m2t(std - cierreMin)}</td>
@@ -1217,7 +1230,9 @@ function renderScheduleHorizontal() {
   const chipVuelo = d => {
     const airline = (String(d.f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
     const colorVuelo = airline === 'FR' ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444'; // no-FR → rojo
-    return `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(d.f.destination || '')} — ${escapeHtml(d.f.number || '')} — STD ${m2t(d.std)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
+    const ags = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(' / ');
+    const titulo = `${d.f.destination || ''} — ${d.f.number || ''} — STD ${m2t(d.std)}${ags ? '\n' + ags : ''}`; // 2.ª línea: agentes del vuelo
+    return `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(titulo)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
   };
   const celdasDe = vuelosDelAgente => slots.map(s => {
     const d = vuelosDelAgente.find(v => v.emb === s.mins);
@@ -1645,16 +1660,17 @@ function setToday() {
 }
 
 function updateStats() {
-  const date = document.getElementById('currentDate').value;
-  const assignments = state.assignments[date] || {};
   const dateFlights = getFlightsForDate();
-  const assignedCount = Object.keys(assignments).filter(fId => 
-    dateFlights.some(f => f.id === parseInt(fId))
-  ).length;
-  
-  const activeAgents = new Set(Object.values(assignments)).size;
+  // v7.11: los contadores leen la MISMA fuente que la parrilla (f.agents,
+  // asignación completa), no el registro legacy de 1.er agente por vuelo
+  const nombres = new Set();
+  dateFlights.forEach(f => String(f.agents || '').split(',').forEach(s => {
+    const t = s.trim();
+    if (t) nombres.add(t);
+  }));
+  const assignedCount = dateFlights.filter(f => String(f.agents || '').split(',').some(s => s.trim())).length;
 
-  document.getElementById('statAgents').textContent = activeAgents;
+  document.getElementById('statAgents').textContent = nombres.size;
   document.getElementById('statAssigned').textContent = assignedCount;
   document.getElementById('statUnassigned').textContent = dateFlights.length - assignedCount;
   document.getElementById('statFlights').textContent = dateFlights.length;
