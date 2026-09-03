@@ -842,23 +842,42 @@ function filasParrillaHorizontal() {
   const horas = [...new Set(datos.map(d => Math.floor(d.emb / 60)))].sort((a, b) => a - b);
   const slots = [];
   horas.forEach(h => { for (let m = 0; m < 60; m += 5) slots.push({ h, m, mins: h * 60 + m }); });
-  const cabecera = ['#', 'Agentes', ...slots.map(s => `${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}`)];
+
+  // Una fila por AGENTE: todos sus embarques en su línea (como la parrilla operativa)
+  const porAgente = new Map();
+  datos.forEach(d => {
+    (String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean)).forEach(n => {
+      if (!porAgente.has(n)) porAgente.set(n, []);
+      porAgente.get(n).push(d);
+    });
+  });
+  const filasAgentes = [...porAgente.entries()].sort((a, b) => {
+    const ma = Math.min(...a[1].map(v => v.emb));
+    const mb = Math.min(...b[1].map(v => v.emb));
+    return ma - mb || a[0].localeCompare(b[0]);
+  });
+  const sinAsignar = datos.filter(d => (String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean)).length === 0);
+
+  const cabecera = ['#', 'Agente', ...slots.map(s => `${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}`)];
   const resaltados = [];
-  const filas = datos.map((d, i) => {
-    const fila = [i + 1, _agCell(d.f)];
+  let num = 0;
+  const filaDe = (nombre, vuelos) => {
+    num += 1;
+    const fila = [num, nombre];
     slots.forEach(s => {
-      if (s.mins === d.emb) {
-        fila.push(d.f.destination || '');
-        resaltados.push([i + 2, fila.length]);
-      } else if (s.mins > d.emb && s.mins < d.std) {
-        fila.push('');
-        resaltados.push([i + 2, fila.length]);
+      const v = vuelos.find(d => s.mins >= d.emb && s.mins < d.std);
+      if (v) {
+        fila.push(s.mins === v.emb ? (v.f.destination || '') : '');
+        resaltados.push([num + 1, fila.length]);
       } else {
         fila.push('');
       }
     });
     return fila;
-  });
+  };
+  const filas = filasAgentes.map(([nombre, vuelos]) => filaDe(nombre, vuelos));
+  sinAsignar.forEach(d => filas.push(filaDe(`⚠ Sin asignar (${d.f.destination || ''} ${d.f.time || ''})`, [d])));
+
   return {
     cabecera, filas, resaltados,
     anchos: [4, 30, ...slots.map(() => 4.5)], congelar: 'C2'
@@ -1180,30 +1199,59 @@ function renderScheduleHorizontal() {
     };
   };
 
-  tbody.innerHTML = datos.map(d => {
-    const nombres = String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean);
-    const iniciales = nombres.map(colorPorNombre);
-    const avatarIzq = iniciales.length > 0
-      ? `<div class="gh-avatar" style="background:${iniciales[0].color}" title="${escapeHtml(nombres[0])}${iniciales[0].horario ? ' · ' + escapeHtml(iniciales[0].horario) : ''}">${iniciales[0].inicial}</div>` : '';
-    const avatarDer = iniciales.length > 1
-      ? `<div class="gh-avatar" style="background:${iniciales[1].color}" title="${escapeHtml(nombres[1])}${iniciales[1].horario ? ' · ' + escapeHtml(iniciales[1].horario) : ''}">${iniciales[1].inicial}</div>` : '';
-    const bloqueNombres = nombres.length > 0
-      ? `<div class="gh-nombres">${nombres.map(n => `<div class="gh-nombre">${escapeHtml(n)}</div>`).join('')}</div>`
-      : '<div class="gh-nombres"><div class="pv-sin">⚠ Sin asignar</div></div>';
+  // Una fila POR AGENTE: todos sus embarques visibles en su línea (v7.10)
+  const porAgente = new Map();
+  datos.forEach(d => {
+    (String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean)).forEach(n => {
+      if (!porAgente.has(n)) porAgente.set(n, { nombre: n, vuelos: [] });
+      porAgente.get(n).vuelos.push(d);
+    });
+  });
+  const filasAgentes = [...porAgente.values()].sort((a, b) => {
+    const ma = Math.min(...a.vuelos.map(v => v.emb));
+    const mb = Math.min(...b.vuelos.map(v => v.emb));
+    return ma - mb || a.nombre.localeCompare(b.nombre);
+  });
+  const sinAsignar = datos.filter(d => (String(d.f.agents || '').split(',').map(s => s.trim()).filter(Boolean)).length === 0);
+
+  const chipVuelo = d => {
     const airline = (String(d.f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
     const colorVuelo = airline === 'FR' ? (AIRLINE_COLORS.FR || '#f5a623') : '#ef4444'; // no-FR → rojo
-    const tarjeta = `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(d.f.destination || '')} — ${escapeHtml(d.f.number || '')} — STD ${m2t(d.std)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
-    const celdas = slots.map(s => s.mins === d.emb
-      ? `<td class="gh-celda">${tarjeta}</td>`
-      : `<td class="gh-vacia"></td>`).join('');
-    return `
-      <tr class="gh-row${nombres.length > 0 ? '' : ' pv-row-sin'}">
-        <td class="gh-agentes"><span class="gh-num-linea">${datos.indexOf(d) + 1}</span>
-          <div class="gh-fila-ag">${avatarIzq}${bloqueNombres}${avatarDer}</div>
-        </td>
-        ${celdas}
-      </tr>`;
+    return `<div class="gh-flight-card" style="border-color:${colorVuelo}; background:${colorVuelo}18;" title="${escapeHtml(d.f.destination || '')} — ${escapeHtml(d.f.number || '')} — STD ${m2t(d.std)}"><span class="gh-destino" style="color:${colorVuelo}">${escapeHtml(d.f.destination || '')}</span><span class="gh-emb" style="color:${colorVuelo}">${m2t(d.emb)}</span></div>`;
+  };
+  const celdasDe = vuelosDelAgente => slots.map(s => {
+    const d = vuelosDelAgente.find(v => v.emb === s.mins);
+    return `<td class="${d ? 'gh-celda' : 'gh-vacia'}">${d ? chipVuelo(d) : ''}</td>`;
   }).join('');
+
+  let numFila = 0;
+  tbody.innerHTML =
+    filasAgentes.map(fa => {
+      numFila += 1;
+      const info = colorPorNombre(fa.nombre);
+      return `
+      <tr class="gh-row">
+        <td class="gh-agentes">
+          <div class="gh-fila-ag"><span class="gh-num-linea">${numFila}</span>
+            <div class="gh-avatar" style="background:${info.color}" title="${escapeHtml(fa.nombre)}${info.horario ? ' · ' + escapeHtml(info.horario) : ''}">${info.inicial}</div>
+            <div class="gh-nombres"><div class="gh-nombre">${escapeHtml(fa.nombre)}</div></div>
+          </div>
+        </td>
+        ${celdasDe(fa.vuelos)}
+      </tr>`;
+    }).join('') +
+    sinAsignar.map(d => {
+      numFila += 1;
+      return `
+      <tr class="gh-row pv-row-sin">
+        <td class="gh-agentes">
+          <div class="gh-fila-ag"><span class="gh-num-linea">${numFila}</span>
+            <div class="gh-nombres"><div class="pv-sin">⚠ Sin asignar</div></div>
+          </div>
+        </td>
+        ${celdasDe([d])}
+      </tr>`;
+    }).join('');
 }
 
 function scrollToFirstFlight(flights, slots) {

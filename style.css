@@ -603,7 +603,8 @@ body {
 /* ===== SCHEDULE TABLE ===== */
 .schedule-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate; /* sticky de celdas NO funciona con collapse */
+  border-spacing: 0;
   table-layout: fixed;
 }
 
@@ -1814,21 +1815,6 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 .gen-pop-cancel:hover { background: rgba(239, 68, 68, 0.12); }
 
 /* Insignia de versión junto al logo (v7.0) */
-.ver-badge {
-  display: inline-block;
-  vertical-align: middle;
-  margin-left: 8px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: rgba(55, 138, 221, 0.14);
-  border: 1px solid rgba(55, 138, 221, 0.45);
-  color: #cfe4fa;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-}
-
-
 /* ═══ Gantt por vuelo con cortes de 5 minutos (v7.4) ═══ */
 /* Cortes FIJOS de 2 mm (≈8 px): una hora ≈ 2,4 cm. No se estiran. */
 .schedule-table.gantt-fijo {
@@ -1900,7 +1886,6 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 22px;
 }
 .schedule-table .gh-avatar {
   width: 28px;
@@ -1970,13 +1955,26 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
 }
 .schedule-table td.gh-agentes { left: 0; }
 .schedule-table .gh-num-linea {
-  position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex: 0 0 18px;
   color: #9CA3B4;
   font-family: 'Consolas', 'Courier New', monospace;
   font-size: 12px;
+  text-align: left;
 }
 /* Tarjetas del panel derecho: nomenclatura no-FR en rojo */
 .flight-number.ext { color: #ef4444; }
+
+/* v7.10: la columna # + Agentes SIEMPRE fija (sticky real con border-collapse: separate) */
+.schedule-table th.gh-agentes-th {
+  position: sticky !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 12 !important;
+  background: #121212 !important;
+}
+.schedule-table td.gh-agentes,
+.schedule-table td:first-child {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 6 !important;
+}
