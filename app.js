@@ -1030,7 +1030,7 @@ function renderFlights() {
           <div class="flight-assigned-agent">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg>
             ${escapeHtml(n)}
-            ${horario ? `<span style="margin-left:auto; color:#9CA3B4; font-size:10px; font-weight:600; white-space:nowrap;" title="Horario laboral">🕐 ${escapeHtml(horario)}</span>` : ''}
+            ${horario ? `<span style="margin-left:auto; color:#9CA3B4; font-size:10px; font-weight:600; white-space:nowrap;">🕐 ${escapeHtml(horario)}</span>` : ''}
           </div>`;
         }).join('')}
       </div>`;
@@ -1114,7 +1114,7 @@ function renderScheduleVertical() {
     const agentes = nombres.length > 0
       ? nombres.map(n => {
         const h = horarioDe(n);
-        return `<span class="pv-chip"${h ? ` title="🕐 ${escapeHtml(h)}"` : ''}>${escapeHtml(n)}</span>`;
+        return `<span class="pv-chip${h ? ' pv-tip' : ''}">${escapeHtml(n)}${h ? `<span class="pv-tip-box">🕐 ${escapeHtml(h)}</span>` : ''}</span>`;
       }).join('')
       : '<span class="pv-sin">⚠ Sin asignar</span>';
     const prefijo = (String(f.number || '').match(/^[A-Za-z]{2}/) || [''])[0].toUpperCase();
