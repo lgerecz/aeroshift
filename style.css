@@ -2005,28 +2005,3 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 .pv-chip.pv-tip:hover .pv-tip-box { display: block; }
-
-/* v7.17: tooltip del vuelo en el Gantt — 2 líneas (vuelo+STD / agentes) */
-.schedule-table .gh-flight-card { position: relative; }
-.schedule-table .gh-flight-card .gh-tip-box {
-  display: none;
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 6px);
-  transform: translateX(-50%);
-  background: #121212;
-  border: 1px solid #C49F19;
-  color: #F5C518;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: 'Consolas', 'Courier New', monospace;
-  padding: 5px 10px;
-  border-radius: 6px;
-  white-space: nowrap;
-  z-index: 60;
-  pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  text-align: center;
-}
-.schedule-table .gh-flight-card:hover .gh-tip-box { display: block; }
-.schedule-table .gh-tip-l1, .schedule-table .gh-tip-l2 { display: block; }
