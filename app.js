@@ -33,6 +33,7 @@ let validationParametersSnapshot = null;
 let ultimoInforme = null;
 let informeOrden = { col: 'embarques', asc: false };
 let pendingClipboardFiles = [];
+let pendingClipboardText = ''; // v8.0: tabla de Excel pegada como texto
 const quadrantReviewState = { agents: false, flights: false };
 
 // ===== PERSISTENCE =====
@@ -615,15 +616,45 @@ function setupExtractorClipboardAndDrop() {
   setupQuadrantDropZone('flightsDropZone', 'flights', 'Suelta aquí la Parrilla de Vuelos');
 }
 
+function extraerTablaDelPortapapeles(clipboardData) {
+  // v8.0: Excel copia las celdas también como TEXTO (TSV). Si está, viaja el
+  // texto real (sin OCR, sin límite de tamaño) en vez de la "foto" interna.
+  if (!clipboardData || !clipboardData.getData) return '';
+  let texto = (clipboardData.getData('text/plain') || '').replace(/[\r\n]+$/, '');
+  if (texto.includes('\t') || texto.includes('\n')) return texto;
+  const html = clipboardData.getData('text/html') || '';
+  if (html && /<tr[\s>]/i.test(html)) { // tabla HTML sin texto plano
+    texto = html
+      .replace(/<\/(tr|table)[^>]*>/gi, '\n')
+      .replace(/<\/(td|th)[^>]*>/gi, '\t')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+      .replace(/^[ \t]+|[ \t]+$/gm, '')
+      .replace(/\n{2,}/g, '\n')
+      .trim();
+    return texto.includes('\t') || texto.includes('\n') ? texto : '';
+  }
+  return '';
+}
+
 function handleExtractorPaste(event) {
   if (!isExtractorVisible()) return;
+  const tablaTexto = extraerTablaDelPortapapeles(event.clipboardData);
+  if (tablaTexto) { // prioridad: datos reales de las celdas
+    event.preventDefault();
+    pendingClipboardText = tablaTexto;
+    pendingClipboardFiles = [];
+    document.getElementById('clipboardTargetModal')?.classList.add('active');
+    return;
+  }
   const items = Array.from(event.clipboardData?.items || []);
   const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'));
   if (imageItems.length === 0) {
-    alert('El portapapeles no contiene una imagen compatible.');
+    alert('El portapapeles no contiene una tabla ni una imagen compatible.');
     return;
   }
   event.preventDefault();
+  pendingClipboardText = '';
   pendingClipboardFiles = imageItems.map((item, index) => {
     const blob = item.getAsFile();
     const extension = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
@@ -633,14 +664,18 @@ function handleExtractorPaste(event) {
 }
 
 function uploadClipboardTo(type) {
-  if (!pendingClipboardFiles.length) return;
+  const texto = pendingClipboardText;
+  if (!texto && !pendingClipboardFiles.length) return;
+  const hayTexto = !!texto;
+  pendingClipboardText = '';
   const files = pendingClipboardFiles;
   pendingClipboardFiles = [];
   document.getElementById('clipboardTargetModal')?.classList.remove('active');
-  uploadFileToBackend(files, type);
+  uploadFileToBackend(files, type, hayTexto ? texto : undefined);
 }
 
 function cancelClipboardUpload() {
+  pendingClipboardText = '';
   pendingClipboardFiles = [];
   document.getElementById('clipboardTargetModal')?.classList.remove('active');
 }
@@ -1898,8 +1933,8 @@ function vaciarCuadrante(tipo) {
   renderUploadedFilesList();
 }
 
-async function uploadFileToBackend(files, type) {
-  if (!files || files.length === 0) return;
+async function uploadFileToBackend(files, type, textoPlano) {
+  if ((!files || files.length === 0) && !textoPlano) return;
 
   const openaiKey = localStorage.getItem('aeroshift_openai_key') || '';
   const backendInput = document.getElementById('backendUrl');
@@ -1917,7 +1952,7 @@ async function uploadFileToBackend(files, type) {
       blobUrl: URL.createObjectURL(files[i])
     });
   }
-  const etiqueta = filesCopy.length === 1 ? filesCopy[0].name : (filesCopy.length + ' archivos');
+  const etiqueta = textoPlano ? 'portapapeles (tabla)' : (filesCopy.length === 1 ? filesCopy[0].name : (filesCopy.length + ' archivos'));
   // Progreso estimado: la API no comunica un porcentaje real mientras trabaja.
   // Turnos alcanza el 90% en 75s; Vuelos en 45s. Después suma 1% cada 15s.
   const tiempoHastaNoventa = (type === 'flights') ? 45000 : 75000;
@@ -1979,8 +2014,12 @@ async function uploadFileToBackend(files, type) {
   try {
     // Prepare FormData payload for the backend API
     const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
+    if (textoPlano) {
+      formData.append('texto', textoPlano); // v8.0: tabla pegada como texto
+    } else {
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
     }
 
     const response = await fetch(`${backendUrl}/extract?model=${selectedModel}&type=${type}`, {
