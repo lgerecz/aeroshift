@@ -2005,3 +2005,25 @@ details.reg-avanzado:not([open]) .reg-titulo::after { content: " +"; }
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 .pv-chip.pv-tip:hover .pv-tip-box { display: block; }
+
+/* v7.19: tooltip del Gantt con pinta nativa y nombres en 2.ª línea (aprobado en propuesta) */
+.schedule-table .gh-flight-card { position: relative; }
+.schedule-table .gh-flight-card .gh-tip-box {
+  display: none;
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
+  background: #2b3040;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 400;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 7px 11px;
+  border-radius: 8px;
+  white-space: nowrap;
+  z-index: 60;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.schedule-table .gh-flight-card:hover .gh-tip-box { display: block; }
+.schedule-table .gh-tip-l1, .schedule-table .gh-tip-l2 { display: block; }
