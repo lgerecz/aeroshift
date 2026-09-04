@@ -9,7 +9,7 @@ import contextlib
 import time
 import threading
 import unicodedata
-from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, Header, Body, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -1569,7 +1569,8 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
 async def extract_data(
     model: Optional[str] = "gpt-5.6-luna",
     document_type: str = Query("all", alias="type"),
-    files: List[UploadFile] = File(...),
+    files: Optional[List[UploadFile]] = File(None),
+    texto: Optional[str] = Form(None),
     authorization: Optional[str] = Header(None),
 ):
     """Extrae turnos o vuelos mediante visión IA."""
@@ -1580,6 +1581,17 @@ async def extract_data(
             status_code=422,
             detail="El parámetro type debe ser 'agents', 'flights' o 'all'.",
         )
+
+    # v8.0: la tabla pegada desde Excel viaja como TEXTO de las celdas
+    # (lectura directa, sin OCR ni visión, sin límite de tamaño de imagen).
+    texto_portapapeles = (texto or "").strip()
+    if not files and not texto_portapapeles:
+        raise HTTPException(
+            status_code=400,
+            detail="No se han recibido archivos ni tabla pegada.",
+        )
+    if texto_portapapeles:
+        files = []  # el texto manda: se ignora cualquier imagen adjunta
 
     selected_model = (model or "gpt-5.6-luna").strip()
     is_deepseek = selected_model == "deepseek-v4-flash-vision-exp"
@@ -1622,6 +1634,10 @@ async def extract_data(
 
         user_content_blocks = []
         text_payloads = []
+        if texto_portapapeles:
+            text_payloads.append(
+                "--- CONTENIDO PEGADO (tabla de Excel) ---\n" + texto_portapapeles + "\n"
+            )
         verification_image_blocks = []
 
         def build_verification_image_block(crop, target_width: int):
