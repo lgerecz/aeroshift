@@ -2419,6 +2419,7 @@ async function validateUploadedData() {
     saveData();
     renderAll();
     renderDetectedFlights();
+    cambiarVistaParrilla('vertical'); // v8.1: al generar, la vista por defecto es la vertical
     switchView('parrilla');
     finalizarGenerandoPop('ok');
 
