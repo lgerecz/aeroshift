@@ -1079,12 +1079,80 @@ let vistaParrilla = localStorage.getItem('aeroshift_vista_parrilla') === 'horizo
 function renderSchedule() {
   const tabla = document.getElementById('scheduleTable');
   if (tabla) tabla.classList.toggle('gantt-fijo', vistaParrilla === 'horizontal');
+  pintarPanelInformes(); // v8.2: si hay pestaña de informe activa, sustituye a la tabla
+  if (vistaInformes) return;
   if (vistaParrilla === 'horizontal') renderScheduleHorizontal();
   else renderScheduleVertical();
 }
 
+// ── Pestañas 😴 Descansos / ✈️ Embarques (v8.2): el informe de texto, fuera del modal ──
+let vistaInformes = null; // 'descansos' | 'embarques' | null (tabla normal)
+
+function cambiarVistaInformes(pane) {
+  vistaInformes = vistaInformes === pane ? null : pane; // clic repetido → volver a la tabla
+  actualizarBotonesVista();
+  renderSchedule();
+}
+
+function actualizarBotonesVista() {
+  const bd = document.getElementById('btnVistaDescansos');
+  const be = document.getElementById('btnVistaEmbarques');
+  const bv = document.getElementById('btnVistaVertical');
+  const bh = document.getElementById('btnVistaHorizontal');
+  if (bd) bd.classList.toggle('active', vistaInformes === 'descansos');
+  if (be) be.classList.toggle('active', vistaInformes === 'embarques');
+  if (bv) bv.classList.toggle('active', !vistaInformes && vistaParrilla === 'vertical');
+  if (bh) bh.classList.toggle('active', !vistaInformes && vistaParrilla === 'horizontal');
+}
+
+// Extrae una sección del informe de texto (entre sus separadores ═)
+function textoSeccionInforme(titulo) {
+  const lineas = String((ultimoInforme && ultimoInforme.texto) || '').split('\n');
+  const i = lineas.findIndex(l => l.trim() === titulo);
+  if (i < 0) return '';
+  let inicio = i + 1;
+  if (/^═{8,}\s*$/.test((lineas[inicio] || '').trim())) inicio++;
+  while (inicio < lineas.length && !lineas[inicio].trim()) inicio++;
+  let fin = lineas.length;
+  for (let k = inicio; k < lineas.length; k++) {
+    if (/^═{8,}\s*$/.test(lineas[k].trim())) { fin = k; break; }
+  }
+  while (fin > inicio && !lineas[fin - 1].trim()) fin--;
+  return lineas.slice(inicio, fin).join('\n');
+}
+
+function pintarLineasInforme(texto) {
+  if (!texto) return '<div style="color:#6b7280; font-size:12.5px;">Aún no hay informe. Genera la parrilla (o consulta 📋 Informe) y aparecerá aquí el detalle completo.</div>';
+  return texto.split('\n').map(l => {
+    if (!l.trim()) return '<div style="height:8px;"></div>';
+    const t = escapeHtml(l.replace(/\s+$/, ''));
+    if (/^═{8,}$|^─{8,}$/.test(l.trim())) return `<div style="color:#2d3148;">${t}</div>`;
+    if (l.includes('⚠')) return `<div style="color:#ef4444;">${t}</div>`;
+    if (!/^\s/.test(l)) return `<div style="color:#e8eaf0; font-weight:700; margin-top:6px;">${t}</div>`;
+    return `<div style="color:#9CA3B4;">${t}</div>`;
+  }).join('');
+}
+
+function pintarPanelInformes() {
+  const panel = document.getElementById('panelInformes');
+  const wrapper = document.querySelector('.schedule-wrapper');
+  if (!panel) return;
+  if (!vistaInformes) { panel.style.display = 'none'; if (wrapper) wrapper.style.display = ''; return; }
+  const esDescansos = vistaInformes === 'descansos';
+  const contenido = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
+  const sub = esDescansos
+    ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE'
+    : 'LISTADO POR CANTIDAD DE EMBARQUES';
+  panel.innerHTML =
+    `<div style="color:#9CA3B4; font-size:11px; letter-spacing:1px; font-weight:700; margin-bottom:10px;">${sub}</div>` +
+    `<div style="font-family:'Consolas','Courier New',monospace; font-size:12.5px; line-height:1.5; white-space:pre-wrap;">${pintarLineasInforme(contenido)}</div>`;
+  panel.style.display = 'block';
+  if (wrapper) wrapper.style.display = 'none';
+}
+
 // Conmutador de vista (botones Vertical / Horizontal de las pestañas)
 function cambiarVistaParrilla(vista) {
+  vistaInformes = null; // v8.2: elegir Vertical/Horizontal cierra el panel de informes
   vistaParrilla = vista === 'horizontal' ? 'horizontal' : 'vertical';
   localStorage.setItem('aeroshift_vista_parrilla', vistaParrilla);
   const bv = document.getElementById('btnVistaVertical');

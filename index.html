@@ -425,6 +425,8 @@
     <main class="main-content">
       <!-- SHIFT TABS -->
       <div class="shift-tabs">
+        <button class="btn-vista" id="btnVistaDescansos" onclick="cambiarVistaInformes('descansos')">😴 Descansos</button>
+        <button class="btn-vista" id="btnVistaEmbarques" onclick="cambiarVistaInformes('embarques')">✈️ Embarques</button>
         <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
           <span style="font-size:11px; color:#9CA3B4; letter-spacing:.5px;">VISTA</span>
           <button class="btn-vista active" id="btnVistaVertical" onclick="cambiarVistaParrilla('vertical')">▦ Vertical</button>
@@ -445,6 +447,7 @@
           </table>
         </div>
       </div>
+      <div id="panelInformes" style="display:none; background:#121212; border:1px solid #2d3148; border-radius:8px; padding:16px 20px; overflow:auto;"></div>
 
       <!-- STATS BAR -->
       <div class="stats-bar" id="statsBar">
@@ -874,6 +877,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=106"></script>
+  <script src="app.js?v=107"></script>
 </body>
 </html>
