@@ -238,7 +238,7 @@
           </select>
         </div>
 
-        <button class="btn" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap; background: transparent; border: 1px solid #555; color: #d1d5db; transition: all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='#777'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#d1d5db'; actualizarEstadoBotonParams()" aria-label="Configurar parámetros de validación" id="btnParametrosValidacion">
+        <button class="btn" onclick="openValidationParametersModal()" style="font-weight: 700; padding: 10px 16px; display: flex; align-items: center; gap: 7px; height: 38px; margin-top: 15px; white-space: nowrap; background: transparent; border: 1px solid #555; color: #d1d5db; transition: all 0.15s;" onmouseover="hoverBotonParams(this)" onmouseout="this.style.background='transparent'; actualizarEstadoBotonParams()" aria-label="Configurar parámetros de validación" id="btnParametrosValidacion">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.08A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.08A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
           </svg>
@@ -877,6 +877,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=107"></script>
+  <script src="app.js?v=108"></script>
 </body>
 </html>

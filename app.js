@@ -372,7 +372,18 @@ function init() {
     // Verde SOLO cuando se ha guardado el conjunto completo en esta versión
     // (estrategia + parámetros). El opt_modo antiguo no cuenta: eso era el bug.
     const guardado = !!localStorage.getItem('aeroshift_parametros_guardados');
+    // v8.3: verde notorio (borde 2px + texto) y ESTABLE: el hover no lo cambia
     btn.style.borderColor = guardado ? '#10b981' : '#555';
+    btn.style.borderWidth = guardado ? '2px' : '1px';
+    btn.style.color = guardado ? '#10b981' : '#d1d5db';
+  }
+
+  function hoverBotonParams(btn) {
+    // v8.3: cuando está validado (verde), el hover NO altera el botón
+    if (localStorage.getItem('aeroshift_parametros_guardados')) return;
+    btn.style.background = 'rgba(255,255,255,0.06)';
+    btn.style.borderColor = '#777';
+    btn.style.color = '#fff';
   }
 
   function actualizarAgSiempre() {
