@@ -495,9 +495,14 @@ def optimize_schedule(req: OptimizeRequest):
             'excluir_embarque': ag.excluir_embarque,
             'bloque2': ag.bloque2
         }
+        # v8.3: bloque2 vacío ({"inicio":"","fin":""} del editor) = sin partido
+        bloque2 = ag.bloque2 or {}
+        if not (bloque2.get('inicio') and bloque2.get('fin')):
+            bloque2 = None
+        ag_dict['bloque2'] = bloque2
         # Time processing
         ag_dict['_t_ini'] = hms(ag.inicio)
-        if ag.bloque2:
+        if bloque2:
             ag_dict['_pausa_ini'] = t2m_fin(ag.inicio, ag.fin)
             b2i = hms(ag.bloque2['inicio'])
             b2f = hms(ag.bloque2['fin'])
@@ -520,11 +525,14 @@ def optimize_schedule(req: OptimizeRequest):
         if ag_dict.get('bloque2'):
             ag_dict['_excl_intervals'].append((ag_dict['_pausa_ini'], ag_dict['_pausa_fin']))
         
+        # v8.3: los bloques mixtos (TKT/OPS/LL) van aparte: el vuelo ocupa al
+        # agente hasta el STD y necesita traslado antes/después del bloque.
+        ag_dict['_mixto_intervals'] = []
         mixed_info = parse_mixed_role_exclusion(ag_dict['rol'])
         if mixed_info:
             ex_ini, ex_fin, restricted_role = mixed_info
             if is_non_boarding_role(restricted_role):
-                ag_dict['_excl_intervals'].append((ex_ini, ex_fin))
+                ag_dict['_mixto_intervals'].append((ex_ini, ex_fin))
                 
         AGENTES.append(ag_dict)
 
@@ -642,6 +650,13 @@ def optimize_schedule(req: OptimizeRequest):
             
                 # Check overlap with exclusion intervals (like split shift pause or mixed role TKT interval)
                 overlap = False
+                # v8.3: bloque mixto (TKT/OPS/LL): el vuelo ocupa hasta el STD y
+                # necesita el traslado de los parámetros antes y después del bloque
+                _traslado = max(0, R.cobertura_duracion - R.cobertura_tolerancia)
+                for ex_ini, ex_fin in ag.get('_mixto_intervals', []):
+                    if v['std_min'] + _traslado > ex_ini and v['emb_inicio'] < ex_fin + _traslado:
+                        overlap = True
+                        break
                 for ex_ini, ex_fin in ag.get('_excl_intervals', []):
                     if v['emb_inicio'] < ex_fin and v['emb_fin'] > ex_ini:
                         overlap = True
@@ -692,7 +707,9 @@ def optimize_schedule(req: OptimizeRequest):
         # Constraint: Lunch Breaks
         break_iv_dict = {}
         for ai, ag in enumerate(activos):
-            if ag['_jornada'] > R.descanso_jornada_min:
+            # v8.3: los turnos PARTIDOS no tienen derecho a descanso (regla del
+            # usuario): su hueco entre tramos ya está protegido como pausa.
+            if ag['_jornada'] > R.descanso_jornada_min and not ag.get('bloque2'):
                 mid = ag['_midpoint']
                 _dur_min = max(0, R.descanso_duracion - R.descanso_tolerancia)
                 _hi_s = max(mid, ag['_t_fin'] - _dur_min)
@@ -942,10 +959,12 @@ def optimize_schedule(req: OptimizeRequest):
             # SALIDA 5 — DESCANSOS
             # ─────────────────────────────────────────────────────────────
             print("\n"+"═"*72); print("DESCANSOS"); print("═"*72)
-            _oblig_desc = [a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min]
-            _recom_desc = [a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada]
-            _op_desc = [a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and not no_cuenta_descanso(a['rol']) and a['_jornada'] > R.descanso_jornada_min]
-            print(f"👥 Resumen: 🔴 CSA >6h (obligatorio): {len(_oblig_desc)}  🟡 CSA =6h (recomendable): {len(_recom_desc)}  🔵 Operativo >6h: {len(_op_desc)}")
+            # v8.3: los turnos partidos NO figuran como descanso obligatorio
+            _oblig_desc = [a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min and not a.get('bloque2')]
+            _recom_desc = [a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada and not a.get('bloque2')]
+            _op_desc = [a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and not no_cuenta_descanso(a['rol']) and a['_jornada'] > R.descanso_jornada_min and not a.get('bloque2')]
+            _partidos = [a for a in todos_csa if a.get('bloque2')]
+            print(f"👥 Resumen: 🔴 CSA >6h (obligatorio): {len(_oblig_desc)}  🟡 CSA =6h (recomendable): {len(_recom_desc)}  🔵 Operativo >6h: {len(_op_desc)}  🟢 Turnos partidos (sin descanso obligatorio): {len(_partidos)}")
             
             def tramos_agente(ag):
                 vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
@@ -967,7 +986,7 @@ def optimize_schedule(req: OptimizeRequest):
                 mid = ag['_midpoint']
                 exc_emb = ag.get('excluir_embarque', False)
                 nota = " · solo cobertura" if exc_emb else ""
-                print(f"\n{ndisp(ag)} ({ag['inicio']}–{ag['fin']} / {dur_str(ag['_jornada'])} ){nota} — {len(vag)} embarques")
+                print(f"\n{ndisp(ag)} ({hor_turno_completo(ag)}){nota} — {len(vag)} embarques")  # v8.3: horarios completos (también partidos)
                 if not vag:
                     print("  Todo el turno libre ✅")
                     if exc_emb and ag['espec']:
@@ -1058,8 +1077,9 @@ def optimize_schedule(req: OptimizeRequest):
 
             # Sort and print breaks
             sort_desc_key = lambda a: (a['_t_ini'], -a['_jornada'], -len(por_ag.get(a['id'], [])), a['nombre'])
-            oblig = sorted([a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min], key=sort_desc_key)
-            recom = sorted([a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada], key=sort_desc_key)
+            # v8.3: los turnos partidos no figuran como descanso (regla del usuario)
+            oblig = sorted([a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min and not a.get('bloque2')], key=sort_desc_key)
+            recom = sorted([a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada and not a.get('bloque2')], key=sort_desc_key)
             
             if oblig:
                 print("\n▶ CSA — DESCANSO OBLIGATORIO (jornada >6h)")
@@ -1070,7 +1090,7 @@ def optimize_schedule(req: OptimizeRequest):
                 for ag in recom:
                     imprimir_descanso_csa(ag)
             
-            op_necesitan = sorted([a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and get_full_shift_status(a['rol']) != 'SICK' and not a['excluir'] and a['_jornada'] > 360], key=lambda a: (a['_t_ini'], -a['_jornada'], a['nombre']))
+            op_necesitan = sorted([a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and get_full_shift_status(a['rol']) != 'SICK' and not a['excluir'] and a['_jornada'] > 360 and not a.get('bloque2')], key=lambda a: (a['_t_ini'], -a['_jornada'], a['nombre']))
             if op_necesitan:
                 print("\n▶ PERSONAL OPERATIVO — DESCANSO OBLIGATORIO (jornada >6h)")
                 for ag in op_necesitan:
