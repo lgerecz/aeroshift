@@ -858,6 +858,103 @@ function fechaParaArchivo() {
 const SEPARADOR_AGENTES = ' / ';
 const _agCell = f => String(f.agents || '').split(',').map(s => s.trim()).filter(Boolean).join(SEPARADOR_AGENTES);
 
+// v8.4: descargar el informe abierto (Descansos/Embarques) tal cual se ve
+async function descargarInformeAbierto() {
+  const esDescansos = vistaInformes === 'descansos';
+  const contenido = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
+  if (!contenido) { alert('Aún no hay informe que descargar. Genera la parrilla primero.'); return; }
+  const titulo = esDescansos ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE' : 'LISTADO POR CANTIDAD DE EMBARQUES';
+  const payload = {
+    vista: vistaInformes,
+    fecha: fechaParaArchivo(),
+    cabecera: [titulo],
+    filas: contenido.split('\n').map(l => [l]),
+    anchos: [130]
+  };
+  const backendInput = document.getElementById('backendUrl');
+  const backendUrl = backendInput ? backendInput.value.trim() : 'https://aeroshift-backend.onrender.com';
+  try {
+    const response = await fetch(`${backendUrl}/export-parrilla-xlsx`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      let mensaje = 'No se pudo generar el archivo Excel.';
+      try { const err = await response.json(); mensaje = err.detail || mensaje; } catch (_) {}
+      throw new Error(mensaje);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const m = disposition.match(/filename="?([^";]+)"?/i);
+    const nombre = m ? m[1] : `informes_${vistaInformes}_${fechaParaArchivo()}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (error) {
+    console.error('descargarInformeAbierto:', error);
+    alert(error && error.message ? error.message : 'No se pudo generar el archivo Excel.');
+  }
+}
+
+// v8.4: orden del panel Descansos (sin cambiar el formato: se reordenan los
+// agentes DENTRO de cada grupo ▶)
+let ordenDescansos = 'entrada'; // 'entrada' | 'embarques' | 'nombre'
+
+function cambiarOrdenDescansos(v) {
+  ordenDescansos = v === 'embarques' || v === 'nombre' ? v : 'entrada';
+  pintarPanelInformes();
+}
+
+function parseDescansos(texto) {
+  const pre = [];
+  const grupos = [];
+  let g = null, ag = null;
+  texto.split('\n').forEach(l => {
+    const t = l.trim();
+    if (t.startsWith('▶')) {
+      g = { titulo: l, agentes: [], cola: [] };
+      grupos.push(g); ag = null; return;
+    }
+    if (!g) { pre.push(l); return; }
+    if (t && !/^\s/.test(l) && !t.startsWith('👥')) {
+      ag = { header: l, cuerpo: [] };
+      g.agentes.push(ag); return;
+    }
+    if (ag) ag.cuerpo.push(l);
+    else g.cola.push(l);
+  });
+  return { pre, grupos };
+}
+
+function claveOrdenDescansos(header, criterio) {
+  if (criterio === 'embarques') { const m = header.match(/—\s*(\d+)\s+embarques/); return -(m ? +m[1] : 0); }
+  if (criterio === 'nombre') return header.split(' (')[0].trim().toUpperCase();
+  const m = header.match(/\d{2}:\d{2}/);
+  return m ? m[0] : '99:99';
+}
+
+function ordenarDescansos(texto, criterio) {
+  if (criterio !== 'embarques' && criterio !== 'nombre') return texto;
+  const { pre, grupos } = parseDescansos(texto);
+  const out = [...pre];
+  grupos.forEach(g => {
+    out.push('', g.titulo);
+    const agentes = [...g.agentes].sort((a, b) => {
+      const ka = claveOrdenDescansos(a.header, criterio), kb = claveOrdenDescansos(b.header, criterio);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+    agentes.forEach(a => { out.push('', a.header, ...a.cuerpo); });
+    out.push(...g.cola);
+  });
+  return out.join('\n').replace(/^\n+/, '');
+}
+
 function filasParrillaVertical() {
   const [cierreMin] = ventanaEmbarque();
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
@@ -932,6 +1029,7 @@ function filasParrillaHorizontal() {
 
 // Un solo botón ⇩: descarga la parrilla en .xlsx según la vista activa
 async function descargarParrilla() {
+  if (vistaInformes) return descargarInformeAbierto(); // v8.2: ⇩ descarga el panel abierto
   const vertical = vistaParrilla !== 'horizontal';
   const datos = vertical ? filasParrillaVertical() : filasParrillaHorizontal();
   if (!datos.filas.length) { alert('No hay vuelos en la parrilla para descargar.'); return; }
@@ -1150,12 +1248,22 @@ function pintarPanelInformes() {
   if (!panel) return;
   if (!vistaInformes) { panel.style.display = 'none'; if (wrapper) wrapper.style.display = ''; return; }
   const esDescansos = vistaInformes === 'descansos';
-  const contenido = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
+  const textoSeccion = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
+  const contenido = esDescansos ? ordenarDescansos(textoSeccion, ordenDescansos) : textoSeccion;
   const sub = esDescansos
     ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE'
     : 'LISTADO POR CANTIDAD DE EMBARQUES';
+  const selector = esDescansos && textoSeccion
+    ? `<select onchange="cambiarOrdenDescansos(this.value)" style="background:#121212; color:#9CA3B4; border:1px solid #888888; border-radius:6px; padding:5px 8px; font-size:11px; font-family:inherit; cursor:pointer;">
+         <option value="entrada"${ordenDescansos === 'entrada' ? ' selected' : ''}>Orden: horario de entrada</option>
+         <option value="embarques"${ordenDescansos === 'embarques' ? ' selected' : ''}>Orden: nº de embarques</option>
+         <option value="nombre"${ordenDescansos === 'nombre' ? ' selected' : ''}>Orden: alfabético</option>
+       </select>`
+    : '';
   panel.innerHTML =
-    `<div style="color:#9CA3B4; font-size:11px; letter-spacing:1px; font-weight:700; margin-bottom:10px;">${sub}</div>` +
+    `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+       <div style="color:#9CA3B4; font-size:11px; letter-spacing:1px; font-weight:700;">${sub}</div>${selector}
+     </div>` +
     `<div style="font-family:'Consolas','Courier New',monospace; font-size:12.5px; line-height:1.5; white-space:pre-wrap;">${pintarLineasInforme(contenido)}</div>`;
   panel.style.display = 'block';
   if (wrapper) wrapper.style.display = 'none';

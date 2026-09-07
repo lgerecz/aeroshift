@@ -960,11 +960,11 @@ def optimize_schedule(req: OptimizeRequest):
             # ─────────────────────────────────────────────────────────────
             print("\n"+"═"*72); print("DESCANSOS"); print("═"*72)
             # v8.3: los turnos partidos NO figuran como descanso obligatorio
+            # v8.4: y tampoco se mencionan aquí (no tienen descanso: no aporta)
             _oblig_desc = [a for a in todos_csa if a['_jornada'] > R.descanso_jornada_min and not a.get('bloque2')]
             _recom_desc = [a for a in todos_csa if a['_jornada'] == R.descanso_recomendable_jornada and not a.get('bloque2')]
             _op_desc = [a for a in AGENTES if get_base_role(a['rol']) in ROLES_OPERATIVOS and not no_cuenta_descanso(a['rol']) and a['_jornada'] > R.descanso_jornada_min and not a.get('bloque2')]
-            _partidos = [a for a in todos_csa if a.get('bloque2')]
-            print(f"👥 Resumen: 🔴 CSA >6h (obligatorio): {len(_oblig_desc)}  🟡 CSA =6h (recomendable): {len(_recom_desc)}  🔵 Operativo >6h: {len(_op_desc)}  🟢 Turnos partidos (sin descanso obligatorio): {len(_partidos)}")
+            print(f"👥 Resumen: 🔴 CSA >6h (obligatorio): {len(_oblig_desc)}  🟡 CSA =6h (recomendable): {len(_recom_desc)}  🔵 Operativo >6h: {len(_op_desc)}")
             
             def tramos_agente(ag):
                 vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
@@ -1524,10 +1524,11 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
             raise HTTPException(status_code=400, detail="No hay datos de la parrilla para descargar.")
 
         vista = str(payload.get("vista") or "vertical").lower().strip()
-        if vista not in {"vertical", "horizontal"}:
+        if vista not in {"vertical", "horizontal", "descansos", "embarques"}:
             vista = "vertical"
         fecha = re.sub(r"[^0-9A-Za-z_-]+", "-", str(payload.get("fecha") or "")).strip("-") or "sin-fecha"
-        filename = f"parrilla_{vista}_{fecha}.xlsx"
+        prefijo = "informes" if vista in {"descansos", "embarques"} else "parrilla"
+        filename = f"{prefijo}_{vista}_{fecha}.xlsx"
 
         wb = openpyxl.Workbook()
         ws = wb.active
