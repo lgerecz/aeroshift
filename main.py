@@ -1013,26 +1013,44 @@ def optimize_schedule(req: OptimizeRequest):
                     max_a = max((min(te, ag['_t_fin']) - max(ts, mid) for ts, te, _, __ in t if te > mid), default=0)
                     print(f"  ⚠️  Sin tramo ≥{R.descanso_duracion} min desde {m2t(mid)} — disponible: {dur_str(max_a)} — PSM")
 
-            # v8.6: hueco mínimo para COBERTURA = 15 min (el traslado), no los 55
-            # del informe — los propios huecos cortos de VITO/YANI, 35-40 min,
-            # se descartaban aquí dentro. Constante a nivel de optimize_schedule
-            # para que ventanas_libres y cobertura_dept la compartan.
-            _min_cob = 15
+            # v8.6: hueco mínimo para que un hueco cuente como COBERTURA: 30 min,
+            # v8.6: para que un hueco cuente como COBERTURA hace falta tiempo para
+            # comer (30 min) y, si el borde del hueco es un VUELO del propio
+            # agente de cobertura, también el traslado efectivo (traslado −
+            # tolerancia): acaba de embarcar (irse al siguiente vuelo o a casa)
+            # y/o debe marchar antes para embarcar el siguiente. Los bordes que
+            # no son vuelo (entrada/salida de turno) no comen hueco. El 55 del
+            # informe sigue solo en las sugerencias de DESCANSOS y la sección SICK.
+            _min_cob = 30
+            _traslado_cob = max(0, R.cobertura_duracion - R.cobertura_tolerancia)
+
+            # v8.6: un turno partido solo cubre DENTRO de sus dos bloques
+            # (VITO 04:35–08:40 / 11:30–15:00 no está disponible a las 11:15:
+            # su segundo bloque empieza a las 11:30).
+            def bloques_de(ag):
+                if ag.get('bloque2'):
+                    return [(ag['_t_ini'], ag['_pausa_ini']), (ag['_pausa_fin'], ag['_t_fin'])]
+                return [(ag['_t_ini'], ag['_t_fin'])]
 
             def ventanas_libres(ag, desde, hasta):
                 vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
                 wins, prev = [], desde
                 for v in vag:
                     if v['std_min'] <= desde:
-                        prev = max(prev, v['std_min'])
+                        # v8.6: acaba de embarcar este vuelo → el traslado (al
+                        # siguiente vuelo o a casa) resta desde su STD
+                        prev = max(prev, v['std_min'] + _traslado_cob)
                         continue
                     if v['emb_inicio'] >= hasta:
+                        # v8.6: embarcará más adelante → hay que salir antes
+                        # del hueco para trasladarse a ese vuelo
+                        hasta = min(hasta, v['emb_inicio'] - _traslado_cob)
                         break
                     gs = max(prev, desde)
-                    ge = min(v['emb_inicio'], hasta)
+                    ge = min(v['emb_inicio'] - _traslado_cob, hasta)
                     if ge - gs >= _min_cob:
                         wins.append((gs, ge, ge-gs))
-                    prev = max(prev, v['std_min'])
+                    prev = max(prev, v['std_min'] + _traslado_cob)
                 gs = max(prev, desde)
                 if hasta - gs >= _min_cob:
                     wins.append((gs, hasta, hasta-gs))
@@ -1059,26 +1077,26 @@ def optimize_schedule(req: OptimizeRequest):
                 result = []
                 for col in AGENTES:
                     if get_base_role(col['rol']) == dept and col['id'] != op_ag['id'] and not col['excluir']:
-                        ol_s = max(desde, col['_t_ini'])
-                        ol_e = min(hasta, col['_t_fin'])
-                        if ol_e - ol_s >= _min_cob:
-                            result.append(('🔵 Colega', ndisp(col), ol_s, ol_e))
+                        # v8.6: solo dentro de sus bloques y con el traslado
+                        # restado en los bordes que son vuelos del propio colega
+                        for bl_s, bl_e in bloques_de(col):
+                            for ws, we, wd in ventanas_libres(col, max(desde, bl_s), min(hasta, bl_e)):
+                                result.append(('🔵 Colega', ndisp(col), ws, we))
                 for cov in cobertura_pool:
                     if dept not in cov['espec']:
                         continue
-                    ss = max(desde, cov['_t_ini'])
-                    se = min(hasta, cov['_t_fin'])
-                    if se - ss < _min_cob:
-                        continue
-                    wins = ventanas_libres(cov, ss, se)
-                    if not wins:
-                        continue
                     req = descanso_requerido_cobertura(cov)
-                    for ws, we, wd in wins:
-                        if wd < _min_cob:
+                    # v8.6: recorta a los bloques REALES del partido (no al span total)
+                    for bl_s, bl_e in bloques_de(cov):
+                        ss = max(desde, bl_s)
+                        se = min(hasta, bl_e)
+                        if se - ss < _min_cob:
                             continue
-                        if req == 0 or hay_descanso_disjunto(cov, ws, we, req) or wd >= req + 55:
-                            result.append(('🟢 CSA', ndisp(cov), ws, we))
+                        for ws, we, wd in ventanas_libres(cov, ss, se):
+                            if wd < _min_cob:
+                                continue
+                            if req == 0 or hay_descanso_disjunto(cov, ws, we, req) or wd >= req + 55:
+                                result.append(('🟢 CSA', ndisp(cov), ws, we))
                 return result
 
             # Sort and print breaks
@@ -1107,7 +1125,7 @@ def optimize_schedule(req: OptimizeRequest):
                     cob_norm = cobertura_dept(dept, ag, mid, ag['_t_fin'])
                     cob_antes = cobertura_dept(dept, ag, ag['_t_ini'], mid)
                     if cob_norm:
-                        print(f"  Descanso desde {m2t(mid)} — cobertura disponible:")
+                        # v8.6: sin el rótulo «Descanso desde…» — las ventanas se listan tal cual
                         seen = set()
                         for tipo, nombre, s, e in sorted(cob_norm, key=lambda x: -(x[3]-x[2]))[:4]:
                             k = f"{nombre}{s}{e}"
