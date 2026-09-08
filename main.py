@@ -1013,6 +1013,12 @@ def optimize_schedule(req: OptimizeRequest):
                     max_a = max((min(te, ag['_t_fin']) - max(ts, mid) for ts, te, _, __ in t if te > mid), default=0)
                     print(f"  ⚠️  Sin tramo ≥{R.descanso_duracion} min desde {m2t(mid)} — disponible: {dur_str(max_a)} — PSM")
 
+            # v8.6: hueco mínimo para COBERTURA = 15 min (el traslado), no los 55
+            # del informe — los propios huecos cortos de VITO/YANI, 35-40 min,
+            # se descartaban aquí dentro. Constante a nivel de optimize_schedule
+            # para que ventanas_libres y cobertura_dept la compartan.
+            _min_cob = 15
+
             def ventanas_libres(ag, desde, hasta):
                 vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
                 wins, prev = [], desde
@@ -1024,11 +1030,11 @@ def optimize_schedule(req: OptimizeRequest):
                         break
                     gs = max(prev, desde)
                     ge = min(v['emb_inicio'], hasta)
-                    if ge - gs >= R.ventana_reporte_min:
+                    if ge - gs >= _min_cob:
                         wins.append((gs, ge, ge-gs))
                     prev = max(prev, v['std_min'])
                 gs = max(prev, desde)
-                if hasta - gs >= R.ventana_reporte_min:
+                if hasta - gs >= _min_cob:
                     wins.append((gs, hasta, hasta-gs))
                 return wins
 
@@ -1055,21 +1061,21 @@ def optimize_schedule(req: OptimizeRequest):
                     if get_base_role(col['rol']) == dept and col['id'] != op_ag['id'] and not col['excluir']:
                         ol_s = max(desde, col['_t_ini'])
                         ol_e = min(hasta, col['_t_fin'])
-                        if ol_e - ol_s >= R.ventana_reporte_min:
+                        if ol_e - ol_s >= _min_cob:
                             result.append(('🔵 Colega', ndisp(col), ol_s, ol_e))
                 for cov in cobertura_pool:
                     if dept not in cov['espec']:
                         continue
                     ss = max(desde, cov['_t_ini'])
                     se = min(hasta, cov['_t_fin'])
-                    if se - ss < 55:
+                    if se - ss < _min_cob:
                         continue
                     wins = ventanas_libres(cov, ss, se)
                     if not wins:
                         continue
                     req = descanso_requerido_cobertura(cov)
                     for ws, we, wd in wins:
-                        if wd < R.ventana_reporte_min:
+                        if wd < _min_cob:
                             continue
                         if req == 0 or hay_descanso_disjunto(cov, ws, we, req) or wd >= req + 55:
                             result.append(('🟢 CSA', ndisp(cov), ws, we))
@@ -1097,6 +1103,7 @@ def optimize_schedule(req: OptimizeRequest):
                     dept = get_base_role(ag['rol'])
                     mid = ag['_midpoint']
                     print(f"\n{ndisp(ag)} ({ag['inicio']}–{ag['fin']} / {dur_str(ag['_jornada'])})")
+                    print(f"  ── mitad de jornada: {m2t(mid)} ──────────────────────")  # v8.6: nomenclatura en todos los casos
                     cob_norm = cobertura_dept(dept, ag, mid, ag['_t_fin'])
                     cob_antes = cobertura_dept(dept, ag, ag['_t_ini'], mid)
                     if cob_norm:
