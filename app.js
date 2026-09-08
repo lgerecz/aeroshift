@@ -955,6 +955,40 @@ function ordenarDescansos(texto, criterio) {
   return out.join('\n').replace(/^\n+/, '');
 }
 
+// v8.5: orden también en Embarques (dentro de cada grupo "N embarques:")
+let ordenEmbarques = 'embarques'; // 'embarques' | 'nombre' | 'entrada'
+
+function cambiarOrdenEmbarques(v) {
+  ordenEmbarques = v === 'nombre' || v === 'entrada' ? v : 'embarques';
+  pintarPanelInformes();
+}
+
+function ordenarEmbarques(texto, criterio) {
+  if (criterio !== 'nombre' && criterio !== 'entrada') return texto;
+  const pre = [];
+  const grupos = [];
+  let g = null, ag = null;
+  texto.split('\n').forEach(l => {
+    const t = l.trim();
+    if (/^\d+\s+embarques:\s*$/.test(t)) { g = { titulo: l, agentes: [] }; grupos.push(g); ag = null; return; }
+    if (!g) { pre.push(l); return; }
+    if (t && /^\s{2}\S/.test(l) && !/^\s{4}/.test(l)) { ag = { header: l, cuerpo: [] }; g.agentes.push(ag); return; }
+    if (ag) ag.cuerpo.push(l);
+  });
+  const out = [...pre];
+  grupos.forEach(g => {
+    out.push('', g.titulo);
+    const clave = h => criterio === 'nombre'
+      ? h.trim().split(' (')[0].trim().toUpperCase()
+      : (h.match(/\d{2}:\d{2}/) || ['99:99'])[0];
+    [...g.agentes].sort((a, b) => {
+      const ka = clave(a.header), kb = clave(b.header);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    }).forEach(a => { out.push('', a.header, ...a.cuerpo); });
+  });
+  return out.join('\n').replace(/^\n+/, '');
+}
+
 function filasParrillaVertical() {
   const [cierreMin] = ventanaEmbarque();
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
@@ -1249,17 +1283,24 @@ function pintarPanelInformes() {
   if (!vistaInformes) { panel.style.display = 'none'; if (wrapper) wrapper.style.display = ''; return; }
   const esDescansos = vistaInformes === 'descansos';
   const textoSeccion = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
-  const contenido = esDescansos ? ordenarDescansos(textoSeccion, ordenDescansos) : textoSeccion;
+  const contenido = esDescansos
+    ? ordenarDescansos(textoSeccion, ordenDescansos)
+    : ordenarEmbarques(textoSeccion, ordenEmbarques);
   const sub = esDescansos
     ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE'
     : 'LISTADO POR CANTIDAD DE EMBARQUES';
-  const selector = esDescansos && textoSeccion
-    ? `<select onchange="cambiarOrdenDescansos(this.value)" style="background:#121212; color:#9CA3B4; border:1px solid #888888; border-radius:6px; padding:5px 8px; font-size:11px; font-family:inherit; cursor:pointer;">
+  const estilosSel = 'background:#121212; color:#9CA3B4; border:1px solid #888888; border-radius:6px; padding:5px 8px; font-size:11px; font-family:inherit; cursor:pointer;';
+  const selector = !textoSeccion ? '' : (esDescansos
+    ? `<select onchange="cambiarOrdenDescansos(this.value)" style="${estilosSel}">
          <option value="entrada"${ordenDescansos === 'entrada' ? ' selected' : ''}>Orden: horario de entrada</option>
          <option value="embarques"${ordenDescansos === 'embarques' ? ' selected' : ''}>Orden: nº de embarques</option>
          <option value="nombre"${ordenDescansos === 'nombre' ? ' selected' : ''}>Orden: alfabético</option>
        </select>`
-    : '';
+    : `<select onchange="cambiarOrdenEmbarques(this.value)" style="${estilosSel}">
+         <option value="embarques"${ordenEmbarques === 'embarques' ? ' selected' : ''}>Orden: nº de embarques</option>
+         <option value="nombre"${ordenEmbarques === 'nombre' ? ' selected' : ''}>Orden: alfabético</option>
+         <option value="entrada"${ordenEmbarques === 'entrada' ? ' selected' : ''}>Orden: horario de entrada</option>
+       </select>`);
   panel.innerHTML =
     `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
        <div style="color:#9CA3B4; font-size:11px; letter-spacing:1px; font-weight:700;">${sub}</div>${selector}
