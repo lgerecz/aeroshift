@@ -1541,16 +1541,38 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
             celda.fill = fill_cabecera
             celda.font = font_cabecera
             celda.alignment = Alignment(horizontal="center", vertical="center")
-        for r, fila in enumerate(filas, 2):
-            if not isinstance(fila, list):
-                continue
-            for c, valor in enumerate(fila, 1):
-                if valor is None or valor == "":
+        if vista in {"descansos", "embarques"}:
+            # v8.5: los informes se imprimen en DOS columnas A4 (letra 9 y
+            # ajuste al ancho) → la mitad de hojas y sin páginas en blanco.
+            from openpyxl.worksheet.properties import PageSetupProperties
+            lineas = [("" if not isinstance(f, list) or not f or f[0] is None else str(f[0])) for f in filas]
+            mitad = (len(lineas) + 1) // 2
+            fuente_informe = Font(size=9)
+            for r, linea in enumerate(lineas[:mitad], 2):
+                if linea.strip():
+                    ws.cell(row=r, column=1, value=linea).font = fuente_informe
+            for r, linea in enumerate(lineas[mitad:], 2):
+                if linea.strip():
+                    ws.cell(row=r, column=3, value=linea).font = fuente_informe
+            ws.column_dimensions["A"].width = 62
+            ws.column_dimensions["B"].width = 2
+            ws.column_dimensions["C"].width = 62
+            ws.page_setup.orientation = "portrait"
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        else:
+            for r, fila in enumerate(filas, 2):
+                if not isinstance(fila, list):
                     continue
-                celda = ws.cell(row=r, column=c, value=valor)
-                if vista == "vertical" and c in (2, 3):
-                    celda.font = Font(bold=True)
-        for par in (payload.get("resaltados") or []):
+                for c, valor in enumerate(fila, 1):
+                    if valor is None or valor == "":
+                        continue
+                    celda = ws.cell(row=r, column=c, value=valor)
+                    if vista == "vertical" and c in (2, 3):
+                        celda.font = Font(bold=True)
+        es_informe = vista in {"descansos", "embarques"}
+        for par in ([] if es_informe else (payload.get("resaltados") or [])):
             try:
                 celda = ws.cell(row=int(par[0]), column=int(par[1]))
                 celda.fill = fill_corte
@@ -1558,13 +1580,13 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                     celda.font = Font(bold=True)
             except Exception:
                 pass
-        for i, ancho in enumerate(payload.get("anchos") or [], 1):
+        for i, ancho in enumerate([] if es_informe else (payload.get("anchos") or []), 1):
             try:
                 if ancho:
                     ws.column_dimensions[get_column_letter(i)].width = float(ancho)
             except Exception:
                 pass
-        congelar = str(payload.get("congelar") or "").strip()
+        congelar = "" if es_informe else str(payload.get("congelar") or "").strip()
         if re.fullmatch(r"[A-Z]{1,3}[0-9]+", congelar):
             ws.freeze_panes = congelar
 
