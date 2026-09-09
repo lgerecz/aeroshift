@@ -1571,14 +1571,29 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
             # ajuste al ancho) → la mitad de hojas y sin páginas en blanco.
             from openpyxl.worksheet.properties import PageSetupProperties
             lineas = [("" if not isinstance(f, list) or not f or f[0] is None else str(f[0])) for f in filas]
-            mitad = (len(lineas) + 1) // 2
-            fuente_informe = Font(size=9)
-            for r, linea in enumerate(lineas[:mitad], 2):
+            fuente_informe = Font(size=10)
+            fuente_nombre = Font(size=10, bold=True)
+
+            # v8.7: cabeceras de agente en NEGRITA — «NOMBRE [ROL] (…» en
+            # Descansos (columna 0) y «  NOMBRE  HH:MM–…» en Listado de
+            # embarques (indentación de exactamente 2 espacios)
+            def es_nombre(linea):
+                t = linea.strip()
+                if not t or linea.startswith('    '):
+                    return False
+                if linea[0] != ' ' and re.match(r'^[A-ZÁÉÍÓÚÑÜ0-9][^\[]*\s\[\w{2,}\]\s*\(', t):
+                    return True
+                if linea.startswith('  ') and not linea.startswith('   ') and re.match(r'^[A-ZÁÉÍÓÚÑÜ0-9].*?\d{2}:\d{2}', t):
+                    return True
+                return False
+
+            # v8.7: lectura en ZIGZAG en lugar de por columnas — el 1º queda a
+            # la izquierda, el 2º a la derecha (misma fila), el 3º a la
+            # izquierda de la fila siguiente… para leer de izquierda a derecha
+            for i, linea in enumerate(lineas):
                 if linea.strip():
-                    ws.cell(row=r, column=1, value=linea).font = fuente_informe
-            for r, linea in enumerate(lineas[mitad:], 2):
-                if linea.strip():
-                    ws.cell(row=r, column=3, value=linea).font = fuente_informe
+                    celda = ws.cell(row=2 + i // 2, column=1 if i % 2 == 0 else 3, value=linea)
+                    celda.font = fuente_nombre if es_nombre(linea) else fuente_informe
             ws.column_dimensions["A"].width = 62
             ws.column_dimensions["B"].width = 2
             ws.column_dimensions["C"].width = 62

@@ -861,7 +861,9 @@ const _agCell = f => String(f.agents || '').split(',').map(s => s.trim()).filter
 // v8.4: descargar el informe abierto (Descansos/Embarques) tal cual se ve
 async function descargarInformeAbierto() {
   const esDescansos = vistaInformes === 'descansos';
-  const contenido = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
+  const seccion = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
+  // v8.7: descargar EXACTAMENTE lo que se ve (con el orden elegido en el selector)
+  const contenido = esDescansos ? ordenarDescansos(seccion, ordenDescansos) : ordenarEmbarques(seccion, ordenEmbarques);
   if (!contenido) { alert('Aún no hay informe que descargar. Genera la parrilla primero.'); return; }
   const titulo = esDescansos ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE' : 'LISTADO POR CANTIDAD DE EMBARQUES';
   const payload = {
@@ -970,18 +972,29 @@ function ordenarEmbarques(texto, criterio) {
   let g = null, ag = null;
   texto.split('\n').forEach(l => {
     const t = l.trim();
-    if (/^\d+\s+embarques:\s*$/.test(t)) { g = { titulo: l, agentes: [] }; grupos.push(g); ag = null; return; }
+    // v8.7: singular también — main.py imprime «1 embarque:» (solo «embarques:»
+    // no lo cogía y esos agentes quedaban pegados al bloque anterior)
+    if (/^\d+\s+embarques?:\s*$/.test(t)) { g = { titulo: l, agentes: [] }; grupos.push(g); ag = null; return; }
     if (!g) { pre.push(l); return; }
     if (t && /^\s{2}\S/.test(l) && !/^\s{4}/.test(l)) { ag = { header: l, cuerpo: [] }; g.agentes.push(ag); return; }
     if (ag) ag.cuerpo.push(l);
   });
-  const out = [...pre];
+  // v8.7: main.py imprime un rótulo «N embarques:» POR AGENTE (cada grupo
+  // tendría 1 solo agente y reordenar no se vería) → fusionamos los grupos
+  // del mismo nivel para que el orden actúe de verdad
+  const niveles = [];
+  const porTitulo = {};
   grupos.forEach(g => {
-    out.push('', g.titulo);
-    const clave = h => criterio === 'nombre'
-      ? h.trim().split(' (')[0].trim().toUpperCase()
-      : (h.match(/\d{2}:\d{2}/) || ['99:99'])[0];
-    [...g.agentes].sort((a, b) => {
+    if (!porTitulo[g.titulo]) { porTitulo[g.titulo] = []; niveles.push({ titulo: g.titulo, agentes: porTitulo[g.titulo] }); }
+    porTitulo[g.titulo].push(...g.agentes);
+  });
+  const out = [...pre];
+  const clave = h => criterio === 'nombre'
+    ? h.trim().split(' (')[0].trim().toUpperCase()
+    : (h.match(/\d{2}:\d{2}/) || ['99:99'])[0];
+  niveles.forEach(nv => {
+    out.push('', nv.titulo);
+    [...nv.agentes].sort((a, b) => {
       const ka = clave(a.header), kb = clave(b.header);
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     }).forEach(a => { out.push('', a.header, ...a.cuerpo); });
