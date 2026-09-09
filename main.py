@@ -408,10 +408,10 @@ class ReglasConfig(BaseModel):
     tol_salida: int = 5
     respetar_pausa_partido: bool = True
     # Gaps entre embarques (C4) — según zona Schengen/No-Schengen
-    gap_misma_zona_min: int = 60
-    gap_misma_zona_objetivo: int = 65
-    gap_distinta_zona_min: int = 75
-    gap_distinta_zona_objetivo: int = 80
+    gap_misma_zona_min: int = 55
+    gap_misma_zona_objetivo: int = 60
+    gap_distinta_zona_min: int = 70
+    gap_distinta_zona_objetivo: int = 75
     # Dotación por vuelo (C1)
     agentes_por_vuelo: int = 2
     agentes_siempre: bool = False  # dotación exacta siempre, sin excepción por pax bajo
@@ -426,7 +426,7 @@ class ReglasConfig(BaseModel):
     proporcionalidad_umbral: int = 60
     # Cobertura de departamentos (C7)
     cobertura_duracion: int = 15  # tiempo de traslado desde el STD
-    cobertura_tolerancia: int = 0  # traslado que se puede perder (comprime el bloque)
+    cobertura_tolerancia: int = 5  # traslado que se puede perder (comprime el bloque)
     cobertura_jornada_min: int = 0  # cobertura para todo operativo si 0
     # Informes
     ventana_reporte_min: int = 55
@@ -721,20 +721,35 @@ def optimize_schedule(req: OptimizeRequest):
                 model.AddNoOverlap([brk_iv] + flight_iv_dict[ai])
 
         # Constraint: Department Coverage (TKT, LL, OPS)
+        # v8.8: la COBERTURA ES PRIORIDAD sobre los embarques. Tres cambios:
+        # 1) el hueco que el modelo exige es de 30 min (el mínimo para ir a
+        #    comer, como en el informe) y no el traslado (15);
+        # 2) los vuelos del agente de cobertura bloquean TAMBIÉN el traslado
+        #    de ida y vuelta (antes el modelo daba por buena una cobertura
+        #    justo tras el STD — así pudo cargar 5 embarques a YANI/NURIA y
+        #    dejar sin hueco real a MELODIA);
+        # 3) si es físicamente imposible (nadie más puede operar el vuelo que
+        #    lo bloquea), cede un slack caro en vez de dejar el vuelo sin
+        #    agentes o sin solución: primero vuelos completos, luego cobertura.
+        _cob_slot = 30
+        _cob_tr = max(0, R.cobertura_duracion - R.cobertura_tolerancia)
+        _cob_jor = R.cobertura_jornada_min if R.cobertura_jornada_min > 0 else R.descanso_jornada_min
+        _pen_cob = 100_000
+        cob_slacks = []
+        cov_fly_iv = {}
         for op_idx, op_ag in enumerate(AGENTES):
             base_operational_role = get_base_role(op_ag['rol'])
             if (
                 base_operational_role not in ROLES_OPERATIVOS
                 or op_ag['excluir']
                 or get_full_shift_status(op_ag['rol']) == 'SICK'
-                or op_ag['_jornada'] <= R.cobertura_jornada_min
+                or op_ag['_jornada'] <= _cob_jor
             ):
                 continue
             dept = base_operational_role
             op_mid = op_ag['_midpoint']
             op_fin = op_ag['_t_fin']
-            vent = max(0, R.cobertura_duracion - R.cobertura_tolerancia)
-            if op_fin - op_mid < vent:
+            if op_fin - op_mid < _cob_slot:
                 continue
         
             can_cover = []
@@ -745,19 +760,29 @@ def optimize_schedule(req: OptimizeRequest):
                     continue
                 cov_from = max(op_mid, cov_ag['_t_ini'])
                 cov_to = min(op_fin, cov_ag['_t_fin'])
-                if cov_to - cov_from < vent:
+                if cov_to - cov_from < _cob_slot:
                     continue
             
                 is_cov = model.NewBoolVar(f'cov_{cov_ag["nombre"]}_{op_idx}')
-                cov_s = model.NewIntVar(cov_from, cov_to - vent, f'cs_{cov_ag["nombre"]}_{op_idx}')
-                cov_e = model.NewIntVar(cov_from + vent, cov_to, f'ce_{cov_ag["nombre"]}_{op_idx}')
-                cov_iv = model.NewOptionalIntervalVar(cov_s, vent, cov_e, is_cov, f'civ_{cov_ag["nombre"]}_{op_idx}')
+                cov_s = model.NewIntVar(cov_from, cov_to - _cob_slot, f'cs_{cov_ag["nombre"]}_{op_idx}')
+                cov_e = model.NewIntVar(cov_from + _cob_slot, cov_to, f'ce_{cov_ag["nombre"]}_{op_idx}')
+                cov_iv = model.NewOptionalIntervalVar(cov_s, _cob_slot, cov_e, is_cov, f'civ_{cov_ag["nombre"]}_{op_idx}')
             
                 no_ov = [cov_iv]
                 ai = activos_idx.get(cov_ag['id'])
                 if ai is not None:
-                    if ai in flight_iv_dict:
-                        no_ov += flight_iv_dict[ai]
+                    # v8.8: los vuelos del pool bloquean con el traslado incluido
+                    if ai not in cov_fly_iv:
+                        cov_fly_iv[ai] = [
+                            model.NewOptionalIntervalVar(
+                                v['emb_inicio'] - _cob_tr,
+                                (v['std_min'] - v['emb_inicio']) + 2 * _cob_tr,
+                                v['std_min'] + _cob_tr,
+                                x[ai][vi],
+                                f'cf_{ai}_{vi}'
+                            ) for vi, v in enumerate(VUELOS)
+                        ]
+                    no_ov += cov_fly_iv[ai]
                     if ai in break_iv_dict:
                         no_ov.append(break_iv_dict[ai])
             
@@ -765,7 +790,10 @@ def optimize_schedule(req: OptimizeRequest):
                 can_cover.append(is_cov)
         
             if can_cover:
-                model.Add(sum(can_cover) >= 1)
+                # v8.8: exigir ≥1 cobrador con válvula de escape (slack caro)
+                _csl = model.NewBoolVar(f'covsl_{op_idx}')
+                model.Add(sum(can_cover) + _csl >= 1)
+                cob_slacks.append(_csl)
 
         # Workload optimization objective
         carga_ag = [sum(x[ai][vi] for vi in range(V)) for ai in range(A)]
@@ -775,8 +803,12 @@ def optimize_schedule(req: OptimizeRequest):
                     model.Add(carga_ag[ai] >= carga_ag[aj])
 
         # Objective functions based on Mode
+        # v8.8: cobertura no cubierta penaliza 100k en TODOS los modos (por
+        # debajo de los slacks de vuelo 1e6: primero vuelos completos,
+        # después cobertura) → prioridad real sobre los embarques
+        _cob_pen = _pen_cob * sum(cob_slacks)
         if tolerar:
-            model.Minimize(1_000_000 * sum(slacks) if slacks else 0)
+            model.Minimize(1_000_000 * sum(slacks if slacks else []) + _cob_pen)
         elif MODO == 'EQUILIBRADO':
             max_c = model.NewIntVar(0, V, 'mc')
             min_c = model.NewIntVar(0, V, 'nc')
@@ -784,9 +816,9 @@ def optimize_schedule(req: OptimizeRequest):
             model.AddMinEquality(min_c, carga_ag)
             diff = model.NewIntVar(0, V, 'd')
             model.Add(diff == max_c - min_c)
-            model.Minimize(diff)
+            model.Minimize(diff + _cob_pen)
         elif MODO == 'PROPORCIONAL':
-            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)))
+            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)) - _cob_pen)
 
         # Solve model
         solver.parameters.max_time_in_seconds = float(R.tiempo_limite_segundos)
