@@ -721,17 +721,13 @@ def optimize_schedule(req: OptimizeRequest):
                 model.AddNoOverlap([brk_iv] + flight_iv_dict[ai])
 
         # Constraint: Department Coverage (TKT, LL, OPS)
-        # v8.8: la COBERTURA ES PRIORIDAD sobre los embarques. Tres cambios:
-        # 1) el hueco que el modelo exige es de 30 min (el mínimo para ir a
-        #    comer, como en el informe) y no el traslado (15);
-        # 2) los vuelos del agente de cobertura bloquean TAMBIÉN el traslado
-        #    de ida y vuelta (antes el modelo daba por buena una cobertura
-        #    justo tras el STD — así pudo cargar 5 embarques a YANI/NURIA y
-        #    dejar sin hueco real a MELODIA);
-        # 3) si es físicamente imposible (nadie más puede operar el vuelo que
-        #    lo bloquea), cede un slack caro en vez de dejar el vuelo sin
-        #    agentes o sin solución: primero vuelos completos, luego cobertura.
-        _cob_slot = 30
+        # v8.11: el descanso del OPERATIVO son 40 min internos (no embarca:
+        # ida a la sala, comer, vuelta — fuera del modal a propósito). El que
+        # cubre añade su traslado (Cobertura: traslado − tolerancia) en los
+        # bordes con vuelo propio. Los partidos solo cubren dentro de sus
+        # bloques. La cobertura tiene PRIORIDAD sobre los embarques (v8.8)
+        # salvo que no haya agente para embarcar (slack 100k < 1e6 vuelos).
+        _cob_slot = 40
         _cob_tr = max(0, R.cobertura_duracion - R.cobertura_tolerancia)
         _cob_jor = R.cobertura_jornada_min if R.cobertura_jornada_min > 0 else R.descanso_jornada_min
         _pen_cob = 100_000
@@ -785,6 +781,12 @@ def optimize_schedule(req: OptimizeRequest):
                     no_ov += cov_fly_iv[ai]
                     if ai in break_iv_dict:
                         no_ov.append(break_iv_dict[ai])
+                    # v8.10: los partidos solo cubren DENTRO de sus bloques (su
+                    # pausa entre tramos no es tiempo de cobertura, igual que
+                    # en el informe) ni los mixtos durante su bloque TKT
+                    for ex_s, ex_e in cov_ag.get('_excl_intervals', []) + cov_ag.get('_mixto_intervals', []):
+                        ex_iv = model.NewOptionalIntervalVar(ex_s, ex_e - ex_s, ex_e, is_cov, f'cex_{cov_ag["nombre"]}_{op_idx}_{len(no_ov)}')
+                        no_ov.append(ex_iv)
             
                 model.AddNoOverlap(no_ov)
                 can_cover.append(is_cov)
@@ -1046,14 +1048,13 @@ def optimize_schedule(req: OptimizeRequest):
                     print(f"  ⚠️  Sin tramo ≥{R.descanso_duracion} min desde {m2t(mid)} — disponible: {dur_str(max_a)} — PSM")
 
             # v8.6: hueco mínimo para que un hueco cuente como COBERTURA: 30 min,
-            # v8.6: para que un hueco cuente como COBERTURA hace falta tiempo para
-            # comer (30 min) y, si el borde del hueco es un VUELO del propio
-            # agente de cobertura, también el traslado efectivo (traslado −
-            # tolerancia): acaba de embarcar (irse al siguiente vuelo o a casa)
-            # y/o debe marchar antes para embarcar el siguiente. Los bordes que
-            # no son vuelo (entrada/salida de turno) no comen hueco. El 55 del
-            # informe sigue solo en las sugerencias de DESCANSOS y la sección SICK.
-            _min_cob = 30
+            # v8.11: REGLA INTERNA (a propósito fuera del modal, para no acumular
+            # parámetros) — el descanso del PERSONAL OPERATIVO son 40 min: como
+            # no embarca, no necesita traslados de vuelo, solo ir a la sala de
+            # descanso, comer y volver. Es lo que debe durar la cobertura que
+            # reciba. El agente que cubre añade su traslado (🛡️ Cobertura:
+            # traslado − tolerancia) solo en los bordes con vuelo propio.
+            _min_cob = 40
             _traslado_cob = max(0, R.cobertura_duracion - R.cobertura_tolerancia)
 
             # v8.6: un turno partido solo cubre DENTRO de sus dos bloques
@@ -1088,11 +1089,11 @@ def optimize_schedule(req: OptimizeRequest):
                     wins.append((gs, hasta, hasta-gs))
                 return wins
 
+            # v8.10: el que cubre también exige SU descanso según parámetros
+            # (sin caso especial de 6h exactas — menos reglas)
             def descanso_requerido_cobertura(ag):
                 if ag['_jornada'] > R.descanso_jornada_min:
-                    return R.descanso_duracion
-                if ag['_jornada'] == R.descanso_recomendable_jornada:
-                    return R.ventana_reporte_min
+                    return max(0, R.descanso_duracion - R.descanso_tolerancia)
                 return 0
 
             def hay_descanso_disjunto(ag, ex_s, ex_e, req):
