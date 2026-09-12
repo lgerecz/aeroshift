@@ -424,6 +424,10 @@ function init() {
   }
 
   function pintarInforme() {
+    // v8.12: el modal muestra directamente el informe completo (la tabla de
+    // "Embarques por agente" se retiró — esa información vive en ✈️ Embarques)
+    const pre = document.getElementById('informeTexto');
+    if (pre) pre.textContent = (ultimoInforme && ultimoInforme.texto) || '';
     const body = document.getElementById('informeTablaBody');
     if (!body) return;
     const filas = Array.from((ultimoInforme && ultimoInforme.resumen) || []);
@@ -444,8 +448,6 @@ function init() {
       + '<td style="padding:8px 12px;">' + escapeHtml(f.ultima || '—') + '</td>'
       + '</tr>').join('')
       || '<tr><td colspan="5" style="padding:14px; text-align:center;">Genera una parrilla para ver el informe.</td></tr>';
-    const pre = document.getElementById('informeTexto');
-    if (pre) pre.textContent = (ultimoInforme && ultimoInforme.texto) || '';
   }
 
   function nombreNormalizado(s) {
@@ -1318,7 +1320,9 @@ function pintarPanelInformes() {
     `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
        <div style="color:#9CA3B4; font-size:11px; letter-spacing:1px; font-weight:700;">${sub}</div>${selector}
      </div>` +
-    `<div style="font-family:'Consolas','Courier New',monospace; font-size:12.5px; line-height:1.5; white-space:pre-wrap;">${pintarLineasInforme(contenido)}</div>`;
+    `<div style="font-family:'Consolas','Courier New',monospace; font-size:12.5px; line-height:1.5; white-space:pre-wrap;">${pintarLineasInforme(contenido)}</div>` +
+    // v8.12: botón «subir» flotante (esquina inferior derecha) en Descansos/Embarques
+    `<button id="btnSubirArriba" onclick="window.scrollTo({top:0,behavior:'smooth'}); var w=document.querySelector('.schedule-wrapper'); if(w&&w.scrollHeight>w.clientHeight) w.scrollTo({top:0,behavior:'smooth'});" title="Volver arriba" aria-label="Volver arriba" style="position:fixed; right:22px; bottom:22px; z-index:900; width:38px; height:38px; border:none; border-radius:50%; background:#9CA3B4; color:#ffffff; font-size:17px; font-weight:900; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.35); transition:background 0.15s; padding:0;" onmouseover="this.style.background='#378add'" onmouseout="this.style.background='#9CA3B4'">↑</button>`;
   panel.style.display = 'block';
   if (wrapper) wrapper.style.display = 'none';
 }
