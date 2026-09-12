@@ -969,37 +969,32 @@ function cambiarOrdenEmbarques(v) {
 
 function ordenarEmbarques(texto, criterio) {
   if (criterio !== 'nombre' && criterio !== 'entrada') return texto;
+  // v8.15: orden GLOBAL — alfabético y horario de entrada reordenan TODA la
+  // pestaña (Andrea S con 6 va antes que Estefi T con 7); los rótulos
+  // «N embarques:» desaparecen en esos modos (el nº de embarques sigue
+  // siendo el orden por defecto, que mantiene los grupos)
   const pre = [];
-  const grupos = [];
-  let g = null, ag = null;
+  const agentes = [];
+  let ag = null;
+  let enGrupos = false;
   texto.split('\n').forEach(l => {
     const t = l.trim();
-    // v8.7: singular también — main.py imprime «1 embarque:» (solo «embarques:»
-    // no lo cogía y esos agentes quedaban pegados al bloque anterior)
-    if (/^\d+\s+embarques?:\s*$/.test(t)) { g = { titulo: l, agentes: [] }; grupos.push(g); ag = null; return; }
-    if (!g) { pre.push(l); return; }
-    if (t && /^\s{2}\S/.test(l) && !/^\s{4}/.test(l)) { ag = { header: l, cuerpo: [] }; g.agentes.push(ag); return; }
+    if (/^\d+\s+embarques?:\s*$/.test(t)) { enGrupos = true; ag = null; return; }
+    if (!enGrupos) { pre.push(l); return; }
+    if (t && /^\s{2}\S/.test(l) && !/^\s{4}/.test(l)) { ag = { header: l, cuerpo: [] }; agentes.push(ag); return; }
     if (ag) ag.cuerpo.push(l);
   });
-  // v8.7: main.py imprime un rótulo «N embarques:» POR AGENTE (cada grupo
-  // tendría 1 solo agente y reordenar no se vería) → fusionamos los grupos
-  // del mismo nivel para que el orden actúe de verdad
-  const niveles = [];
-  const porTitulo = {};
-  grupos.forEach(g => {
-    if (!porTitulo[g.titulo]) { porTitulo[g.titulo] = []; niveles.push({ titulo: g.titulo, agentes: porTitulo[g.titulo] }); }
-    porTitulo[g.titulo].push(...g.agentes);
-  });
-  const out = [...pre];
   const clave = h => criterio === 'nombre'
     ? h.trim().split(' (')[0].trim().toUpperCase()
     : (h.match(/\d{2}:\d{2}/) || ['99:99'])[0];
-  niveles.forEach(nv => {
-    out.push('', nv.titulo);
-    [...nv.agentes].sort((a, b) => {
-      const ka = clave(a.header), kb = clave(b.header);
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    }).forEach(a => { out.push('', a.header, ...a.cuerpo); });
+  agentes.sort((a, b) => {
+    const ka = clave(a.header), kb = clave(b.header);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  const out = [...pre];
+  agentes.forEach(a => {
+    while (a.cuerpo.length && !a.cuerpo[a.cuerpo.length - 1].trim()) a.cuerpo.pop();
+    out.push('', a.header, ...a.cuerpo);
   });
   return out.join('\n').replace(/^\n+/, '');
 }
