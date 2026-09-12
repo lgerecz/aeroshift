@@ -732,6 +732,12 @@ def optimize_schedule(req: OptimizeRequest):
         _cob_jor = R.cobertura_jornada_min if R.cobertura_jornada_min > 0 else R.descanso_jornada_min
         _pen_cob = 100_000
         cob_slacks = []
+        # v8.13: los vuelos que pisan la ventana de cobertura de un agente
+        # del pool cuestan CARO en el objetivo → el solver los reparte antes
+        # al resto de agentes y solo se los queda si nadie más puede volarlos
+        # (así la cobertura de puestos nunca se descuida por comodidad).
+        _pen_win = 1000
+        cob_win = []
         cov_fly_iv = {}
         for op_idx, op_ag in enumerate(AGENTES):
             base_operational_role = get_base_role(op_ag['rol'])
@@ -781,6 +787,13 @@ def optimize_schedule(req: OptimizeRequest):
                     no_ov += cov_fly_iv[ai]
                     if ai in break_iv_dict:
                         no_ov.append(break_iv_dict[ai])
+                    # v8.13: penaliza sus vuelos dentro de ESTA ventana de
+                    # cobertura (vuelo sigue en vuelo tras el traslado, o
+                    # embarque antes del traslado) → empuja a repartirlos
+                    # al resto de agentes antes de cargarle a él
+                    for vi, v in enumerate(VUELOS):
+                        if v['std_min'] + _cob_tr > cov_from and v['emb_inicio'] - _cob_tr < cov_to:
+                            cob_win.append(x[ai][vi])
                     # v8.10: los partidos solo cubren DENTRO de sus bloques (su
                     # pausa entre tramos no es tiempo de cobertura, igual que
                     # en el informe) ni los mixtos durante su bloque TKT
@@ -808,9 +821,14 @@ def optimize_schedule(req: OptimizeRequest):
         # v8.8: cobertura no cubierta penaliza 100k en TODOS los modos (por
         # debajo de los slacks de vuelo 1e6: primero vuelos completos,
         # después cobertura) → prioridad real sobre los embarques
+        # v8.13: y los vuelos que pisan ventanas de cobertura del pool
+        # penalizan 1000 cada uno (por debajo de los 100k: si al final no
+        # hay más remedio, se asignan — pero el solver AGOTA antes el resto
+        # de agentes, que son muchos)
         _cob_pen = _pen_cob * sum(cob_slacks)
+        _cob_win_pen = _pen_win * sum(cob_win)
         if tolerar:
-            model.Minimize(1_000_000 * sum(slacks if slacks else []) + _cob_pen)
+            model.Minimize(1_000_000 * sum(slacks if slacks else []) + _cob_pen + _cob_win_pen)
         elif MODO == 'EQUILIBRADO':
             max_c = model.NewIntVar(0, V, 'mc')
             min_c = model.NewIntVar(0, V, 'nc')
@@ -818,9 +836,9 @@ def optimize_schedule(req: OptimizeRequest):
             model.AddMinEquality(min_c, carga_ag)
             diff = model.NewIntVar(0, V, 'd')
             model.Add(diff == max_c - min_c)
-            model.Minimize(diff + _cob_pen)
+            model.Minimize(diff + _cob_pen + _cob_win_pen)
         elif MODO == 'PROPORCIONAL':
-            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)) - _cob_pen)
+            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)) - _cob_pen - _cob_win_pen)
 
         # Solve model
         solver.parameters.max_time_in_seconds = float(R.tiempo_limite_segundos)
