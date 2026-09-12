@@ -1321,8 +1321,11 @@ function pintarPanelInformes() {
        <div style="color:#9CA3B4; font-size:11px; letter-spacing:1px; font-weight:700;">${sub}</div>${selector}
      </div>` +
     `<div style="font-family:'Consolas','Courier New',monospace; font-size:12.5px; line-height:1.5; white-space:pre-wrap;">${pintarLineasInforme(contenido)}</div>` +
-    // v8.12: botón «subir» flotante (esquina inferior derecha) en Descansos/Embarques
-    `<button id="btnSubirArriba" onclick="window.scrollTo({top:0,behavior:'smooth'}); var w=document.querySelector('.schedule-wrapper'); if(w&&w.scrollHeight>w.clientHeight) w.scrollTo({top:0,behavior:'smooth'});" title="Volver arriba" aria-label="Volver arriba" style="position:fixed; right:22px; bottom:22px; z-index:900; width:38px; height:38px; border:none; border-radius:50%; background:#9CA3B4; color:#ffffff; font-size:17px; font-weight:900; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.35); transition:background 0.15s; padding:0;" onmouseover="this.style.background='#378add'" onmouseout="this.style.background='#9CA3B4'">↑</button>`;
+    // v8.14: botón «subir» DENTRO del cuadrante (sticky, esquina inferior
+    // derecha del panel) y AZUL AeroShift con el hover del botón Informe.
+    // v8.14b: el scroll que hay que subir es EL DEL PROPIO panelInformes
+    // (tiene overflow:auto) — no la ventana: por eso antes no hacía nada.
+    `<button id="btnSubirArriba" onclick="var p=document.getElementById('panelInformes'); if(p&&p.scrollHeight>p.clientHeight){p.scrollTo({top:0,behavior:'smooth'});} window.scrollTo({top:0,behavior:'smooth'}); var w=document.querySelector('.schedule-wrapper'); if(w&&w.scrollHeight>w.clientHeight) w.scrollTo({top:0,behavior:'smooth'});" title="Volver arriba" aria-label="Volver arriba" style="position: sticky; bottom: 10px; margin-left: auto; margin-top: 12px; display: block; width: 38px; height: 38px; border: none; border-radius: 50%; background: #378add; color: #ffffff; font-size: 17px; font-weight: 900; line-height: 1; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.35); transition: all 0.15s; padding: 0;" onmouseover="this.style.background='#1e70c5'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#378add'; this.style.transform='none'">↑</button>`;
   panel.style.display = 'block';
   if (wrapper) wrapper.style.display = 'none';
 }
