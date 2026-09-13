@@ -866,6 +866,33 @@ async function descargarInformeAbierto() {
   const seccion = textoSeccionInforme(esDescansos ? 'DESCANSOS' : 'LISTADO POR CANTIDAD DE EMBARQUES');
   // v8.7: descargar EXACTAMENTE lo que se ve (con el orden elegido en el selector)
   const contenido = esDescansos ? ordenarDescansos(seccion, ordenDescansos) : ordenarEmbarques(seccion, ordenEmbarques);
+  // v8.18: estructura por BLOQUES para la impresión — pre (resumen/títulos a
+  // ancho completo) y bloques [cabecera del agente, …su información…]; el
+  // servidor los aparea izquierda/derecha con los nombres a la misma altura
+  const pre = [];
+  const bloques = [];
+  let blk = null;
+  const cerrarBlk = () => { if (blk) { bloques.push(blk); blk = null; } };
+  contenido.split('\n').forEach(l => {
+    const t = l.trim();
+    if (!t) { cerrarBlk(); return; }
+    if (esDescansos) {
+      if (/^[^ ]/.test(l)) {
+        cerrarBlk();
+        if (/^[▶👥]/.test(t)) pre.push(l);
+        else blk = [l];
+        return;
+      }
+      if (blk) blk.push(l);
+      return;
+    }
+    // Embarques: resumen 👥 y rótulos «N embarques:» a ancho completo;
+    // cabeceras de agente con 2 espacios; cuerpo con 4+
+    if (/^[^ ]/.test(l) || /^\d+\s+embarques?:\s*$/.test(t)) { cerrarBlk(); pre.push(l); return; }
+    if (/^ {2}\S/.test(l) && !/^ {4}/.test(l)) { cerrarBlk(); blk = [l]; return; }
+    if (blk) blk.push(l);
+  });
+  cerrarBlk();
   if (!contenido) { alert('Aún no hay informe que descargar. Genera la parrilla primero.'); return; }
   const titulo = esDescansos ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE' : 'LISTADO POR CANTIDAD DE EMBARQUES';
   const payload = {
@@ -873,7 +900,9 @@ async function descargarInformeAbierto() {
     fecha: fechaParaArchivo(),
     cabecera: [titulo],
     filas: contenido.split('\n').map(l => [l]),
-    anchos: [130]
+    anchos: [130],
+    pre,
+    bloques
   };
   const backendInput = document.getElementById('backendUrl');
   const backendUrl = backendInput ? backendInput.value.trim() : 'https://aeroshift-backend.onrender.com';
@@ -1019,7 +1048,7 @@ function filasParrillaVertical() {
   ]);
   return {
     cabecera: ['#', 'DESTINO', 'VUELO', 'APERTURA', 'AGENTES DEL EMBARQUE', 'CIERRE', 'STD', 'PAX'],
-    filas, resaltados: [], anchos: [5, 10, 9, 10, 40, 9, 8, 7], congelar: 'A2'
+    filas, resaltados: [], anchos: [5, 9, 8, 9, 34, 8, 7, 6], congelar: 'A2'
   };
 }
 
@@ -1070,7 +1099,7 @@ function filasParrillaHorizontal() {
 
   return {
     cabecera, filas, resaltados,
-    anchos: [4, 30, ...slots.map(() => 4.5)], congelar: 'C2'
+    anchos: [4, 18, ...slots.map(() => 4.5)], congelar: 'C2'
   };
 }
 
@@ -1285,6 +1314,8 @@ function pintarLineasInforme(texto) {
     if (/^═{8,}$|^─{8,}$/.test(l.trim())) return `<div style="color:#2d3148;">${t}</div>`;
     if (l.includes('⚠')) return `<div style="color:#ef4444;">${t}</div>`;
     if (!/^\s/.test(l)) return `<div style="color:#e8eaf0; font-weight:700; margin-top:6px;">${t}</div>`;
+    // v8.18: en Embarques el nombre + horario también van en blanco y negrita
+    if (/^ {2}[A-ZÁÉÍÓÚÑÜ0-9]/.test(l) && !/^ {4}/.test(l) && /\d{2}:\d{2}\s*[-–—]\s*\d{2}:\d{2}/.test(l)) return `<div style="color:#e8eaf0; font-weight:700; margin-top:6px;">${t}</div>`;
     return `<div style="color:#9CA3B4;">${t}</div>`;
   }).join('');
 }

@@ -1642,13 +1642,43 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                     return True
                 return False
 
-            # v8.7: lectura en ZIGZAG en lugar de por columnas — el 1º queda a
-            # la izquierda, el 2º a la derecha (misma fila), el 3º a la
-            # izquierda de la fila siguiente… para leer de izquierda a derecha
-            for i, linea in enumerate(lineas):
-                if linea.strip():
-                    celda = ws.cell(row=2 + i // 2, column=1 if i % 2 == 0 else 3, value=linea)
-                    celda.font = fuente_nombre if es_nombre(linea) else fuente_informe
+            # v8.18: ALINEACIÓN POR BLOQUES (como en la pestaña) — el cliente
+            # envía «pre» (líneas a ancho completo: resumen, títulos ▶/grupos)
+            # y «bloques» (cabecera del agente + su información). Los bloques
+            # se aparean: 1º izquierda, 2º derecha EN LA MISMA FILA, y la
+            # pareja siguiente empieza debajo del bloque más alto de la
+            # anterior → los nombres SIEMPRE a la misma altura. Sin bloques
+            # (payload antiguo) se mantiene el zigzag línea a línea de la 8.7.
+            pre = [str(x) for x in (payload.get("pre") or [])]
+            bloques = [[str(x) for x in b] for b in (payload.get("bloques") or []) if isinstance(b, list) and b]
+            if bloques:
+                r = 2
+                for linea in pre:
+                    if linea.strip():
+                        ws.cell(row=r, column=1, value=linea).font = fuente_informe
+                    r += 1
+                if pre:
+                    r += 1
+                i = 0
+                while i < len(bloques):
+                    izq = bloques[i]
+                    der = bloques[i + 1] if i + 1 < len(bloques) else None
+                    fila_ini = r
+                    for j, linea in enumerate(izq):
+                        if linea.strip():
+                            ws.cell(row=fila_ini + j, column=1, value=linea).font = fuente_nombre if j == 0 else fuente_informe
+                    if der:
+                        for j, linea in enumerate(der):
+                            if linea.strip():
+                                ws.cell(row=fila_ini + j, column=3, value=linea).font = fuente_nombre if j == 0 else fuente_informe
+                    r = fila_ini + max(len(izq), len(der) if der else 0) + 1
+                    i += 2
+            else:
+                # v8.7: lectura en ZIGZAG (retrocompatibilidad)
+                for i, linea in enumerate(lineas):
+                    if linea.strip():
+                        celda = ws.cell(row=2 + i // 2, column=1 if i % 2 == 0 else 3, value=linea)
+                        celda.font = fuente_nombre if es_nombre(linea) else fuente_informe
             ws.column_dimensions["A"].width = 62
             ws.column_dimensions["B"].width = 2
             ws.column_dimensions["C"].width = 62
@@ -1666,6 +1696,9 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                     celda = ws.cell(row=r, column=c, value=valor)
                     if vista == "vertical" and c in (2, 3):
                         celda.font = Font(bold=True)
+                    elif vista == "horizontal":
+                        # v8.18: datos en letra 9 (los títulos siguen en 10)
+                        celda.font = Font(size=9)
         es_informe = vista in {"descansos", "embarques"}
         for par in ([] if es_informe else (payload.get("resaltados") or [])):
             try:
@@ -1684,6 +1717,28 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
         congelar = "" if es_informe else str(payload.get("congelar") or "").strip()
         if re.fullmatch(r"[A-Z]{1,3}[0-9]+", congelar):
             ws.freeze_panes = congelar
+
+        # v8.18: IMPRESIÓN A4 — vertical en retrato y horizontal en apaisado,
+        # ambos ajustados al ancho de una página; la columna de agentes de la
+        # horizontal (B) se dimensiona justo para el nombre más largo
+        from openpyxl.worksheet.properties import PageSetupProperties
+        if vista == "vertical":
+            ws.page_setup.orientation = "portrait"
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        elif vista == "horizontal":
+            ws.page_setup.orientation = "landscape"
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+            try:
+                max_nombre = max((len(str(f[1])) for f in filas
+                                  if isinstance(f, list) and len(f) > 1 and f[1] not in (None, "")),
+                                 default=10)
+                ws.column_dimensions["B"].width = max(10, min(30, max_nombre + 2))
+            except Exception:
+                pass
 
         output = io.BytesIO()
         wb.save(output)
