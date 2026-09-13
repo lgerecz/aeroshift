@@ -1722,8 +1722,9 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                     if vista == "vertical" and c in (2, 3):
                         celda.font = Font(bold=True)
                     elif vista == "horizontal":
-                        # v8.18: datos en letra 9 (los títulos siguen en 10)
-                        celda.font = Font(size=9)
+                        # v9.2: letra normal Calibri 10 (la 9 de la 8.18 se
+                        # quedaba pequeña; el escalado de impresión es aparte)
+                        celda.font = Font(size=10)
         es_informe = vista in {"descansos", "embarques"}
         for par in ([] if es_informe else (payload.get("resaltados") or [])):
             try:
@@ -1747,16 +1748,24 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
         # ambos ajustados al ancho de una página; la columna de agentes de la
         # horizontal (B) se dimensiona justo para el nombre más largo
         from openpyxl.worksheet.properties import PageSetupProperties
+        # v9.2: alto LIBRE (32767) — con 0, LibreOffice aplastaba toda la
+        # parrilla horizontal en UNA hoja diminuta. Ahora: vertical 1 hoja de
+        # ancho; horizontal MÁXIMO 2 hojas de ancho (la letra que resulte se
+        # evalúa con esa regla) y hacia abajo las páginas que hagan falta.
         if vista == "vertical":
             ws.page_setup.orientation = "portrait"
             ws.page_setup.fitToWidth = 1
-            ws.page_setup.fitToHeight = 0
+            ws.page_setup.fitToHeight = 32767
             ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+            ws.print_title_rows = "1:1"
         elif vista == "horizontal":
             ws.page_setup.orientation = "landscape"
-            ws.page_setup.fitToWidth = 1
-            ws.page_setup.fitToHeight = 0
+            ws.page_setup.fitToWidth = 2
+            ws.page_setup.fitToHeight = 32767
             ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+            ws.print_title_rows = "1:1"
+            # la 2ª hoja horizontal repite # y Agente para poder leerla
+            ws.print_title_cols = "A:B"
             try:
                 max_nombre = max((len(str(f[1])) for f in filas
                                   if isinstance(f, list) and len(f) > 1 and f[1] not in (None, "")),
@@ -1764,6 +1773,18 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                 ws.column_dimensions["B"].width = max(10, min(30, max_nombre + 2))
             except Exception:
                 pass
+
+        # v9.2: CUADRÍCULA IMPRESA — líneas finas en todas las celdas del
+        # área (horizontales y verticales) para que la parrilla se lea bien
+        # en papel (petición para vertical y horizontal)
+        if vista in {"vertical", "horizontal"}:
+            from openpyxl.styles import Border, Side
+            fino = Side(style="thin", color="FF666666")
+            cuadricula = Border(left=fino, right=fino, top=fino, bottom=fino)
+            max_col = max((len(f) for f in filas if isinstance(f, list)), default=0)
+            for rr in range(1, ws.max_row + 1):
+                for cc in range(1, max_col + 1):
+                    ws.cell(row=rr, column=cc).border = cuadricula
 
         output = io.BytesIO()
         wb.save(output)

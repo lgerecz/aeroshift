@@ -1115,7 +1115,7 @@ function filasParrillaHorizontal() {
 
   return {
     cabecera, filas, resaltados,
-    anchos: [4, 18, ...slots.map(() => 4.5)], congelar: 'C2'
+    anchos: [4, 18, ...slots.map(() => 5)], congelar: 'C2'
   };
 }
 
