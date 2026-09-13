@@ -538,7 +538,9 @@ def optimize_schedule(req: OptimizeRequest):
 
     # Filter pools
     activos = [a for a in AGENTES if not a['excluir'] and not a.get('excluir_embarque') and not is_non_boarding_role(a['rol'])]
-    cobertura_pool = [a for a in AGENTES if not a['excluir'] and a['espec']]
+    # v8.16: los EXCLUIDOS sí pueden cubrir (regla del usuario: excluido =
+    # sin embarques, pero mantiene su descanso y su cobertura de área)
+    cobertura_pool = [a for a in AGENTES if a['espec']]
     activos_idx = {ag['id']: ai for ai, ag in enumerate(activos)}
     solo_cobertura = [a for a in AGENTES if a.get('excluir_embarque') and not a['excluir'] and not is_non_boarding_role(a['rol'])]
     todos_csa = (activos + solo_cobertura
@@ -1127,7 +1129,9 @@ def optimize_schedule(req: OptimizeRequest):
             def cobertura_dept(dept, op_ag, desde, hasta):
                 result = []
                 for col in AGENTES:
-                    if get_base_role(col['rol']) == dept and col['id'] != op_ag['id'] and not col['excluir']:
+                    if get_base_role(col['rol']) == dept and col['id'] != op_ag['id']:
+                        # v8.16: los excluidos también cuentan como colega (sin
+                        # embarques, pero disponibles para cobertura)
                         # v8.6: solo dentro de sus bloques y con el traslado
                         # restado en los bordes que son vuelos del propio colega
                         for bl_s, bl_e in bloques_de(col):
