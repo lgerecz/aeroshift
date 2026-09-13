@@ -2583,7 +2583,7 @@ async function validateUploadedData() {
         ? `\n- Y ${pendingFlights.length - 12} vuelo(s) más.`
         : '';
       alert(
-        'No se pueden importar los vuelos todavía.\n\n' +
+        'No se genera la parrilla: hay errores en el cuadrante de vuelos. No se generará nada hasta que se corrijan y no quede ningún aviso.\n\n' +
         'Corrige las filas marcadas en rojo:\n' + details + extra
       );
       return;
@@ -2626,18 +2626,10 @@ async function validateUploadedData() {
   const date = agentsDateISO;
   state.assignments[date] = {};
 
-  // Pop-up de carga con progreso estimado y botón Cancelar (v7.0)
-  const genController = new AbortController();
-  abrirGenerandoPop(genController);
-
-  const generateButton = document.getElementById('generateBoardButton');
-  const originalButtonHtml = generateButton ? generateButton.innerHTML : '';
-  if (generateButton) {
-    generateButton.disabled = true;
-    generateButton.innerHTML = '<span class="spinner" style="width:15px;height:15px;"></span> Generando Parrilla...';
-  }
-
   // ASIGNACIONES MANUALES: nombres escritos en la columna Agentes de la parrilla de vuelos
+  // v9.0: esta validación va ANTES de abrir el pop de progreso — con nombres
+  // sin reconocer NO se genera nada (ni se abre el pop ni se desactiva el
+  // botón Generar): se corrige el nombre y se vuelve a generar.
   const mapaAgentes = {};
   (extractedData.agents || []).forEach(a => { mapaAgentes[nombreNormalizado(a.name)] = a.id; });
   const forzadas = [];
@@ -2652,10 +2644,24 @@ async function validateUploadedData() {
     });
   });
   if (noEncontrados.length > 0) {
-    alert('Asignaciones manuales: no encuentro en Turnos del Personal a:\n\n- ' +
+    alert('No se genera la parrilla: hay nombres sin reconocer. No se generará nada hasta que todos los nombres estén reconocidos y no quede ningún aviso.\n\nAsignaciones manuales: no encuentro en Turnos del Personal a:\n\n- ' +
       noEncontrados.join('\n- ') +
-      '\n\nRevisa el nombre (debe coincidir con el cuadrante de turnos) y vuelve a generar.');
+      '\n\nCorrige el nombre en el cuadrante de vuelos (debe coincidir con el del cuadrante de turnos) y vuelve a generar.');
     return;
+  }
+
+  // Pop-up de carga con progreso estimado y botón Cancelar (v7.0).
+  // v9.0: se abre SOLO cuando el motor va a empezar; antes se abría antes de
+  // validar los nombres y, al fallar la validación, el pop se quedaba colgado
+  // y «Cancelar» no tenía nada que abortar (por eso "no cancelaba").
+  const genController = new AbortController();
+  abrirGenerandoPop(genController);
+
+  const generateButton = document.getElementById('generateBoardButton');
+  const originalButtonHtml = generateButton ? generateButton.innerHTML : '';
+  if (generateButton) {
+    generateButton.disabled = true;
+    generateButton.innerHTML = '<span class="spinner" style="width:15px;height:15px;"></span> Generando Parrilla...';
   }
 
   try {
