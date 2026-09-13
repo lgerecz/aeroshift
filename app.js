@@ -872,6 +872,7 @@ async function descargarInformeAbierto() {
   const pre = [];
   const bloques = [];
   let blk = null;
+  let nActual = 0;
   const cerrarBlk = () => { if (blk) { bloques.push(blk); blk = null; } };
   contenido.split('\n').forEach(l => {
     const t = l.trim();
@@ -886,11 +887,26 @@ async function descargarInformeAbierto() {
       if (blk) blk.push(l);
       return;
     }
-    // Embarques: resumen 👥 y rótulos «N embarques:» a ancho completo;
-    // cabeceras de agente con 2 espacios; cuerpo con 4+
-    if (/^[^ ]/.test(l) || /^\d+\s+embarques?:\s*$/.test(t)) { cerrarBlk(); pre.push(l); return; }
-    if (/^ {2}\S/.test(l) && !/^ {4}/.test(l)) { cerrarBlk(); blk = [l]; return; }
-    if (blk) blk.push(l);
+    // Embarques (v9.1): el rótulo «N embarques:» ya NO va suelto a ancho
+    // completo — se une a la cabecera de cada agente («6 embarques: NOMBRE
+    // (horario)») y los «con …» bajan a su propia línea; resumen 👥 y «— Sin
+    // asignación» quedan a ancho completo. Cuerpo sin la indentación de
+    // pantalla. (La pestaña en pantalla NO cambia: solo el Excel.)
+    const mR = t.match(/^(\d+)\s+embarques?:\s*$/);
+    if (mR) { cerrarBlk(); nActual = parseInt(mR[1], 10) || 0; return; }
+    if (/^[^ ]/.test(l)) { cerrarBlk(); pre.push(l); return; }
+    if (/^ {2}\S/.test(l) && !/^ {4}/.test(l)) {
+      cerrarBlk();
+      let base = t, con = '', n = nActual;
+      // orden alfabético/entrada: «NOMBRE (…) — N embarques, con …» (v8.17)
+      const mE = t.match(/^(.*?\))\s*—\s*(\d+)\s+embarques?(?:,\s*(con\b.*))?$/);
+      if (mE) { base = mE[1]; n = parseInt(mE[2], 10) || 0; con = mE[3] || ''; }
+      else { const mC = t.match(/^(.*?),\s*(con\b.*)$/); if (mC) { base = mC[1]; con = mC[2]; } }
+      blk = [`${n} embarque${n === 1 ? '' : 's'}: ${base}`];
+      if (con) blk.push(con.charAt(0).toUpperCase() + con.slice(1));
+      return;
+    }
+    if (blk) blk.push(l.replace(/^\s+/, ''));
   });
   cerrarBlk();
   if (!contenido) { alert('Aún no hay informe que descargar. Genera la parrilla primero.'); return; }

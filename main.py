@@ -1628,6 +1628,19 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
             lineas = [("" if not isinstance(f, list) or not f or f[0] is None else str(f[0])) for f in filas]
             fuente_informe = Font(size=10)
             fuente_nombre = Font(size=10, bold=True)
+            # v9.1: la línea «Con …» de cada agente (Embarques) va en cursiva
+            fuente_con = Font(size=10, italic=True)
+
+            def _linea_informe(celda, linea, es_cabecera):
+                # v9.1: cabecera en negrita, «Con …» en cursiva (y con ajuste
+                # de texto por si la lista de compañeros es larga), resto normal
+                if es_cabecera:
+                    celda.font = fuente_nombre
+                elif linea.lstrip().startswith("Con "):
+                    celda.font = fuente_con
+                    celda.alignment = Alignment(wrap_text=True, vertical="top")
+                else:
+                    celda.font = fuente_informe
 
             # v8.7: cabeceras de agente en NEGRITA — «NOMBRE [ROL] (…» en
             # Descansos (columna 0) y «  NOMBRE  HH:MM–…» en Listado de
@@ -1666,11 +1679,11 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                     fila_ini = r
                     for j, linea in enumerate(izq):
                         if linea.strip():
-                            ws.cell(row=fila_ini + j, column=1, value=linea).font = fuente_nombre if j == 0 else fuente_informe
+                            _linea_informe(ws.cell(row=fila_ini + j, column=1, value=linea), linea, j == 0)
                     if der:
                         for j, linea in enumerate(der):
                             if linea.strip():
-                                ws.cell(row=fila_ini + j, column=3, value=linea).font = fuente_nombre if j == 0 else fuente_informe
+                                _linea_informe(ws.cell(row=fila_ini + j, column=3, value=linea), linea, j == 0)
                     r = fila_ini + max(len(izq), len(der) if der else 0) + 1
                     i += 2
             else:
@@ -1679,13 +1692,25 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                     if linea.strip():
                         celda = ws.cell(row=2 + i // 2, column=1 if i % 2 == 0 else 3, value=linea)
                         celda.font = fuente_nombre if es_nombre(linea) else fuente_informe
-            ws.column_dimensions["A"].width = 62
+            # v9.1: en Embarques las columnas pasan de 62 a 48 — las líneas son
+            # más cortas (el rótulo va con el nombre y los «con …» en su propia
+            # línea) y así A+B+C caben al 100% en una A4 vertical sin encoger
+            ancho_informe = 48 if vista == "embarques" else 62
+            ws.column_dimensions["A"].width = ancho_informe
             ws.column_dimensions["B"].width = 2
-            ws.column_dimensions["C"].width = 62
+            ws.column_dimensions["C"].width = ancho_informe
             ws.page_setup.orientation = "portrait"
             ws.page_setup.fitToWidth = 1
             ws.page_setup.fitToHeight = 0
             ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+            # v9.1: IMPRESIÓN CENTRADA — la división entre las dos columnas
+            # cae en el MEDIO del papel; papel A4 explícito, área acotada a lo
+            # escrito y márgenes simétricos
+            ws.print_options.horizontalCentered = True
+            ws.page_setup.paperSize = 9  # A4
+            ws.print_area = f"A1:C{ws.max_row + 1}"
+            from openpyxl.worksheet.page import PageMargins
+            ws.page_margins = PageMargins(left=0.4, right=0.4, top=0.6, bottom=0.6)
         else:
             for r, fila in enumerate(filas, 2):
                 if not isinstance(fila, list):
