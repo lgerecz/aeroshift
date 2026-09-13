@@ -970,18 +970,19 @@ function cambiarOrdenEmbarques(v) {
 function ordenarEmbarques(texto, criterio) {
   if (criterio !== 'nombre' && criterio !== 'entrada') return texto;
   // v8.15: orden GLOBAL — alfabético y horario de entrada reordenan TODA la
-  // pestaña (Andrea S con 6 va antes que Estefi T con 7); los rótulos
-  // «N embarques:» desaparecen en esos modos (el nº de embarques sigue
-  // siendo el orden por defecto, que mantiene los grupos)
+  // pestaña (Andrea S con 6 va antes que Estefi T con 7)
+  // v8.17: la cantidad de embarques NO desaparece: se inserta en la propia
+  // línea del agente al estilo Descansos — «NOMBRE (horario) — N embarques, …»
   const pre = [];
   const agentes = [];
   let ag = null;
   let enGrupos = false;
+  let nActual = 0;
   texto.split('\n').forEach(l => {
     const t = l.trim();
-    if (/^\d+\s+embarques?:\s*$/.test(t)) { enGrupos = true; ag = null; return; }
+    if (/^\d+\s+embarques?:\s*$/.test(t)) { nActual = parseInt(t, 10) || 0; enGrupos = true; ag = null; return; }
     if (!enGrupos) { pre.push(l); return; }
-    if (t && /^\s{2}\S/.test(l) && !/^\s{4}/.test(l)) { ag = { header: l, cuerpo: [] }; agentes.push(ag); return; }
+    if (t && /^\s{2}\S/.test(l) && !/^\s{4}/.test(l)) { ag = { header: l, cuerpo: [], n: nActual }; agentes.push(ag); return; }
     if (ag) ag.cuerpo.push(l);
   });
   const clave = h => criterio === 'nombre'
@@ -993,6 +994,8 @@ function ordenarEmbarques(texto, criterio) {
   });
   const out = [...pre];
   agentes.forEach(a => {
+    const etiqueta = ` — ${a.n} embarque${a.n === 1 ? '' : 's'}`;
+    if (!/— \d+ embarques?/.test(a.header)) a.header = a.header.replace(/\)/, ')' + etiqueta);
     while (a.cuerpo.length && !a.cuerpo[a.cuerpo.length - 1].trim()) a.cuerpo.pop();
     out.push('', a.header, ...a.cuerpo);
   });
