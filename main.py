@@ -1760,8 +1760,14 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
             ws.print_title_rows = "1:1"
         elif vista == "horizontal":
             ws.page_setup.orientation = "landscape"
-            ws.page_setup.fitToWidth = 2
-            ws.page_setup.fitToHeight = 32767
+            # v9.4 (petición usuaria): la ALTURA manda — la parrilla completa
+            # cabe de margen superior a margen inferior en UNA página y el
+            # ANCHO sale en las hojas que hagan falta (~4 con un día real).
+            # La escala resultante la fija la altura (~60-65%), con la letra
+            # mucho más legible que aplastando todo a lo ancho. fitToWidth=0
+            # significa "sin límite de páginas de ancho" en el estándar xlsx.
+            ws.page_setup.fitToWidth = 0
+            ws.page_setup.fitToHeight = 1
             ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
             ws.print_title_rows = "1:1"
             # la 2ª hoja horizontal repite # y Agente para poder leerla
