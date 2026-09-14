@@ -873,6 +873,7 @@ async function descargarInformeAbierto() {
   const bloques = [];
   let blk = null;
   let nActual = 0;
+  const nDe = []; // v9.3: N de cada bloque, para ordenar dentro de cada grupo
   const cerrarBlk = () => { if (blk) { bloques.push(blk); blk = null; } };
   contenido.split('\n').forEach(l => {
     const t = l.trim();
@@ -898,17 +899,35 @@ async function descargarInformeAbierto() {
     if (/^ {2}\S/.test(l) && !/^ {4}/.test(l)) {
       cerrarBlk();
       let base = t, con = '', n = nActual;
-      // orden alfabético/entrada: «NOMBRE (…) — N embarques, con …» (v8.17)
-      const mE = t.match(/^(.*?\))\s*—\s*(\d+)\s+embarques?(?:,\s*(con\b.*))?$/);
+      // orden alfabético/entrada: «NOMBRE (…) — N embarques, con/siempre con …» (v8.17)
+      const mE = t.match(/^(.*?\))\s*—\s*(\d+)\s+embarques?(?:,\s*((?:siempre\s+)?con\b.*))?$/);
       if (mE) { base = mE[1]; n = parseInt(mE[2], 10) || 0; con = mE[3] || ''; }
-      else { const mC = t.match(/^(.*?),\s*(con\b.*)$/); if (mC) { base = mC[1]; con = mC[2]; } }
+      else { const mC = t.match(/^(.*?),\s*((?:siempre\s+)?con\b.*)$/); if (mC) { base = mC[1]; con = mC[2]; } }
       blk = [`${n} embarque${n === 1 ? '' : 's'}: ${base}`];
       if (con) blk.push(con.charAt(0).toUpperCase() + con.slice(1));
+      nDe.push(n);
       return;
     }
     if (blk) blk.push(l.replace(/^\s+/, ''));
   });
   cerrarBlk();
+  // v9.3: con el orden por defecto («nº de embarques»), DENTRO de cada grupo
+  // los agentes van por horario de entrada — el mismo criterio que siguen los
+  // de más de un embarque — y los de 1 o 0 embarques dejan de quedar
+  // salteados. Orden ESTABLE (los empates conservan el orden del informe).
+  // En alfabético/horario de entrada no se toca nada: ya están ordenados.
+  if (!esDescansos && ordenEmbarques === 'embarques' && nDe.length === bloques.length) {
+    const horaDe = bl => { const m = bl[0].match(/\d{2}:\d{2}/); return m ? m[0] : '99:99'; };
+    let a = 0;
+    while (a < bloques.length) {
+      let b = a + 1;
+      while (b < bloques.length && nDe[b] === nDe[a]) b++;
+      const run = bloques.slice(a, b).map((bl, k) => ({ bl, k, h: horaDe(bl) }));
+      run.sort((x, y) => (x.h < y.h ? -1 : x.h > y.h ? 1 : 0));
+      run.forEach((o, k) => { bloques[a + k] = o.bl; });
+      a = b;
+    }
+  }
   if (!contenido) { alert('Aún no hay informe que descargar. Genera la parrilla primero.'); return; }
   const titulo = esDescansos ? 'DESCANSOS DEL DÍA · DETALLE POR AGENTE' : 'LISTADO POR CANTIDAD DE EMBARQUES';
   const payload = {

@@ -1636,7 +1636,7 @@ def export_parrilla_xlsx(payload: Dict[str, Any] = Body(...)):
                 # de texto por si la lista de compañeros es larga), resto normal
                 if es_cabecera:
                     celda.font = fuente_nombre
-                elif linea.lstrip().startswith("Con "):
+                elif linea.lstrip().startswith(("Con ", "Siempre con ")):
                     celda.font = fuente_con
                     celda.alignment = Alignment(wrap_text=True, vertical="top")
                 else:
