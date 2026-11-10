@@ -3166,8 +3166,9 @@ function renderDetectedFlights() {
       }
       let stdMins = sh * 60 + sm;
       
-      // Boarding time (EMB) is 40 minutes before STD
-      let embMins = stdMins - 40;
+      // v11.2: esta columna pasa a ser el CIERRE = STD − 60 (antes mostraba
+      // el inicio del embarque, STD − 40). El STD es el que manda.
+      let embMins = stdMins - 60;
       if (embMins < 0) embMins += 1440;
       
       // Aperture time (APERTU) is 3 hours (180 minutes) before STD
