@@ -812,6 +812,24 @@ def optimize_schedule(req: OptimizeRequest):
                 model.Add(sum(can_cover) + _csl >= 1)
                 cob_slacks.append(_csl)
 
+        # v11.4: NO DOS TOLERANCIAS DE ENTRADA EN EL MISMO EMBARQUE — en cada
+        # vuelo, como mucho UN agente puede entrar «con tolerancia» (su margen
+        # de entrada cae DESPUÉS del inicio del embarque: entraría a STD−60 en
+        # vez de STD−70). Motivo: algunos vuelos de madrugada empiezan a
+        # embarcar a STD−50 y, si ambos agentes están en el límite, nadie
+        # cubre bien el arranque. SOFT (1000, nivel 8.13): el solver lo evita
+        # siempre que pueda; si no hay alternativa, no bloquea la cobertura.
+        _pen_tol_par = 1000
+        tol_par_slacks = []
+        for vi, v in enumerate(VUELOS):
+            _en_tol = [x[ai][vi] for ai in range(A)
+                       if activos[ai]['_t_ini'] + R.preparacion_entrada > v['emb_inicio']]
+            if len(_en_tol) >= 2:
+                _vp = model.NewIntVar(0, len(_en_tol), f'tolpar_{vi}')
+                model.Add(sum(_en_tol) <= 1 + _vp)
+                tol_par_slacks.append(_vp)
+        _tol_par_pen = _pen_tol_par * sum(tol_par_slacks)
+
         # Workload optimization objective
         carga_ag = [sum(x[ai][vi] for vi in range(V)) for ai in range(A)]
         for ai in range(A):
@@ -830,7 +848,7 @@ def optimize_schedule(req: OptimizeRequest):
         _cob_pen = _pen_cob * sum(cob_slacks)
         _cob_win_pen = _pen_win * sum(cob_win)
         if tolerar:
-            model.Minimize(1_000_000 * sum(slacks if slacks else []) + _cob_pen + _cob_win_pen)
+            model.Minimize(1_000_000 * sum(slacks if slacks else []) + _cob_pen + _cob_win_pen + _tol_par_pen)
         elif MODO == 'EQUILIBRADO':
             max_c = model.NewIntVar(0, V, 'mc')
             min_c = model.NewIntVar(0, V, 'nc')
@@ -838,9 +856,9 @@ def optimize_schedule(req: OptimizeRequest):
             model.AddMinEquality(min_c, carga_ag)
             diff = model.NewIntVar(0, V, 'd')
             model.Add(diff == max_c - min_c)
-            model.Minimize(diff + _cob_pen + _cob_win_pen)
+            model.Minimize(diff + _cob_pen + _cob_win_pen + _tol_par_pen)
         elif MODO == 'PROPORCIONAL':
-            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)) - _cob_pen - _cob_win_pen)
+            model.Maximize(sum(x[ai][vi]*activos[ai]['_jornada'] for ai in range(A) for vi in range(V)) - _cob_pen - _cob_win_pen - _tol_par_pen)
 
         # Solve model
         solver.parameters.max_time_in_seconds = float(R.tiempo_limite_segundos)
@@ -952,16 +970,18 @@ def optimize_schedule(req: OptimizeRequest):
             # SALIDA 3 — TOLERANCIAS
             # ─────────────────────────────────────────────────────────────
             print("\n"+"═"*72); print("TOLERANCIAS"); print("═"*72); hay_tol = False
+            _tol_por_vuelo = {}  # v11.4: vuelo → agentes que entrarían con tolerancia
             for ag in activos:
                 vag = sorted(por_ag.get(ag['id'], []), key=lambda v: v['emb_inicio'])
-                disp = ag['_t_ini'] + 30
+                disp = ag['_t_ini'] + R.preparacion_entrada
                 for idx, v in enumerate(vag):
                     de = disp - v['emb_inicio']
                     if de > 0:
                         hay_tol = True
-                        cat = "Tolerable" if de <= 10 else "No aceptable"
-                        icon = "⚠️ " if de <= 10 else "🔴"
-                        print(f"{icon} {ndisp(ag)} ({hor_turno_completo(ag)}) — L{v['num']} {v['destino']}: EMB {m2t(v['emb_inicio'])}, entrada {ag['inicio']}+30={m2t(disp)}. ❌ {de} min. {cat}.")
+                        cat = "Tolerable" if de <= R.tol_entrada else "No aceptable"
+                        icon = "⚠️ " if de <= R.tol_entrada else "🔴"
+                        print(f"{icon} {ndisp(ag)} ({hor_turno_completo(ag)}) — L{v['num']} {v['destino']}: EMB {m2t(v['emb_inicio'])}, entrada {ag['inicio']}+{R.preparacion_entrada}={m2t(disp)}. ❌ {de} min. {cat}.")
+                        _tol_por_vuelo.setdefault(v['num'], []).append(ndisp(ag))
                     if idx == len(vag) - 1:
                         ex = v['std_min'] + 15 - ag['_t_fin']
                         if ex > 0:
@@ -981,6 +1001,13 @@ def optimize_schedule(req: OptimizeRequest):
                             cat = "Tolerable" if gr >= gt else ("Solo si inevitable" if deficit <= 15 else "No aceptable")
                             icon = "⚠️ " if gr >= gt else ("🟡" if deficit <= 15 else "🔴")
                             print(f"{icon} {ndisp(ag)} — L{v['num']} {v['destino']} → L{sig['num']} {sig['destino']}: {m2t(v['emb_inicio'])}→{m2t(sig['emb_inicio'])}: {gr} min [{zs}]. ❌ {deficit} min. {cat}.")
+            # v11.4: banderín cuando un embarque acumula VARIAS tolerancias
+            # de entrada (la cláusula del solver intenta evitarlo; si aparece,
+            # es que no había alternativa)
+            for _num, _noms in sorted(_tol_por_vuelo.items()):
+                if len(_noms) >= 2:
+                    hay_tol = True
+                    print(f"🔴 L{_num}: {len(_noms)} agentes EN TOLERANCIA de entrada ({', '.join(_noms)}) — mejor una en posición óptima (STD−70)")
             if not hay_tol:
                 print("✅ Sin tolerancias")
 
