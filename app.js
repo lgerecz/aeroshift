@@ -1448,7 +1448,10 @@ function renderScheduleVertical() {
     return;
   }
 
-  const [cierreMin] = ventanaEmbarque(); // cierre de embarque guardado (defecto STD−40)
+  // v11.3: CIERRE en PANTALLA = STD − 60 (igual que el Excel de la vertical
+  // desde la 11.1). El inicio del embarque (STD−40) sigue intacto en Gantt e
+  // informe; el STD es el que manda.
+  const cierreMin = 60;
   const APERTURA_MIN = 180;              // apertura de mostrador: STD−3 h (como el cuadrante impreso)
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
