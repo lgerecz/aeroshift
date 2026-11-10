@@ -1067,7 +1067,10 @@ function ordenarEmbarques(texto, criterio) {
 }
 
 function filasParrillaVertical() {
-  const [cierreMin] = ventanaEmbarque();
+  // v11.1: CIERRE = STD − 60 (nueva regla de cierre de embarque). El inicio
+  // del embarque sigue siendo STD − 40 y el agente se va STD−70/−60 (margen
+  // 30 + tolerancia 10, anclado al primer embarque). El STD es el que manda.
+  const cierreCol = 60;
   const t2m = s => { const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
   const m2t = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   const orden = getFlightsForDate().map(f => ({ f, std: t2m(f.time) })).sort((a, b) => a.std - b.std);
@@ -1077,7 +1080,7 @@ function filasParrillaVertical() {
     d.f.number || '',
     m2t(d.std - 180),
     _agCell(d.f),
-    m2t(d.std - cierreMin),
+    m2t(d.std - cierreCol),
     d.f.time || '',
     (d.f.pax === null || d.f.pax === undefined || d.f.pax === '') ? '' : Number(d.f.pax)
   ]);
